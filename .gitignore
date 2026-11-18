@@ -1,0 +1,14 @@
+.DS_Store
+.idea/
+.env
+.env.*
+!.env.example
+
+node_modules/
+.nuxt/
+.output/
+/frontend/.output-pages/
+/frontend/dist
+dist/
+coverage/
+*.tsbuildinfo

@@ -1,0 +1,108 @@
+name: tropio
+
+services:
+  postgres:
+    image: postgis/postgis:18-3.7
+    platform: linux/amd64
+    environment:
+      POSTGRES_DB: tropio
+      POSTGRES_USER: tropio
+      POSTGRES_PASSWORD: ${TROPIO_POSTGRES_PASSWORD:?Set TROPIO_POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${TROPIO_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          PGPASSWORD="$$POSTGRES_PASSWORD"
+          psql -X -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+          -Atqc 'SELECT PostGIS_Version()' >/dev/null
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  redis:
+    image: redis:8.10.3-alpine
+    environment:
+      REDIS_PASSWORD: ${TROPIO_REDIS_PASSWORD:?Set TROPIO_REDIS_PASSWORD in .env}
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${TROPIO_REDIS_PASSWORD:?Set TROPIO_REDIS_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${TROPIO_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli --raw PING | grep -qx PONG
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8.36.3
+    environment:
+      CLICKHOUSE_DB: tropio
+      CLICKHOUSE_USER: tropio
+      CLICKHOUSE_PASSWORD: ${TROPIO_CLICKHOUSE_PASSWORD:?Set TROPIO_CLICKHOUSE_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${TROPIO_CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "127.0.0.1:${TROPIO_CLICKHOUSE_NATIVE_PORT:-9000}:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          clickhouse-client --user "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD"
+          --database "$$CLICKHOUSE_DB" --query 'SELECT 1' >/dev/null
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.54
+    command:
+      - mini
+      - -dir=/data
+      - -ip.bind=0.0.0.0
+    environment:
+      AWS_ACCESS_KEY_ID: ${TROPIO_S3_ACCESS_KEY_ID:?Set TROPIO_S3_ACCESS_KEY_ID in .env}
+      AWS_SECRET_ACCESS_KEY: ${TROPIO_S3_SECRET_ACCESS_KEY:?Set TROPIO_S3_SECRET_ACCESS_KEY in .env}
+      S3_BUCKET: ${TROPIO_S3_BUCKET:-tropio-media}
+    ports:
+      - "127.0.0.1:${TROPIO_S3_PORT:-8333}:8333"
+    volumes:
+      - seaweedfs_data:/data
+    networks:
+      - s3_storage
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - --max-time
+        - "3"
+        - http://127.0.0.1:8333/readyz
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+volumes:
+  postgres_data:
+  redis_data:
+  clickhouse_data:
+  seaweedfs_data:
+
+networks:
+  s3_storage:

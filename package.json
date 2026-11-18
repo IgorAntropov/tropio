@@ -1,0 +1,18 @@
+{
+  "name": "tropio",
+  "private": true,
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": "^24.15.0",
+    "pnpm": "12.21.0"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:all": "docker compose up -d --wait --wait-timeout 180 && pnpm run dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  }
+}

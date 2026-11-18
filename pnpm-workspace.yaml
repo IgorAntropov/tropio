@@ -1,0 +1,8 @@
+packages:
+  - frontend
+  - backend
+
+engineStrict: true
+
+allowBuilds:
+  esbuild@0.28.2: true
