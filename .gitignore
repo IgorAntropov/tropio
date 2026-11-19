@@ -9,6 +9,7 @@ node_modules/
 .output/
 /frontend/.output-pages/
 /frontend/dist
+/frontend/ui-kit/dist
 dist/
 coverage/
 *.tsbuildinfo

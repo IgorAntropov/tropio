@@ -1,11 +1,10 @@
 <script setup lang="ts">
 useSeoMeta({ robots: 'noindex' })
-useHead({ link: [{ rel: 'icon', href: 'data:,' }] })
 </script>
 
 <template>
-  <div class="demo-shell">
-    <header class="demo-header demo-width">
+  <div class="demo-shell font-sans">
+    <header class="demo-header demo-width flex items-center justify-between">
       <NuxtLink to="/" class="demo-wordmark">Tropio</NuxtLink>
       <span>Демо</span>
     </header>
@@ -28,7 +27,8 @@ body {
   min-height: 100vh;
   background: var(--paper);
   color: var(--ink);
-  font: 16px/1.6 system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
 }
 
 .demo-shell a {
@@ -48,9 +48,6 @@ body {
 
 .demo-header {
   min-height: 4.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
 }
