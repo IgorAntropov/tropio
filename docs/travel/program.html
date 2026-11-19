@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Программа путешествия и время сбора — справочник Tropio</title>
+  <link rel="stylesheet" href="../handbook.css">
+</head>
+<body>
+  <main>
+    <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Путешествия и каталог</nav>
+    <h1>Программа путешествия и время сбора</h1>
+    <p>Организатор редактирует программу по дням и задаёт расписание точек и треков. Время сбора берётся из первой маршрутной точки первого дня. Посетитель, приглашения и напоминания используют опубликованную программу в пределах действующих прав. <a href="../../.agents/docs/tropio_tz_v1.1.md#113-дни">ТЗ, § 11.3</a></p>
+    <p class="document-note"><strong>Статус.</strong> Редактор программы, календарь и публичная схема согласованы в UX-01. POC-04 описывает базовое чтение черновика и публичного снимка. Расширение контрактов и реализация относятся к GIS-03–06, подключение продуктовых уведомлений — к SOC-02. <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог</a> · <a href="../../.agents/docs/poc-04/openapi.yaml">OpenAPI</a></p>
+
+    <nav class="document-links" aria-label="На этой странице">
+      <ul>
+        <li><a href="#editing">Программа и расписание в редакторе</a></li>
+        <li><a href="#meeting">Как определяется время сбора</a></li>
+        <li><a href="#public-program">Публичная программа</a></li>
+        <li><a href="#interface">Состояния интерфейса</a></li>
+        <li><a href="#api">Операции API</a></li>
+        <li><a href="#errors">Ошибки и восстановление</a></li>
+        <li><a href="#acceptance">Приёмка</a></li>
+        <li><a href="#open">Открытые вопросы</a></li>
+      </ul>
+    </nav>
+
+    <section aria-labelledby="editing">
+      <h2 id="editing">Программа и расписание в редакторе</h2>
+      <ol>
+        <li>Организатор выбирает календарную дату путешествия или включительный диапазон. При смене часового пояса эти даты отображаются как выбраны. У каждого дня есть номер, дата, описание, заметки и привязка к маршруту. В GIS MVP у дня один маршрут, а в черновике привязка может быть пустой.</li>
+        <li>В «Программе по дням» организатор переключает день по номеру и дате. Незавершённые изменения остаются в полях своего дня, пока форма открыта. Действие «Сохранить день» относится к выбранному дню.</li>
+        <li>День с готовым маршрутом показывает длину при наличии и действие «Открыть маршрут». День без маршрута показывает «К построению». Редактор открывается на выбранном дне, возврат восстанавливает его выбор.</li>
+        <li>Организатор может задать точке или треку дату, диапазон дат, точное время или интервал. Дату и время можно заполнить независимо и оставить пустыми. Одно поле даты открывает календарь с режимами «Одна дата» и «Период». Можно сменить год, выбрать диапазон через Новый год или очистить дату.</li>
+        <li>В форме маршрутной точки видны номер, тип и координаты. Координаты меняются на карте. Просмотр фотографий сохраняет текущие правки формы. После подтверждённого сохранения схема показывает обновлённую точку.</li>
+      </ol>
+      <p>Travel владеет днями, их привязками и расписанием программы. Geo владеет порядком и координатами маршрутных объектов. Для публикации каждый день должен иметь готовый маршрут. <a href="../../.agents/docs/tropio_tz_v1.1.md#111-атрибуты-путешествия">Даты путешествия</a> · <a href="../../.agents/docs/tropio_tz_v1.1.md#113-дни">Программа по дням</a> · <a href="../../.agents/docs/tropio_tz_v1.1.md#92-routepoint">Форма маршрутной точки</a> · <a href="../../.agents/docs/microservices.md#21-travel--программа-публикация-и-участие">Граница Travel и Geo</a></p>
+    </section>
+
+    <section aria-labelledby="meeting">
+      <h2 id="meeting">Как определяется время сбора</h2>
+      <ul>
+        <li><strong>Расписание.</strong> Источник — первая маршрутная точка первого дня. Если у точки задано только точное время, берётся календарная дата первого дня. Часы трактуются в поясе места сбора.</li>
+        <li><strong>Хранение.</strong> Когда момент однозначен, программа хранит момент в UTC и идентификатор пояса места сбора IANA. Владелец видит предварительный расчёт в редакторе. Публичная проекция получает момент и пояс из опубликованного снимка.</li>
+        <li><strong>Отображение.</strong> Основная строка показывает дату, время и смещение UTC на месте сбора. Если у пользователя другое смещение на тот же момент, ниже показывается «У тебя» с его датой, временем и смещением. При одинаковом смещении достаточно одной строки. По умолчанию пояс пользователя берётся с устройства.</li>
+        <li><strong>Уведомления.</strong> Notifications использует опубликованное расписание Travel для приглашений и оповещений. При заданной дате без времени приглашение показывает дату. Напоминание, привязанное к точному сбору, создаётся только когда момент определён. Выбор точного момента из диапазона остаётся открытым.</li>
+      </ul>
+      <h3>Пример через Новый год</h3>
+      <p>Сбор в Томске 31 декабря 2026 года в 23:30 (<code>UTC+07:00</code>) — это <code>2026-12-31T16:30:00Z</code> и пояс <code>Asia/Tomsk</code>. Для пользователя в Якутске в строке «У тебя» будет 1 января 2027 года, 01:30 (<code>UTC+09:00</code>). Календарные даты самого путешествия сохраняются.</p>
+      <p><a href="../../.agents/docs/tropio_tz_v1.1.md#113-дни">Определение и отображение сбора</a> · <a href="../social/notifications.html#reminders">Уведомления и напоминания</a> · <a href="catalog.html#filters">Отдельные правила фильтра каталога</a></p>
+    </section>
+
+    <section aria-labelledby="public-program">
+      <h2 id="public-program">Публичная программа</h2>
+      <p>Посетитель выбирает день по номеру и дате. Сводка и вертикальная схема показывают маршрут выбранного дня с чередующимися точками и треками. Нажатие открывает описание и доступные сведения. Детали расположены рядом со схемой на десктопе и на отдельном экране на смартфоне. Возврат восстанавливает выбранный элемент.</p>
+      <p>Карточка и шапка сбора читают одну версию программы по <code>publication_id</code>. Сохранение дней, расписания или геометрии меняет черновик. Публичный снимок переключается после явной публикации. Для выдачи проверяются актуальные права и зависимости от POI. При отзыве доступа к геометрии применяются правила публичной карточки. <a href="../../.agents/docs/tropio_tz_v1.1.md#133-действия-на-карточке-путешествия">ТЗ, § 13.3</a> · <a href="publication.html#data">Снимок Travel/Geo</a> · <a href="participation.html#interface">Участие в путешествии и заявки</a> · <a href="../route-editor/poi-privacy.html#revocation">Отзыв доступа</a></p>
+    </section>
+
+    <section aria-labelledby="interface">
+      <h2 id="interface">Состояния интерфейса</h2>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Согласованные макеты программы и времени сбора">
+        <table>
+          <thead><tr><th scope="col">Состояние</th><th scope="col">Что видит пользователь</th><th scope="col">Макеты</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">День с готовым маршрутом</th><td>Описание, заметки, длина при наличии и «Открыть маршрут».</td><td><a href="../../.agents/images/layouts/desktop/trip-program-ready.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/trip-program-ready.png">Mobile</a></td></tr>
+            <tr><th scope="row">День без маршрута</th><td>Поля программы и действие «К построению» для выбранного дня.</td><td><a href="../../.agents/images/layouts/desktop/trip-program-unbuilt.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/trip-program-unbuilt.png">Mobile</a></td></tr>
+            <tr><th scope="row">День сохранён</th><td>Подтверждение сохранения описания и заметок.</td><td><a href="../../.agents/images/layouts/desktop/trip-program-saved.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/trip-program-saved.png">Mobile</a></td></tr>
+            <tr><th scope="row">Редактор готового маршрута</th><td>Открыт маршрут ранее выбранного дня.</td><td><a href="../../.agents/images/layouts/desktop/trip-program-route.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/trip-program-route.png">Mobile</a></td></tr>
+            <tr><th scope="row">Начало построения</th><td>Редактор открывает построение для дня с пустой привязкой.</td><td><a href="../../.agents/images/layouts/desktop/trip-program-route-empty.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/trip-program-route-empty.png">Mobile</a></td></tr>
+            <tr><th scope="row">Расписание первой точки</th><td>Пояс места, точное время или интервал и предварительный сбор для уведомлений при однозначном времени.</td><td><a href="../../.agents/images/layouts/desktop/route-schedule-meeting.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/route-schedule-meeting.png">Mobile</a></td></tr>
+            <tr><th scope="row">Календарь периода</th><td>Одна сетка для двух границ с навигацией по месяцам и годам.</td><td><a href="../../.agents/images/layouts/desktop/route-point-form-calendar.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/route-point-form-calendar.png">Mobile</a></td></tr>
+            <tr><th scope="row">Публичная схема первого дня</th><td>Сводка и чередование точек и треков выбранного дня.</td><td><a href="../../.agents/images/layouts/desktop/public-program-timeline.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/public-program-timeline.png">Mobile</a></td></tr>
+            <tr><th scope="row">Публичная схема второго дня</th><td>Номер, дата и содержимое соответствующего маршрута.</td><td><a href="../../.agents/images/layouts/desktop/public-program-second-day.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/public-program-second-day.png">Mobile</a></td></tr>
+            <tr><th scope="row">Детали точки сбора</th><td>Разрешённые сведения о месте и время сбора в одном или двух поясах.</td><td><a href="../../.agents/images/layouts/desktop/public-program-point.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/public-program-point.png">Mobile</a></td></tr>
+            <tr><th scope="row">Детали трека</th><td>Доступные сведения об отрезке с возвратом к выбранному элементу.</td><td><a href="../../.agents/images/layouts/desktop/public-program-track.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/public-program-track.png">Mobile</a></td></tr>
+            <tr><th scope="row">Блок сбора в шапке</th><td>На десктопе рядом с описанием, на смартфоне под ним. Часовой пояс зрителя учитывается в строке «У тебя».</td><td><a href="../../.agents/images/layouts/desktop/public-trip-header-default.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/public-trip-header-default.png">Mobile</a></td></tr>
+            <tr><th scope="row">Уведомление о сборе</th><td>Опубликованные место и время для получателя с учётом его часового пояса.</td><td><a href="../../.agents/images/layouts/desktop/notification-center-gathering.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/notification-center-gathering.png">Mobile</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><a href="../../.agents/docs/TODO.md#текущая-работа">Согласования UX-01</a></p>
+    </section>
+
+    <section aria-labelledby="api">
+      <h2 id="api">Операции API</h2>
+      <p>Проект BFF <code>0.1.0</code> содержит три операции чтения для этого сценария. Для черновика нужны сессия и объектные права. Публичная ручка использует гостевой контекст. <a href="../../.agents/docs/poc-04/openapi.yaml">OpenAPI GIS MVP</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Операции программы путешествия">
+        <table>
+          <thead><tr><th scope="col">Ручка</th><th scope="col">Данные в текущем срезе</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>GET /api/v1/trips/{tripId}/draft</code><br><code>getTripDraft</code></th><td><code>200 TripDraft</code>. Ревизия Travel, указатель публикации, название, видимость и дни с <code>day_id</code>, <code>position</code> и <code>route_id</code>. Для дня без привязки <code>route_id</code> равен <code>null</code>.</td></tr>
+            <tr><th scope="row"><code>GET /api/v1/routes/{routeId}</code><br><code>getRouteDraft</code></th><td><code>200 RouteDraft</code>. Ревизия Geo и доступные точки и треки. В состоянии <code>geometry_restricted</code> остаются UUID маршрута и ревизии вместе с признаком ограничения.</td></tr>
+            <tr><th scope="row"><code>GET /api/v1/catalog/trips/{tripId}</code><br><code>getPublicTrip</code></th><td><code>200 PublicTrip</code>. UUID снимка, название, описание, дни с порядковыми номерами и линиями, разрешённые POI.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Расширение контракта.</strong> В <code>DraftDay</code> предстоит добавить данные редактора дня. Для публичной программы нужны разрешённые поля сводки, точек, треков и время сбора в UTC с поясом IANA. Текущий <code>PublicDay</code> содержит позицию и линии. В § 24 ТЗ есть проектные пути <code>POST /api/v1/trips/{id}/days</code> и <code>PATCH /api/v1/days/{id}</code>. В POC-04 сохранение дня, изменение расписания и их схемы записи предстоит уточнить. <a href="../../.agents/docs/tropio_tz_v1.1.md#24-api-контракты-проект-интерфейсов">Проект ресурсной структуры</a> · <a href="publication.html#api">Команды публикации и опроса</a></p>
+      <h3>Пример черновика программы</h3>
+      <p>Второй день добавлен в черновик и ожидает построения маршрута. Указатель ведёт на прежний опубликованный снимок.</p>
+      <pre><code id="program-draft-example">{
+  "trip_id": "d0106c0f-f191-4add-b969-d07edd26c88e",
+  "trip_revision_id": "64590ea9-4a76-4caf-8b9e-ea9d1feb8923",
+  "publication_id": "30cbed84-cf00-4a18-a289-fffe29e71f7a",
+  "visibility": "public",
+  "title": "Новый год у реки",
+  "days": [
+    { "day_id": "3f5b4d4a-61c9-49ff-8fc6-f6b7ec36510c", "position": 1,
+      "route_id": "14c246eb-b4b0-4867-ad95-9eeba2adedd6" },
+    { "day_id": "28247728-d433-45fa-a97b-4666a6b73730", "position": 2, "route_id": null }
+  ]
+}</code></pre>
+      <h3>Пример публичного снимка</h3>
+      <p>В активном снимке пока один день. Поля примера соответствуют текущей схеме <code>PublicTrip</code>.</p>
+      <pre><code id="program-public-example">{
+  "trip_id": "d0106c0f-f191-4add-b969-d07edd26c88e",
+  "publication_id": "30cbed84-cf00-4a18-a289-fffe29e71f7a",
+  "title": "Новый год у реки",
+  "description": "Маршрут первого дня",
+  "days": [{ "position": 1, "lines": [
+    { "type": "LineString", "coordinates": [[84.98, 56.47], [85.01, 56.48]] }
+  ] }],
+  "pois": []
+}</code></pre>
+    </section>
+
+    <section aria-labelledby="errors">
+      <h2 id="errors">Ошибки и восстановление</h2>
+      <ul>
+        <li><code>400 INVALID_REQUEST</code> — проверить UUID и параметры чтения. Для защищённого черновика <code>401 SESSION_REQUIRED</code> требует входа и повторной проверки прав.</li>
+        <li><code>404 NOT_FOUND</code> — объект отсутствует или недоступен. У посетителя после повторной проверки прежняя программа и карта очищаются. При <code>200 geometry_restricted</code> владелец с правом на маршрут видит состояние пересборки без закрытых координат.</li>
+        <li><code>503 DEPENDENCY_UNAVAILABLE</code> — обязательная проверка временно недоступна. Публичная карточка скрывает защищённые данные до успешного повторного чтения.</li>
+        <li><strong>Обрыв при сохранении.</strong> До подтверждения интерфейс показывает несинхронизированные правки. Для будущих команд записи должен быть описан способ проверки исхода и повтора по общим соглашениям BFF. При конфликте ревизий клиент перечитывает актуальные данные перед подтверждением новой правки.</li>
+      </ul>
+      <p><a href="../contracts/bff-errors.html#recovery">Правила восстановления BFF</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#3-чтение-отзыв-и-публичный-каталог">Перепроверка публичной карточки</a></p>
+    </section>
+
+    <section aria-labelledby="acceptance">
+      <h2 id="acceptance">Приёмка</h2>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Кейсы проверки программы и времени сбора">
+        <table>
+          <thead><tr><th scope="col">Кейс</th><th scope="col">Что проверить</th><th scope="col">Ожидаемый результат</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Правки по дням · UX-01</th><td>Изменить описание первого дня, переключиться на второй, ввести свои заметки, вернуться и сохранить первый.</td><td>Поля каждого дня сохраняют свои незавершённые правки в открытой форме. Сохранение затрагивает выбранный день.</td></tr>
+            <tr><th scope="row">Готовый и пустой маршрут · UX-01</th><td>Открыть день с готовым маршрутом и день с пустой привязкой. Вернуться из редактора.</td><td>Используются разные действия. Редактор открывается на нужном дне, возврат восстанавливает выбор.</td></tr>
+            <tr><th scope="row">Календарь и независимые поля · UX-01</th><td>Выбрать одну дату, затем диапазон через Новый год, закрыть без применения и очистить дату у объекта с заполненным временем.</td><td>Выбор года и обе границы читаемы. Закрытие без применения сохраняет прежнее значение. Очистка даты сохраняет время.</td></tr>
+            <tr><th scope="row">Первая точка с одним временем</th><td>Указать <code>09:00</code> без даты в первой точке первого дня с заданной календарной датой. Проверить также точку второго дня.</td><td>Сбор получает дату первого дня и пояс места. Точка второго дня не меняет время сбора.</td></tr>
+            <tr><th scope="row">Дата без часов · § 17 ТЗ</th><td>Указать только дату. Открыть приглашение и проверить правило напоминания.</td><td>Приглашение показывает дату без часов. Напоминание к точному моменту ждёт однозначного времени.</td></tr>
+            <tr><th scope="row">Часовые пояса и смена года</th><td>Открыть одну публикацию в поясе места и в другом поясе, где сбор попадает на следующий год.</td><td>При одинаковом смещении одна строка. При разных — «У тебя» с другим временем, датой, годом и смещением. Даты поездки сохраняются.</td></tr>
+            <tr><th scope="row">Публичные дни и детали · UX-01</th><td>Переключить день, открыть точку и трек на десктопе и смартфоне, вернуться к схеме.</td><td>Детали относятся к выбранному дню. Возврат восстанавливает выбранный элемент, данные приходят из опубликованной версии.</td></tr>
+            <tr><th scope="row">Правка и явная публикация · AT-17</th><td>Сохранить новое время сбора и изменить маршрут, пока посетитель смотрит старую карточку. Затем опубликовать и повторно открыть карточку.</td><td>До публикации видна старая цельная версия. После проверки время, дни и карта относятся к новому снимку.</td></tr>
+            <tr><th scope="row">Отзыв доступа · AT-18</th><td>Закрыть поездку или отозвать доступ к зависимости маршрута и перечитать открытую программу.</td><td>Публичная карточка убирает прежнюю программу и карту после <code>404</code>. Владелец с правом на маршрут получает ограниченный результат, если проблема в защищённой зависимости.</td></tr>
+            <tr><th scope="row">Сеть и незавершённые правки · AT-20</th><td>Оборвать сеть при сохранении дня или расписания точки. Перепроверить состояние после восстановления.</td><td>До серверного подтверждения видно несинхронизированное состояние. Интерфейс показывает сохранение после подтверждения операции.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><a href="../../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">Сценарии ТЗ</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#7-приёмочные-проверки-будущей-реализации">Проверки POC-04</a></p>
+    </section>
+
+    <section aria-labelledby="open">
+      <h2 id="open">Открытые вопросы</h2>
+      <ul>
+        <li><strong>Точный сбор из диапазона.</strong> Нужно определить, как согласовать точное время, если первая точка задана диапазоном дат или интервалом времени.</li>
+        <li><strong>Модель и ручки.</strong> В GIS-01 предстоит сопоставить поля прежней ER-модели с календарными датами, частичным расписанием и ревизиями. В GIS-03–06 уточняются команды редактирования и разрешённые поля опубликованной программы.</li>
+        <li><strong>Фильтр по часам.</strong> Правило отбора в каталоге при заданных часах и поездках без точного сбора согласуется отдельно.</li>
+      </ul>
+      <p><a href="../../.agents/docs/er-diagram.md#21-поездки-маршруты-и-публикации-этапы-1-и-3">Уточнение ER перед миграциями</a> · <a href="../../.agents/docs/tropio_tz_v1.1.md#132-фильтры">Фильтры каталога</a></p>
+    </section>
+  </main>
+</body>
+</html>

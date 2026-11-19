@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Технический справочник Tropio</title>
+  <link rel="icon" data-local-href="../.agents/images/favicon.ico">
+  <link rel="stylesheet" href="handbook.css">
+  <script defer src="generated/documents.js"></script>
+  <script defer src="reader.js"></script>
+</head>
+<body class="handbook">
+  <a class="skip-link" href="#reader">К документу</a>
+  <div class="workspace">
+    <aside class="sidebar">
+      <header class="sidebar-header">
+        <a class="identity" href="index.html">
+          <img data-local-src="../.agents/images/travel_icon_192.png" alt="" width="38" height="38" hidden>
+          <span><strong>Tropio</strong><span>Технический справочник</span></span>
+        </a>
+        <button class="sidebar-toggle" type="button" aria-expanded="false" aria-controls="contents">Разделы</button>
+      </header>
+      <nav id="contents" class="tree" aria-label="Оглавление справочника">
+        <details>
+          <summary>Архитектура и эксплуатация</summary>
+          <ul>
+            <li><a href="../.agents/docs/microservices.md">Сервисы, BFF и владение данными</a></li>
+            <li><a href="../.agents/docs/er-diagram.md">Модель данных PostgreSQL и PostGIS</a></li>
+            <li><a href="../.agents/docs/MEMORY.md#что-уже-работает">Локальный запуск и текущая реализация</a></li>
+          </ul>
+        </details>
+        <details>
+          <summary>Аккаунт и профиль</summary>
+          <ul>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#7-fr-01-регистрация-авторизация-профиль">Регистрация, вход и профиль</a></li>
+          </ul>
+        </details>
+        <details open>
+          <summary>Редактор маршрутов</summary>
+          <ul>
+            <li><a href="route-editor/split-track.html">Деление трека</a></li>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#8-fr-02-редактор-интерактивной-карты">Карта, построение маршрута и инструменты</a></li>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#9-fr-03-треки-и-маршрутные-точки">Треки и маршрутные точки</a></li>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#10-fr-04-poi">Объекты POI</a></li>
+            <li><a href="route-editor/poi-privacy.html">Приватность POI</a></li>
+          </ul>
+        </details>
+        <details>
+          <summary>Путешествия и каталог</summary>
+          <ul>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#11-fr-05-путешествия-дни-и-статусы">Путешествия, дни и статусы</a></li>
+            <li><a href="travel/program.html">Программа путешествия и время сбора</a></li>
+            <li><a href="travel/participation.html">Участие в путешествии и заявки</a></li>
+            <li><a href="travel/catalog.html">Публичный каталог и фильтры</a></li>
+            <li><a href="travel/publication.html">Публикация Travel/Geo</a></li>
+          </ul>
+        </details>
+        <details>
+          <summary>Социальные функции и общение</summary>
+          <ul>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#14-fr-08-социальные-функции">Лента, отзывы и ачивки</a></li>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#16-fr-10-чаты">Чаты</a></li>
+            <li><a href="social/notifications.html">Уведомления и напоминания</a></li>
+          </ul>
+        </details>
+        <details>
+          <summary>Турфирмы и продажи</summary>
+          <ul>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#15-fr-09-турфирмы-календарь-и-платежи">Календарь выездов, оплата и партнёрские акции</a></li>
+            <li><a href="travel/departure-changes.html">Перенос и отмена выезда</a></li>
+          </ul>
+        </details>
+        <details>
+          <summary>Мобильная PWA и планирование</summary>
+          <ul>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#18-fr-12-офлайн-пакеты-и-навигация">Офлайн-пакеты и навигация</a></li>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#19-fr-13-ai-планировщик-путешествий">AI-планировщик путешествий</a></li>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#20-fr-14-последовательная-визуализация">Последовательная визуализация</a></li>
+          </ul>
+        </details>
+        <details>
+          <summary>Публичные страницы и администрирование</summary>
+          <ul>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#21-seo-и-маркетинговый-лендинг">SEO и лендинг</a></li>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#22-административная-панель">Административная панель</a></li>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#25-аналитика-и-clickhouse">Аналитика и ClickHouse</a></li>
+          </ul>
+        </details>
+        <details>
+          <summary>Контракты, дизайн и приёмка</summary>
+          <ul>
+            <li><a href="../.agents/docs/poc-04/openapi.yaml">Проект внешнего API GIS MVP</a></li>
+            <li><a href="contracts/bff-errors.html">Ошибки BFF и восстановление</a></li>
+            <li><a href="../.agents/docs/poc-04/events.md">События POC-04</a></li>
+            <li><a href="contracts/events-deduplication.html">События Travel/Geo и дедупликация</a></li>
+            <li><a href="../.agents/docs/UX-01-ui-kit.md">UI-kit Тропио</a></li>
+            <li><a href="../.agents/docs/TODO.md#текущая-работа">Утверждённые макеты UX-01</a></li>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#34-бренд-и-визуальная-система">Бренд, локализация и визуальная система</a></li>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">Приёмочные сценарии ТЗ</a></li>
+            <li><a href="../.agents/docs/tropio_tz_v1.1.md#31-реестр-решений">Реестр решений</a></li>
+          </ul>
+        </details>
+      </nav>
+    </aside>
+    <main class="reader" id="reader" tabindex="-1">
+      <header class="reader-toolbar">
+        <span id="reader-section">Справочник</span>
+        <a id="reader-source" target="_blank" rel="noopener" hidden>Исходник</a>
+      </header>
+      <article class="document" id="document" aria-labelledby="document-title">
+        <h1 id="document-title">Технический справочник Tropio</h1>
+        <p>Собери справочник командой <code>npm --prefix docs run build</code> из корня репозитория. <a href="README.md">Инструкция по запуску</a></p>
+        <noscript><p>Для просмотра документов в этой панели включи JavaScript.</p></noscript>
+      </article>
+    </main>
+  </div>
+</body>
+</html>

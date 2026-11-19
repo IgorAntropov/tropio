@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>События Travel/Geo и дедупликация — справочник Tropio</title>
+  <link rel="stylesheet" href="../handbook.css">
+</head>
+<body>
+  <main>
+    <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Контракты, дизайн и приёмка</nav>
+    <h1>События Travel/Geo и дедупликация</h1>
+    <p>Travel и Geo записывают событие вместе с изменением состояния. Kafka может доставить один факт несколько раз. В отчёте ClickHouse каждый <code>event_id</code> учитывается один раз, даже до фонового слияния строк. <a href="../../.agents/docs/tropio_tz_v1.1.md#od-15-транспорт-событий-и-аналитика-gis-mvp">OD-15</a></p>
+    <p class="document-note"><strong>Статус.</strong> Транспорт Kafka/KRaft и правила дедупликации утверждены. Схемы и примеры описаны в POC-04. Сквозная приёмка с Kafka и ClickHouse относится к GIS-07. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#8-утверждённые-решения">Решения POC-04</a> · <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
+
+    <nav class="document-links" aria-label="На этой странице">
+      <ul>
+        <li><a href="#facts">Кто и когда отправляет</a></li>
+        <li><a href="#schemas">Схемы и примеры</a></li>
+        <li><a href="#delivery">Доставка и повторы</a></li>
+        <li><a href="#failures">Сбои и восстановление</a></li>
+        <li><a href="#acceptance">Приёмка AT-19</a></li>
+        <li><a href="#open">Открытые вопросы</a></li>
+      </ul>
+    </nav>
+
+    <section aria-labelledby="facts">
+      <h2 id="facts">Кто и когда отправляет</h2>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="События Travel и Geo">
+        <table>
+          <thead><tr><th scope="col">Событие v1</th><th scope="col">Владелец, топик и агрегат</th><th scope="col">Факт и содержимое <code>payload</code></th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>trip.published</code></th><td>Travel · <code>tropio.travel.domain</code> · UUID поездки</td><td>Успешная явная публикация переключила активный указатель. В транзакции сохраняются снимок, указатель, публичная проекция и outbox. <code>publication_id</code> — UUID нового снимка.</td></tr>
+            <tr><th scope="row"><code>trip.unpublished</code></th><td>Travel · <code>tropio.travel.domain</code> · UUID поездки</td><td>Travel снял действовавший указатель, включая закрытие поездки или архивирование. <code>previous_publication_id</code> — UUID снятого снимка. При отмене первой публикации с пустым указателем факт снятия отсутствует.</td></tr>
+            <tr><th scope="row"><code>route.track.split</code></th><td>Geo · <code>tropio.geo.domain</code> · UUID маршрута</td><td>Geo после проверки прав, ожидаемой ревизии и топологии сохранил результат деления. Новая ревизия и outbox записываются одной транзакцией. <code>route_revision_id</code> — UUID сохранённой ревизии.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Событие фиксируется при успешном изменении состояния. HTTP <code>202</code> означает запись намерения опубликовать. Повтор той же команды возвращает сохранённый результат, а успешная публикация новой версии создаёт отдельный факт. Деление меняет черновик. Публичную выдачу определяют текущий указатель Travel и актуальные проверки Geo. <a href="../../.agents/docs/poc-04/events.md#факты-и-ответственность">Контракт POC-04</a> · <a href="../travel/publication.html#flow">Сценарий публикации</a> · <a href="../route-editor/split-track.html#flow">Сценарий деления</a></p>
+    </section>
+
+    <section aria-labelledby="schemas">
+      <h2 id="schemas">Схемы и примеры</h2>
+      <p>Доменное сообщение — UTF-8 JSON. Ключ Kafka байт в байт совпадает с <code>aggregate_id</code>. Доменный конверт и <code>payload</code> закрыты для дополнительных полей. Допустимые поля <code>payload</code> указаны для каждого из трёх событий выше. <a href="../../.agents/docs/poc-04/events.schema.json">JSON Schema 2020-12</a> · <a href="../../.agents/docs/poc-04/events.examples.json">Три пары примеров</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Поля доменного конверта">
+        <table>
+          <thead><tr><th scope="col">Обязательные поля</th><th scope="col">Формат и смысл</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>event_id</code></th><td>Глобально уникальный UUID факта. При повторе и восстановлении сохраняется.</td></tr>
+            <tr><th scope="row"><code>event_type</code>, <code>event_version</code></th><td>Тип из трёх разрешённых и версия формы этого типа. Для текущей схемы версия равна <code>1</code>.</td></tr>
+            <tr><th scope="row"><code>occurred_at</code></th><td>Время записи перехода владельцем в outbox. UTC с миллисекундами и обязательной календарной проверкой.</td></tr>
+            <tr><th scope="row"><code>producer</code>, <code>aggregate_id</code></th><td><code>travel</code> или <code>geo</code> согласно типу и топику. UUID поездки или маршрута в нижнем регистре.</td></tr>
+            <tr><th scope="row"><code>aggregate_version</code></th><td>Возрастающий номер состояния агрегата от 1 до <code>9007199254740991</code>. Пропуски допустимы. Точную ревизию или снимок идентифицирует UUID в <code>payload</code>.</td></tr>
+            <tr><th scope="row"><code>correlation_id</code>, <code>payload</code></th><td>UUID сквозной операции, назначаемый на входе, и закрытый объект с UUID результата.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Пример доменного события</h3>
+      <p><code>trip.published</code> в <code>tropio.travel.domain</code>. Ключ — <code>d0106c0f-f191-4add-b969-d07edd26c88e</code>.</p>
+      <pre><code id="event-domain-example">{
+  "event_id": "2c15e574-a98e-4af8-afdc-72e0d09c2a7a",
+  "event_type": "trip.published",
+  "event_version": 1,
+  "occurred_at": "2026-11-19T07:15:00.250Z",
+  "producer": "travel",
+  "aggregate_id": "d0106c0c-f191-4add-b969-d07edd26c88e",
+  "aggregate_version": 7,
+  "correlation_id": "3a53c087-5d2f-4654-9c62-3b439859db53",
+  "payload": { "publication_id": "30cbed84-cf00-4a18-a289-fffe29e71f7a" }
+}</code></pre>
+      <h3>Строка Analytics для того же факта</h3>
+      <p>Из конверта берутся <code>event_id</code>, <code>event_type</code> и <code>occurred_at</code>. Analytics добавляет версию своей формы, проверенный <code>source</code> и <code>received_at</code> первой принятой доставки. Закрытая схема <code>$defs.analytics_event</code> допускает только эти шесть полей. Идентификаторы агрегата и пользователя, геометрия, координаты POI, ACL и исходный <code>payload</code> остаются вне строки. <a href="../../.agents/docs/poc-04/events.md#analytics-и-at-19">Минимизация данных в POC-04</a></p>
+      <pre><code id="event-analytics-example">{
+  "event_id": "2c15e574-a98e-4af8-afdc-72e0d09c2a7a",
+  "event_type": "trip.published",
+  "event_version": 1,
+  "occurred_at": "2026-11-19T07:15:00.250Z",
+  "received_at": "2026-11-19T07:15:00.500Z",
+  "source": "travel"
+}</code></pre>
+    </section>
+
+    <section aria-labelledby="delivery">
+      <h2 id="delivery">Доставка и повторы</h2>
+      <ol>
+        <li><strong>Outbox владельца.</strong> Travel или Geo фиксирует доменное изменение и неизменяемое сообщение в одной транзакции PostgreSQL. Relay отправляет ближайшую неотправленную запись под блокировкой агрегата и отмечает доставку после ACK Kafka. При повторе сохраняет исходные байты, ключ, <code>event_id</code> и версию.</li>
+        <li><strong>Kafka.</strong> Проект закрепляет Apache Kafka 4.4.0 в KRaft, <code>acks=all</code>, <code>enable.idempotence=true</code> и <code>max.in.flight.requests.per.connection=1</code>. Travel и Geo пишут свои топики. Analytics Ingestion читает оба в своей группе. Kafka гарантирует порядок внутри партиции. Повтор между сессиями relay возможен.</li>
+        <li><strong>Проверка потребителем.</strong> До эффекта или резервирования <code>event_id</code> группа проверяет лимит 64 КиБ, UTF-8 JSON, допустимость топика, производителя, типа и версии, точный ключ и схему. Автокоммит выключен. Offset продвигается только за непрерывный обработанный префикс своей партиции.</li>
+        <li><strong>Доменная проекция.</strong> Потребитель сохраняет локальный эффект и <code>processed_events(consumer, event_id)</code> в одной транзакции. Проекция текущего состояния пропускает старую или равную <code>aggregate_version</code>. Analytics учитывает каждый отдельный валидный факт, в том числе поздний с меньшей версией агрегата.</li>
+        <li><strong>Analytics inbox.</strong> PostgreSQL хранит запись по <code>event_id UUID PRIMARY KEY</code>, отпечаток исходного сообщения, первый <code>received_at</code> и состояние <code>pending</code>. Точный повтор получает исходный результат. Kafka offset фиксируется после коммита inbox.</li>
+        <li><strong>ClickHouse.</strong> Экспортёр повторяет незавершённые записи и отмечает доставку после подтверждения синхронного INSERT с <code>async_insert=0</code>. Физические копии допустимы. <code>ReplacingMergeTree</code> сокращает их при слияниях, а отчёт сразу считает <code>uniqExact(event_id)</code> по UTC-дню из <code>occurred_at</code> и типу события.</li>
+      </ol>
+      <p>Для будущего <code>events_daily</code> POC-04 предусматривает сохранение <code>uniqExactState(event_id)</code> и чтение через <code>uniqExactMerge</code>. Публикации, снятия и деления считаются отдельно по серверным фактам. Количество поездок, доступных гостю в данный момент, берётся из проверенной выдачи. <a href="../../.agents/docs/poc-04/events.md#kafka-и-доставка">Доставка</a> · <a href="../../.agents/docs/poc-04/events.md#analytics-и-at-19">Приём и отчёт</a> · <a href="../../.agents/docs/microservices.md#32-доменные-события">Границы сервисов</a></p>
+    </section>
+
+    <section aria-labelledby="failures">
+      <h2 id="failures">Сбои и восстановление</h2>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Сбои доставки и реакция сервисов">
+        <table>
+          <thead><tr><th scope="col">Сбой</th><th scope="col">Что делает система</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Отказ до коммита владельца</th><td>Доменный переход и outbox откатываются. Последующий успех команды записывает один новый факт.</td></tr>
+            <tr><th scope="row">ACK Kafka потерян или relay упал до отметки</th><td>Outbox остаётся незавершённым. Relay отправляет то же сообщение. Потребители обрабатывают повтор по тому же <code>event_id</code>.</td></tr>
+            <tr><th scope="row">Inbox не закоммичен или offset не сохранён</th><td>Kafka доставляет факт снова. При уже закоммиченном inbox используется каноническая строка и первый <code>received_at</code>.</td></tr>
+            <tr><th scope="row">Таймаут INSERT или сбой после ACK ClickHouse</th><td>Экспортёр повторяет исходную строку. Число физических строк может вырасти, <code>uniqExact(event_id)</code> остаётся прежним.</td></tr>
+            <tr><th scope="row">Тот же <code>event_id</code> с другими байтами</th><td>Analytics сохраняет конфликт в карантине и оставляет каноническую строку неизменной.</td></tr>
+            <tr><th scope="row">Доказуемо невалидное сообщение</th><td>Потребитель записывает карантин по группе, топику, партиции и offset с причиной и хэшем. После устойчивой записи может продвинуть offset. Доменный ID и метрика не меняются.</td></tr>
+            <tr><th scope="row">Неизвестная версия допустимого типа</th><td>Партиция останавливается с алертом, offset остаётся на этом сообщении. Совместимый читатель продолжает обработку. Сначала развёртываются потребители обеих версий, затем продюсеры новой.</td></tr>
+            <tr><th scope="row">Временная ошибка или перебалансировка</th><td>При временной ошибке обработка партиции приостанавливается с повторами и задержкой. После смены потребителя записи с незафиксированными offset могут прийти снова. При исчерпании повторов для валидного факта нужно восстановление с сохранением его позиции.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Восстановление.</strong> В доступном окне Kafka повторяют обработку с исходными ключом, байтами и версией. После истечения окна брокера используют сохранённый outbox владельца. ClickHouse перестраивают из канонических строк inbox с первым <code>received_at</code>. При перестройке экспортёр останавливают и завершают начатые вставки, приём из Kafka может продолжаться. <a href="../../.agents/docs/poc-04/events.md#хранение-и-replay">Хранение и повторное воспроизведение</a></p>
+      <p><strong>Что наблюдать.</strong> Возраст старейшей записи outbox и inbox, лаг потребителя, задержку до INSERT, повторы, карантин, конфликты ID и ошибки ClickHouse. Метки метрик используют сервис, тип и фиксированную причину. <a href="../../.agents/docs/microservices.md#34-эксплуатация-и-проверка-контрактов">Эксплуатация</a></p>
+    </section>
+
+    <section aria-labelledby="acceptance">
+      <h2 id="acceptance">Приёмка AT-19</h2>
+      <p>Измерять прирост бизнес-метрики по UTC-дню и типу. Один новый факт даёт прирост <strong>1</strong> при любом числе его повторов. Отдельно сверить, что факт дошёл до отчёта. Иначе отсутствие прироста может скрыть потерю доставки. <a href="../../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">ТЗ, AT-19</a> · <a href="../../.agents/docs/poc-04/events.md#проверка-контрактов-и-счётчика">Протокол POC-04</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Кейсы проверки AT-19">
+        <table>
+          <thead><tr><th scope="col">Кейс</th><th scope="col">Что воспроизвести</th><th scope="col">Ожидаемый результат</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Двойная доставка</th><td>Для каждого из трёх типов доставить один и тот же факт дважды с исходным ключом.</td><td>В inbox одна запись на ID, в отчёте прирост 1 по каждому типу.</td></tr>
+            <tr><th scope="row">Сбой relay после ACK</th><td>Остановить relay после подтверждения Kafka и до отметки outbox. Возобновить обработку.</td><td>Повтор начинает доставку с тем же ключом, байтами и ID. Метрика остаётся равной одному факту.</td></tr>
+            <tr><th scope="row">Сбой consumer до offset</th><td>Остановить потребителя после коммита inbox и до фиксации offset. Запустить его снова.</td><td>Повтор находит каноническую строку с первым <code>received_at</code>. Отчёт учитывает событие один раз.</td></tr>
+            <tr><th scope="row">Повтор INSERT до слияния</th><td>Остановить экспортёр после подтверждения ClickHouse и до отметки доставки. После повтора посмотреть отчёт до фонового merge.</td><td>Физические копии допустимы. Один ID даёт метрику 1 уже до слияния.</td></tr>
+            <tr><th scope="row">Конфликт ID</th><td>В тестовых данных повторить ID с другим валидным содержимым.</td><td>Конфликт в карантине, исходная строка и её вклад в метрику сохранены.</td></tr>
+            <tr><th scope="row">Поздний самостоятельный факт</th><td>Доставить два разных ID одного агрегата, начиная с большего номера версии. Повторить доставку раннего факта.</td><td>Доменная проекция сохраняет более новое состояние. Analytics учитывает оба факта, повтор раннего ID ничего не добавляет.</td></tr>
+            <tr><th scope="row">Версия схемы</th><td>Подать допустимый тип с неподдерживаемой версией. Затем обновить потребителя до совместимого.</td><td>До обновления offset стоит на месте и есть алерт. После обновления этот факт доходит до отчёта один раз.</td></tr>
+            <tr><th scope="row">Проверка конверта и ключа</th><td>Проверить сообщения с несовпадающим ключом, чужим топиком или невалидной формой. После карантина подать валидный тестовый факт.</td><td>Некорректные записи исключены из метрики и не резервируют ID. Валидный факт принят и посчитан один раз.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Для быстрой проверки агрегата POC-04 удваивает три строки из <code>events.examples.json</code>. Для каждого типа за <code>2026-11-19</code> ожидаются <code>physical_rows = 2</code> и <code>metric = 1</code>. <a href="../../.agents/docs/poc-04/events.md#проверка-контрактов-и-счётчика">Команда для ClickHouse Local</a></p>
+    </section>
+
+    <section aria-labelledby="open">
+      <h2 id="open">Открытые вопросы</h2>
+      <ul>
+        <li><strong>Хранение.</strong> Для пилота предложены 7 суток в Kafka, 30 UTC-дат в ClickHouse и до 37 суток для отправленного outbox, подтверждённого inbox и карантина. Сроки и физическая очистка входят в согласование хранения по OD-13 и проверку GIS-07.</li>
+        <li><strong>Эксплуатация.</strong> Параметры production и пороги алертов уточняются отдельно. Для пилота POC-04 предлагает алерт при возрасте необработанного факта более 15 минут и срочный алерт перед истечением окна Kafka.</li>
+      </ul>
+      <p><a href="../../.agents/docs/poc-04/events.md#хранение-и-replay">Предложение POC-04</a> · <a href="../../.agents/docs/tropio_tz_v1.1.md#31-реестр-решений">Реестр решений</a></p>
+    </section>
+  </main>
+</body>
+</html>

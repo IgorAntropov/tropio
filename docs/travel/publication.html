@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Публикация Travel/Geo — справочник Tropio</title>
+  <link rel="stylesheet" href="../handbook.css">
+</head>
+<body>
+  <main>
+    <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Путешествия и каталог</nav>
+    <h1>Публикация Travel/Geo</h1>
+    <p>Владелец сохраняет правки в черновик и сам выбирает момент публикации. Travel закрепляет версию поездки и точные ревизии Geo всех дней. Каталог и публичная карточка выдают один цельный снимок после проверки текущих прав. <a href="../../.agents/docs/tropio_tz_v1.1.md#od-05-версии-и-публикация-travelgeo-в-gis-mvp">OD-05</a> · <a href="../../.agents/docs/tropio_tz_v1.1.md#od-06-приватность-poi-в-gis-mvp">OD-06</a></p>
+    <p class="document-note"><strong>Статус.</strong> Правила публикации и приватности утверждены. Макеты панели согласованы в UX-01. HTTP-операции описаны в проекте POC-04, их реализация и сквозная приёмка относятся к GIS-06. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#8-утверждённые-решения">Утверждённые решения</a> · <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
+
+    <nav class="document-links" aria-label="На этой странице">
+      <ul>
+        <li><a href="#flow">Сценарий и права</a></li>
+        <li><a href="#interface">Интерфейс</a></li>
+        <li><a href="#api">Операции API</a></li>
+        <li><a href="#errors">Ошибки и восстановление</a></li>
+        <li><a href="#data">Публичная выдача и события</a></li>
+        <li><a href="#acceptance">Приёмка</a></li>
+        <li><a href="#open">Открытые вопросы</a></li>
+      </ul>
+    </nav>
+
+    <section aria-labelledby="flow">
+      <h2 id="flow">Сценарий и права</h2>
+      <p>В GIS MVP публикует и снимает публикацию владелец поездки с действующей сессией. Чтобы начать публикацию, поездка должна быть в режиме <code>public</code>, а у каждого дня должен быть готовый маршрут. Travel проверяет принадлежность и порядок маршрутов, Geo проверяет их ревизии, топологию и права на защищённые зависимости. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#2-запись-и-публикация">POC-04, § 2</a></p>
+      <ol>
+        <li>Владелец сохраняет правки и выбирает «Опубликовать» или «Опубликовать изменения». Клиент передаёт ожидаемую ревизию Travel, точную ревизию маршрута каждого дня в порядке дней и UUID явно выбранных глобальных POI.</li>
+        <li>Travel записывает неизменяемый состав операции, инициатора, текущий указатель публикации и дедлайн. Ответ <code>202 Accepted</code> содержит адрес опроса. Если уже есть опубликованный снимок, он остаётся активным и доступен при действующих правах.</li>
+        <li>Geo удерживает закрепляемые ревизии по паре <code>(operation_id, route_id)</code>. Для успеха подготовки нужен весь набор. Правка Geo после успешного удержания остаётся в черновике.</li>
+        <li>Перед переключением Travel повторно проверяет через Geo права на закреплённый состав. Под блокировками проверяет статус <code>pending</code>, права инициатора, дедлайн, исходную ревизию и указатель. Затем одной транзакцией сохраняет снимок, переключает указатель и обновляет каталог, аудит и outbox.</li>
+        <li>Клиент получает <code>succeeded</code> или <code>failed</code>. Текущий указатель проверяет по черновику, а доступность карточки — публичным чтением. Сохранённый результат операции подтверждает её фиксацию в прошлом.</li>
+      </ol>
+      <p><strong>Снятие и отмена.</strong> Владелец передаёт актуальную ревизию Travel и ожидаемый указатель. <code>publication_id: null</code> позволяет отменить подготовку первой публикации. Если указатель успел измениться, клиент получает <code>409</code>, обновляет черновик и запрашивает новое подтверждение. При совпавших ожиданиях, пустом указателе и отсутствии ожидающих операций Travel возвращает текущее состояние без новой ревизии. Закрытие или архивирование поездки тоже снимает активную публикацию. Возврат в публичный режим требует новой явной команды. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#2-запись-и-публикация">Порядок отмены и освобождения ревизий</a></p>
+    </section>
+
+    <section aria-labelledby="interface">
+      <h2 id="interface">Интерфейс</h2>
+      <p>Владелец открывает панель через статус на обложке. Панель отдельно показывает версию в каталоге и сохранённые правки. В desktop-макетах видимость и действие стоят в одной строке. В mobile-макетах кнопка занимает ширину панели под строкой видимости. <a href="../../.agents/docs/tropio_tz_v1.1.md#133-действия-на-карточке-путешествия">ТЗ, § 13.3</a> · <a href="../../.agents/docs/TODO.md#текущая-работа">Согласования UX-01</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Согласованные состояния панели публикации">
+        <table>
+          <thead><tr><th scope="col">Состояние</th><th scope="col">Что видит владелец</th><th scope="col">Макеты</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Готовый черновик</th><td>Путешествие готово к первой публикации. Доступно действие «Опубликовать».</td><td><a href="../../.agents/images/layouts/desktop/trip-publication-draft.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/trip-publication-draft.png">Mobile</a></td></tr>
+            <tr><th scope="row">Есть сохранённые правки</th><td>В панели видны версия в каталоге и изменения в черновике. Доступно действие «Опубликовать изменения».</td><td><a href="../../.agents/images/layouts/desktop/trip-publication-changes.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/trip-publication-changes.png">Mobile</a></td></tr>
+            <tr><th scope="row">Публикация в процессе</th><td>Панель показывает проверку маршрута. Результат определяется по состоянию операции.</td><td><a href="../../.agents/images/layouts/desktop/trip-publication-pending.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/trip-publication-pending.png">Mobile</a></td></tr>
+            <tr><th scope="row">Новая версия опубликована</th><td>После подтверждения панель показывает опубликованную версию. Правки Geo, сохранённые после удержания ревизий, остаются в черновике.</td><td><a href="../../.agents/images/layouts/desktop/trip-publication-published.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/trip-publication-published.png">Mobile</a></td></tr>
+            <tr><th scope="row">Маршрут недоступен</th><td>Панель объясняет необходимость пересборки. После исправления владелец запускает новую команду. Причина описывается в пределах прав пользователя.</td><td><a href="../../.agents/images/layouts/desktop/trip-publication-blocked.png">Desktop</a> · <a href="../../.agents/images/layouts/mobile/trip-publication-blocked.png">Mobile</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Сетевой сбой.</strong> При неопределённом исходе панель оставляет операцию неподтверждённой. Клиент продолжает опрос по известному адресу или повторяет исходную команду с тем же ключом. Подтверждённую ошибку с исправленным составом отправляет как новую команду.</p>
+      <p><strong>Публичная карточка.</strong> При повторной проверке программа и карта обновляются вместе. При <code>404</code> клиент убирает прежнюю карточку и карту. При <code>503</code> скрывает защищённые данные до успешной проверки. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#3-чтение-отзыв-и-публичный-каталог">Правила чтения</a></p>
+    </section>
+
+    <section aria-labelledby="api">
+      <h2 id="api">Операции API</h2>
+      <p>Проект BFF <code>0.1.0</code>. Пути используют UUID и префикс <code>/api/v1</code>. Для команд нужны сессия, <code>X-CSRF-Token</code>, <code>Idempotency-Key</code> в формате UUID и JSON-тело. Публичные операции используют гостевой контекст даже при наличии сессии. Ответы проекта содержат <code>Cache-Control: no-store</code> и <code>X-Request-Id</code>. <a href="../../.agents/docs/poc-04/openapi.yaml">OpenAPI GIS MVP</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Операции API публикации">
+        <table>
+          <thead><tr><th scope="col">Ручка</th><th scope="col">Назначение и ответ</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>GET /api/v1/trips/{tripId}/draft</code><br><code>getTripDraft</code></th><td><code>200 TripDraft</code>. Авторизованное чтение черновика Travel с его ревизией, текущим указателем, видимостью и привязками маршрутов дней.</td></tr>
+            <tr><th scope="row"><code>GET /api/v1/routes/{routeId}</code><br><code>getRouteDraft</code></th><td><code>200 RouteDraft</code>. Авторизованное чтение ревизии Geo. При <code>geometry_restricted</code> остаются UUID маршрута и ревизии вместе с признаком ограничения.</td></tr>
+            <tr><th scope="row"><code>POST /api/v1/trips/{tripId}/publish</code><br><code>publishTrip</code></th><td><code>202 PublicationPending</code> и <code>Location</code> после записи операции. Повтор завершённой команды по тому же ключу возвращает <code>200 PublicationTerminal</code> с исходным результатом.</td></tr>
+            <tr><th scope="row"><code>GET /api/v1/trips/{tripId}/publication-operations/{operationId}</code><br><code>getPublicationOperation</code></th><td><code>200 PublicationOperation</code> с <code>pending</code>, <code>succeeded</code> или <code>failed</code>. Состояние доступно инициатору с действующими правами.</td></tr>
+            <tr><th scope="row"><code>POST /api/v1/trips/{tripId}/unpublish</code><br><code>unpublishTrip</code></th><td><code>200 UnpublishResult</code> с пустым указателем после снятия, отмены подготовки или подтверждения уже пустого состояния.</td></tr>
+            <tr><th scope="row"><code>GET /api/v1/catalog/trips/{tripId}</code><br><code>getPublicTrip</code></th><td><code>200 PublicTrip</code> с единым <code>publication_id</code>, днями, геометрией и доступными POI. Проверка актуальных прав обязательна.</td></tr>
+            <tr><th scope="row"><code>GET /api/v1/catalog/trips</code><br><code>listPublicTrips</code></th><td><code>200 PublicTripPage</code>. Общая отфильтрованная выдача для карты и списка с <code>bbox</code>, курсором и лимитом.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Команда публикации</h3>
+      <p><code>PublishCommand</code> включает ожидаемую ревизию Travel, от 1 до 100 записей маршрутов в порядке дней и до 500 уникальных UUID выбранных глобальных POI. Пустой <code>poi_ids</code> отключает отдельный слой меток. Правила приватности зависимостей маршрута проверяются в любом случае.</p>
+      <pre><code id="publish-request">{
+  "trip_revision_id": "0b659d34-2bd9-42e9-b05b-6c00da3dc165",
+  "routes": [{
+    "day_id": "3f5b4d4a-61c9-49ff-8fc6-f6b7ec36510c",
+    "route_id": "14c246eb-b4b0-4867-ad95-9eeba2adedd6",
+    "route_revision_id": "19fb8843-3032-4062-9e9a-347436bd6ea1"
+  }],
+  "poi_ids": []
+}</code></pre>
+      <h3>Приём команды и опрос</h3>
+      <p><code>202 Accepted</code>. Пример заголовка <code>Location: /api/v1/trips/d0106c0f-f191-4add-b969-d07edd26c88e/publication-operations/47332d9d-d1f7-4366-a37a-069c64f30a19</code>.</p>
+      <pre><code id="publish-pending">{
+  "operation_id": "47332d9d-d1f7-4366-a37a-069c64f30a19",
+  "status": "pending"
+}</code></pre>
+      <p><code>200 OK</code> при успешном завершении операции:</p>
+      <pre><code id="publish-succeeded">{
+  "operation_id": "47332d9d-d1f7-4366-a37a-069c64f30a19",
+  "status": "succeeded",
+  "publication_id": "30cbed84-cf00-4a18-a289-fffe29e71f7a",
+  "trip_revision_id": "64590ea9-4a76-4caf-8b9e-ea9d1feb8923"
+}</code></pre>
+      <p><code>200 OK</code> при бизнес-отказе после принятия команды:</p>
+      <pre><code id="publish-failed">{
+  "operation_id": "47332d9d-d1f7-4366-a37a-069c64f30a19",
+  "status": "failed",
+  "code": "ROUTE_REVISION_CONFLICT"
+}</code></pre>
+      <h3>Снятие опубликованной версии</h3>
+      <p>Команда <code>UnpublishCommand</code> с актуальной ревизией Travel и указателем, которые клиент получил из черновика.</p>
+      <pre><code id="unpublish-request">{
+  "trip_revision_id": "64590ea9-4a76-4caf-8b9e-ea9d1feb8923",
+  "publication_id": "30cbed84-cf00-4a18-a289-fffe29e71f7a"
+}</code></pre>
+      <p>Ответ <code>200 OK</code> после снятия:</p>
+      <pre><code id="unpublish-response">{
+  "publication_id": null,
+  "trip_revision_id": "2a921592-97ec-4769-8d62-21f54aa17c86"
+}</code></pre>
+    </section>
+
+    <section aria-labelledby="errors">
+      <h2 id="errors">Ошибки и восстановление</h2>
+      <h3>Ошибки HTTP</h3>
+      <p>Ответы <code>application/problem+json</code> содержат <code>type</code>, <code>title</code>, <code>status</code>, <code>code</code> и <code>request_id</code>. При конфликте актуальный UUID ревизии может возвращаться после проверки доступа. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#5-общие-соглашения-api">Коды POC-04</a> · <a href="../contracts/bff-errors.html#recovery">Ошибки BFF и восстановление</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Ошибки HTTP публикации">
+        <table>
+          <thead><tr><th scope="col">HTTP и код</th><th scope="col">Условие</th><th scope="col">Реакция клиента</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>400 INVALID_REQUEST</code></th><td>Некорректное тело, UUID, заголовок, фильтр или курсор.</td><td>Исправить данные запроса перед новой отправкой.</td></tr>
+            <tr><th scope="row"><code>401 SESSION_REQUIRED</code></th><td>Для закрытой операции нужна действующая сессия.</td><td>Предложить войти и обновить данные с проверкой прав.</td></tr>
+            <tr><th scope="row"><code>403 CSRF_REJECTED</code></th><td>Мутация отклонена защитой CSRF.</td><td>Восстановить защищённую сессию и состояние операции.</td></tr>
+            <tr><th scope="row"><code>404 NOT_FOUND</code></th><td>Объект или операция отсутствуют либо недоступны.</td><td>Показать недоступность. В публичной карточке убрать прежние данные.</td></tr>
+            <tr><th scope="row"><code>409 TRIP_REVISION_CONFLICT</code></th><td>В Travel изменилась ожидаемая ревизия или указатель.</td><td>Перечитать черновик и запросить подтверждение актуальной команды.</td></tr>
+            <tr><th scope="row"><code>409 IDEMPOTENCY_KEY_REUSED</code></th><td>Ключ уже использован с другим составом команды.</td><td>Для изменившегося намерения отправить новую подтверждённую команду с новым ключом.</td></tr>
+            <tr><th scope="row"><code>422 INVALID_PUBLICATION_MANIFEST</code></th><td>Запрос соответствует схеме, но состав публикации нарушает доменные правила.</td><td>Исправить набор маршрутов и POI, сверить актуальные ревизии и повторить как новую команду.</td></tr>
+            <tr><th scope="row"><code>503 DEPENDENCY_UNAVAILABLE</code></th><td>Данные или обязательный сервис временно недоступны, либо запись не подтверждена.</td><td>Для записи проверить известную операцию или повторить исходную команду с тем же ключом. Для публичного чтения скрыть защищённые данные до успешной проверки.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Бизнес-отказы операции</h3>
+      <p>Опрос и повтор завершённого запроса могут вернуть HTTP <code>200</code> с <code>status: failed</code>. Клиент выбирает реакцию по <code>code</code> из <code>PublicationFailed</code>. <a href="../../.agents/docs/poc-04/openapi.yaml">Схема OpenAPI</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#2-запись-и-публикация">Условия завершения</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Бизнес-отказы публикации">
+        <table>
+          <thead><tr><th scope="col">Код</th><th scope="col">Причина и восстановление</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>TRIP_REVISION_CONFLICT</code></th><td>Черновик Travel изменился во время операции. Перечитать состояние и подтвердить новый состав.</td></tr>
+            <tr><th scope="row"><code>ROUTE_REVISION_CONFLICT</code></th><td>Ожидаемая ревизия маршрута устарела к проверке Geo. Перечитать маршрут и сверить его с черновиком.</td></tr>
+            <tr><th scope="row"><code>ROUTE_NOT_READY</code></th><td>Маршрут требует достроения или пересчёта. Открыть редактор и подготовить маршрут.</td></tr>
+            <tr><th scope="row"><code>POI_PUBLICATION_RESTRICTED</code></th><td>Выбранная метка или известная зависимость ограничена. Обновить разрешённый набор меток либо пересобрать зависимый маршрут из разрешённых входов. Интерфейс скрывает недоступные сведения.</td></tr>
+            <tr><th scope="row"><code>PUBLICATION_PRECONDITION_FAILED</code></th><td>Условие финального переключения не выполнено. Перечитать черновик и проверить доступность публикации.</td></tr>
+            <tr><th scope="row"><code>PUBLICATION_CANCELLED</code></th><td>Операция отменена. Показать отмену и обновить текущий указатель.</td></tr>
+            <tr><th scope="row"><code>PUBLICATION_TIMED_OUT</code></th><td>Операция завершена по дедлайну. После проверки текущего состояния предложить начать новую публикацию.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="data">
+      <h2 id="data">Публичная выдача и события</h2>
+      <ul>
+        <li>Travel владеет указателем, снимком и проекцией каталога. Geo владеет точными ревизиями геометрии и актуальной политикой POI. BFF читает снимок и поколение доступа из Travel, закреплённые ревизии из Geo, затем перепроверяет указатель и поколение в Travel. При смене снимка сборка повторяется один раз. Отзыв доступа даёт <code>404</code> карточки, повторная гонка или недоступность владельца — <code>503</code>.</li>
+        <li>Отзыв доступа к необязательной метке убирает её из слоя. Если точное положение POI читается из маршрута, старта или производной линии, при отзыве поездка исключается целиком из карточки, карты и списка. Доступ к точной версии положения проверяется даже после одобрения нового положения. Отзыв между последней проверкой Geo и фиксацией Travel может оставить записанный снимок, который скрывается уже при первой публичной проверке.</li>
+        <li>Клиент перепроверяет открытую карточку при возврате фокуса и периодически, пока она видима. В POC-04 ориентир интервала — 30 секунд. Запоздалый ответ отбрасывается по порядку запросов.</li>
+        <li><code>trip.published</code> фиксирует успешное переключение. <code>trip.unpublished</code> фиксирует снятие существовавшего указателя. Отмена первой публикации при пустом указателе завершается без события снятия. Повтор команды возвращает исходный результат, повтор доставки сохраняет <code>event_id</code>.</li>
+        <li>При окончательном отказе, отмене или истечении срока Travel фиксирует завершение и намерение освободить удержания. Обработчик повторяет освобождение до подтверждения Geo, а Geo хранит отметку о снятии для защиты от позднего запроса.</li>
+      </ul>
+      <p><a href="../../.agents/docs/POC-04-travel-geo-contracts.md#3-чтение-отзыв-и-публичный-каталог">Выдача и отзыв</a> · <a href="catalog.html#flow">Публичный каталог и фильтры</a> · <a href="program.html#public-program">Программа путешествия и время сбора</a> · <a href="../route-editor/poi-privacy.html">Приватность POI</a> · <a href="../contracts/events-deduplication.html#facts">События Travel/Geo</a> · <a href="../route-editor/split-track.html">Деление трека в черновике</a></p>
+    </section>
+
+    <section aria-labelledby="acceptance">
+      <h2 id="acceptance">Приёмка</h2>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Проверки публикации Travel и Geo">
+        <table>
+          <thead><tr><th scope="col">Кейс</th><th scope="col">Что проверить</th><th scope="col">Ожидаемый результат</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Первая публикация и обновление · AT-17</th><td>Запустить первую публикацию. Затем открыть её из другого браузера, сохранить правки маршрута и запустить обновление. Задержать удержание одного дня и доставить старый ответ после нового.</td><td>До первой фиксации карточка недоступна. При обновлении виден цельный прежний снимок, затем цельный новый. Запоздалый ответ не возвращает старое состояние.</td></tr>
+            <tr><th scope="row">Правка после удержания · AT-17</th><td>После подтверждения Geo изменить один из маршрутов до переключения Travel.</td><td>Снимок получает ранее удержанную ревизию. Свежая правка остаётся в черновике.</td></tr>
+            <tr><th scope="row">Конкуренция и потерянный ответ · AT-17</th><td>Запустить две операции с разными ключами от одной ревизии Travel. Потерять <code>202</code> или подтверждение Geo и повторить исходную команду.</td><td>Один снимок и один факт публикации для победившей операции. Повтор сохраняет UUID операции, а вторая операция получает конфликт.</td></tr>
+            <tr><th scope="row">Снятие и отмена · POC-04</th><td>Снять текущую версию одновременно с её обновлением. Повторить сценарий для ожидающей первой публикации с пустым указателем.</td><td>Сравниваются ревизия и указатель. Устаревшая команда получает <code>409</code>. При успешном снятии событие появляется только для существовавшего указателя. Отменённая операция больше не фиксируется.</td></tr>
+            <tr><th scope="row">Дедлайн и позднее удержание · POC-04</th><td>Дождаться дедлайна, пока фиксация ждёт блокировку. Перезапустить обработчик после отмены и доставить поздний запрос удержания.</td><td>Поздний commit исключён. Освобождение доходит до подтверждения Geo, поздний запрос не восстанавливает удержание.</td></tr>
+            <tr><th scope="row">Приватность и отзыв · AT-06/18</th><td>Отозвать необязательную метку, затем отозвать или переместить POI, от которой зависит геометрия. Проверить карточку через гостевой и другой авторизованный контекст, SSR, карту, список и индекс.</td><td>Метку убирают отдельно. При ограниченной зависимости отсутствует вся поездка в публичной выдаче. После актуальной проверки карточка получает <code>404</code>, локальный индекс исключает запись и открытая карточка очищается.</td></tr>
+            <tr><th scope="row">Отзыв между проверкой и фиксацией · POC-04</th><td>После последней проверки Geo отозвать доступ к POI, от которой зависит маршрут, и завершить транзакцию Travel.</td><td>Даже если операция сохранила снимок и событие, первая публичная проверка скрывает поездку и её защищённую геометрию.</td></tr>
+            <tr><th scope="row">Проверка доступа недоступна · POC-04</th><td>Прервать обязательное чтение Geo после появления карточки. Восстановить сервис.</td><td>BFF возвращает <code>503</code>, интерфейс скрывает защищённое содержимое до успешной проверки.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><a href="../../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">Сценарии ТЗ</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#7-приёмочные-проверки-будущей-реализации">Регрессии POC-04</a></p>
+    </section>
+
+    <section aria-labelledby="open">
+      <h2 id="open">Открытые вопросы</h2>
+      <ul>
+        <li><strong>Данные панели.</strong> Макеты показывают время версии в каталоге и признак неопубликованных изменений. Проект <code>TripDraft</code> описывает текущий <code>publication_id</code>, ревизию и маршруты дней. Для панели нужно определить источник времени публикации и способ сравнения сохранённых ревизий Travel и Geo с закреплённым составом.</li>
+        <li><strong>UI снятия, конфликтов и таймаута.</strong> В проекте API есть поведение для этих случаев. Для реализации нужны отдельные состояния и тексты в пределах прав владельца.</li>
+        <li><strong>Делегирование.</strong> Утверждённый объём GIS MVP предусматривает владельца. Другие роли и совместное редактирование остаются открытой частью OD-05.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

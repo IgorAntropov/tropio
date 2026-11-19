@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Деление трека — справочник Tropio</title>
+  <link rel="stylesheet" href="../handbook.css">
+</head>
+<body>
+  <main>
+    <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Редактор маршрутов</nav>
+    <h1>Деление трека</h1>
+    <p>Владелец поездки выбирает позицию на треке. Geo заменяет его двумя треками с общей маршрутной точкой и сохраняет исходную геометрию в истории. Любой дочерний трек можно разделить снова. <a href="../../.agents/docs/tropio_tz_v1.1.md#84-разделение-трека">ТЗ, § 8.4</a></p>
+    <p class="document-note"><strong>Статус.</strong> Поведение задано ТЗ, внешний API описан в проекте POC-04. Реализация относится к GIS-04 и GIS-05. <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
+
+    <nav class="document-links" aria-label="На этой странице">
+      <ul>
+        <li><a href="#flow">Сценарий и права</a></li>
+        <li><a href="#interface">Интерфейс</a></li>
+        <li><a href="#api">Операции API</a></li>
+        <li><a href="#errors">Ошибки и восстановление</a></li>
+        <li><a href="#data">Данные и события</a></li>
+        <li><a href="#acceptance">Приёмка</a></li>
+        <li><a href="#open">Открытые вопросы</a></li>
+      </ul>
+    </nav>
+
+    <section aria-labelledby="flow">
+      <h2 id="flow">Сценарий и права</h2>
+      <p>В GIS MVP команду выполняет владелец поездки с действующей сессией. Нужны UUID маршрута, трека из его черновика и ожидаемой ревизии Geo. Travel проверяет права на поездку и принадлежность маршрута. Geo проверяет текущий доступ к маршруту и защищённым зависимостям. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#2-запись-и-публикация">POC-04, §§ 2 и 8</a></p>
+      <ol>
+        <li>Владелец открывает маршрут дня и выбирает трек и позицию на нём.</li>
+        <li>Редактор отправляет позицию и UUID ожидаемой ревизии с новым ключом команды. Пока сервер обрабатывает команду, редактор показывает ожидание возле выбранного объекта.</li>
+        <li>Geo вычисляет положение на геометрии, проверяет топологию, создаёт общую точку и два новых трека. Обновляет порядок, расстояние, высоты и другие производные характеристики по ТЗ.</li>
+        <li>После подтверждения редактор показывает сохранение и обновляет карту и схему по данным черновика. Для повторного деления владелец выбирает один из новых треков и работает с актуальной ревизией.</li>
+      </ol>
+      <p><a href="../../.agents/docs/tropio_tz_v1.1.md#84-разделение-трека">Разделение и история</a> · <a href="../../.agents/docs/tropio_tz_v1.1.md#85-остальные-инструменты">Ожидание, схема и сохранение</a></p>
+    </section>
+
+    <section aria-labelledby="interface">
+      <h2 id="interface">Интерфейс</h2>
+      <ul>
+        <li><strong>Широкий экран.</strong> Карта и вертикальная схема доступны одновременно. Выбор трека выделяет объект в обоих представлениях. Форма трека открывается в модальном окне. <a href="../../.agents/images/layouts/desktop/route-timeline.png">Схема</a> · <a href="../../.agents/images/layouts/desktop/track-editor-form.png">Форма трека</a></li>
+        <li><strong>Смартфон.</strong> Карта, схема и форма открываются по очереди на весь экран. При переключении карты и схемы выделение сохраняется. <a href="../../.agents/images/layouts/mobile/route-timeline.png">Схема</a> · <a href="../../.agents/images/layouts/mobile/track-editor-form.png">Форма трека</a></li>
+        <li><strong>После сохранения.</strong> В порядке прохождения вместо исходного трека появляются первый трек, общая точка и второй трек. При потере сети редактор показывает, что изменение ещё не синхронизировано.</li>
+      </ul>
+      <p>Макеты иллюстрируют общий редактор. Кнопку деления и способ выбора позиции касанием предстоит согласовать. Общий экран конфликта утверждён. <a href="../../.agents/images/layouts/desktop/route-conflict-conflict.png">Десктоп</a> · <a href="../../.agents/images/layouts/mobile/route-conflict-conflict.png">Смартфон</a>. <a href="#open">Открытые вопросы</a> · <a href="../../.agents/docs/TODO.md#текущая-работа">Согласования UX-01</a></p>
+    </section>
+
+    <section aria-labelledby="api">
+      <h2 id="api">Операции API</h2>
+      <p>Проект внешнего API BFF, версия <code>0.1.0</code>. <a href="../../.agents/docs/poc-04/openapi.yaml">OpenAPI GIS MVP</a></p>
+      <ul>
+        <li><code>GET /api/v1/trips/{tripId}/draft</code> (<code>getTripDraft</code>) возвращает поля черновика поездки и привязки маршрутов дней.</li>
+        <li><code>GET /api/v1/routes/{routeId}</code> (<code>getRouteDraft</code>) возвращает текущую ревизию, точки и треки доступного маршрута. Этой операцией можно перечитать схему после деления или конфликта. При <code>availability: geometry_restricted</code> доступны только UUID маршрута и ревизии вместе с признаком ограничения.</li>
+        <li><code>POST /api/v1/tracks/{trackId}/split</code> (<code>splitTrack</code>) принимает UUID трека в пути и тело <code>SplitCommand</code>. Для проектного контракта требуются действующая сессия (рабочее имя cookie <code>tropio_session</code>), <code>X-CSRF-Token</code>, <code>Idempotency-Key</code> в формате UUID и <code>Content-Type: application/json</code>.</li>
+      </ul>
+      <p>Координаты <code>split_position</code> передаются как <code>{lon, lat}</code> в WGS 84. Долгота от −180 до 180, широта от −90 до 90. Ответы проекта контракта используют <code>X-Request-Id</code> и <code>Cache-Control: no-store</code>.</p>
+      <h3>Пример команды</h3>
+      <pre><code>POST /api/v1/tracks/a77f78f4-3718-4d73-9aaf-45d638340ce1/split
+Content-Type: application/json
+Cookie: tropio_session=example-session
+X-CSRF-Token: example-token
+Idempotency-Key: b2cbf104-dafb-4fd1-94cf-8afb7f033e64</code></pre>
+      <pre><code id="split-request">{
+  "route_id": "14c246eb-b4b0-4867-ad95-9eeba2adedd6",
+  "route_revision_id": "19fb8843-3032-4062-9e9a-347436bd6ea0",
+  "split_position": { "lon": 84.98, "lat": 56.47 }
+}</code></pre>
+      <h3>Пример ответа <code>200 OK</code></h3>
+      <p><code>SplitResult</code> содержит UUID маршрута, зафиксированной ревизии, общей точки и ровно двух новых треков. Ответ подтверждает фиксацию указанной операции. Текущий состав и порядок черновика можно получить через <code>getRouteDraft</code>.</p>
+      <pre><code id="split-response">{
+  "route_id": "14c246eb-b4b0-4867-ad95-9eeba2adedd6",
+  "route_revision_id": "19fb8843-3032-4062-9e9a-347436bd6ea1",
+  "point_id": "e224d1d4-20e1-4c04-a5b6-c18a8436e02e",
+  "track_ids": [
+    "edd7a79a-2d4d-4078-9016-152b10b37991",
+    "287db291-a30c-4774-9a86-f66dbb0d46cd"
+  ]
+}</code></pre>
+      <p>Для новой команды создаётся новый ключ. При неопределённом исходе тот же ключ повторяют с теми же UUID трека, маршрута, исходной ревизии и той же позицией. При сохранённом результате Geo возвращает исходный ответ после повторной проверки текущих прав, даже если исходный трек уже заменён. Предлагаемое окно гарантированного повтора завершённой команды — 7 суток. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#5-общие-соглашения-api">POC-04, § 5</a></p>
+    </section>
+
+    <section aria-labelledby="errors">
+      <h2 id="errors">Ошибки и восстановление</h2>
+      <p>Возвращается <code>application/problem+json</code> с полями <code>type</code>, <code>title</code>, <code>status</code>, <code>code</code> и <code>request_id</code>. При конфликте сервер может вернуть <code>current_route_revision_id</code> после проверки прав. Коды взяты из соглашений POC-04. Действия клиента описывают ожидаемый сценарий восстановления. Визуальные состояния предстоит согласовать. <a href="../contracts/bff-errors.html#recovery">Ошибки BFF и восстановление</a> · <a href="../../.agents/docs/poc-04/openapi.yaml">Схема Problem</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Таблица ошибок деления трека">
+        <table>
+          <thead>
+            <tr><th scope="col">HTTP и код</th><th scope="col">Условие</th><th scope="col">Реакция редактора</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>400 INVALID_REQUEST</code></th><td>Некорректное тело, UUID или обязательный заголовок.</td><td>Показать, что запрос не принят. Исправить данные перед новой отправкой.</td></tr>
+            <tr><th scope="row"><code>401 SESSION_REQUIRED</code></th><td>Нет действующей сессии.</td><td>Предложить войти и заново проверить доступ к черновику.</td></tr>
+            <tr><th scope="row"><code>403 CSRF_REJECTED</code></th><td>Запрос отклонён защитой CSRF.</td><td>Предложить восстановить защищённую сессию. Сохранение остаётся неподтверждённым.</td></tr>
+            <tr><th scope="row"><code>404 NOT_FOUND</code></th><td>Объект отсутствует или недоступен. Ответ одинаков в обоих случаях.</td><td>Показать, что объект недоступен. Если маршрут доступен, предложить обновить черновик.</td></tr>
+            <tr><th scope="row"><code>409 ROUTE_REVISION_CONFLICT</code></th><td>Текущая ревизия маршрута уже изменилась.</td><td>Перечитать черновик и предложить заново выбрать трек и позицию на актуальной схеме.</td></tr>
+            <tr><th scope="row"><code>409 IDEMPOTENCY_KEY_REUSED</code></th><td>Ключ уже использован с другим содержимым команды.</td><td>Для намеренно изменённой команды использовать новый ключ после проверки актуального черновика.</td></tr>
+            <tr><th scope="row"><code>422 INVALID_SPLIT_POSITION</code></th><td>Позиция нарушает инвариант деления, например приводит к вырожденному отрезку.</td><td>Предложить выбрать другую позицию.</td></tr>
+            <tr><th scope="row"><code>422 ROUTE_GEOMETRY_RESTRICTED</code></th><td>Право на защищённую зависимость отозвано. Частичная правка существующей геометрии отклонена.</td><td>Скрыть ограниченную геометрию и показать состояние пересборки из разрешённых входов.</td></tr>
+            <tr><th scope="row"><code>503 DEPENDENCY_UNAVAILABLE</code></th><td>Обязательный сервис временно недоступен или фиксация команды не подтверждена.</td><td>Показать, что сохранение ещё не подтверждено. При неопределённом исходе повторить исходную команду с тем же ключом.</td></tr>
+            <tr><th scope="row">Сетевой сбой</th><td>Ответ потерян или устройство без сети.</td><td>Показать несинхронизированное изменение. При неопределённом исходе повторить исходную команду с тем же ключом после восстановления сети.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="data">
+      <h2 id="data">Данные и события</h2>
+      <p>BFF передаёт удостоверенный контекст. Travel владеет связью дня с маршрутом и правами на поездку, Geo — маршрутом, его ревизиями, точками и треками. Geo фиксирует геометрию, ревизию, результат команды и запись outbox в одной транзакции. У исходного трека сохраняется история, а общая точка соединяет конец первого нового трека с началом второго. <a href="../../.agents/docs/er-diagram.md#31-ревизии-точки-и-треки">Модель Geo</a> · <a href="../../.agents/docs/microservices.md#23-travel-и-geo--согласование-записи-и-публикации">Граница Travel и Geo</a></p>
+      <p>Событие <code>route.track.split</code> версии 1 создаёт Geo. <code>aggregate_id</code> — UUID маршрута, <code>payload.route_revision_id</code> — UUID сохранённой ревизии. Повтор команды возвращает исходный результат. Повтор доставки несёт тот же <code>event_id</code>. Публичная карточка продолжает читать прежний снимок до явной успешной публикации Travel. <a href="../contracts/events-deduplication.html#facts">События Travel/Geo</a> · <a href="../../.agents/docs/poc-04/events.examples.json">Пример события</a></p>
+    </section>
+
+    <section aria-labelledby="acceptance">
+      <h2 id="acceptance">Приёмка</h2>
+      <ul>
+        <li><strong>AT-02.</strong> Разделить исходный трек, затем одну из половин. Ожидаются три трека в корректном порядке, две новые общие точки попарно соседних треков и сохранённая исходная геометрия в истории.</li>
+        <li><strong>AT-04, связанный сценарий.</strong> Перенести общую точку. Связанные треки согласованы или помечены как требующие пересчёта.</li>
+        <li><strong>AT-20.</strong> Оборвать сеть до получения ответа. Редактор показывает несинхронизированное изменение. Повтор после потерянного ответа возвращает тот же результат, если первая команда уже зафиксирована.</li>
+        <li><strong>POC-04, конкуренция.</strong> Отправить две команды с разными ключами и одной ожидаемой ревизией. Успешная запись на исходную ревизию одна. При разрешённом доступе другая команда получает конфликт.</li>
+        <li><strong>AT-17, связанный сценарий.</strong> Открыть опубликованную карточку и разделить трек в черновике. Карточка сохраняет прежнюю ревизию до явной публикации нового снимка.</li>
+      </ul>
+      <p><a href="../../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">Критерии ТЗ</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#7-приёмочные-проверки-будущей-реализации">Сценарии будущей реализации POC-04</a></p>
+    </section>
+
+    <section aria-labelledby="open">
+      <h2 id="open">Открытые вопросы</h2>
+      <ul>
+        <li><strong>UX-01.</strong> Согласовать вход в режим деления, выбор позиции мышью и касанием, подтверждение команды.</li>
+        <li><strong>GIS-04.</strong> Уточнить нижний порог длины и правила привязки позиции к линии, включая выбор участка при нескольких возможных проекциях.</li>
+        <li><strong>Undo.</strong> ТЗ требует возможность отмены. В срезе POC-04 отдельной операции Undo нет. Нужно уточнить контракт отмены, ожидаемую ревизию и поведение при конкурирующей правке.</li>
+        <li><strong>GIS-02.</strong> Уточнить сессионную cookie, выдачу CSRF-токена и проверку origin.</li>
+      </ul>
+      <p><a href="../../.agents/docs/tropio_tz_v1.1.md#84-разделение-трека">Требования к делению и Undo</a> · <a href="../../.agents/docs/TODO.md#текущая-работа">Очередь UX-01</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#5-общие-соглашения-api">Рабочие параметры API</a></p>
+    </section>
+  </main>
+</body>
+</html>

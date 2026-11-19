@@ -1,0 +1,13 @@
+{
+  "name": "tropio-handbook",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:local": "node build.mjs --local"
+  },
+  "devDependencies": {
+    "marked": "17.0.1",
+    "mermaid": "12.3.0"
+  }
+}
