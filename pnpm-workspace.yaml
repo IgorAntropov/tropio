@@ -5,4 +5,5 @@ packages:
 engineStrict: true
 
 allowBuilds:
+  esbuild@0.25.12: false
   esbuild@0.28.2: true

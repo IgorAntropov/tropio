@@ -2,29 +2,31 @@
 import type { DemoTrip } from '../model/trips'
 
 defineProps<{ trip: DemoTrip }>()
+
+const { t, n } = useI18n()
 </script>
 
 <template>
   <main class="demo-width demo-main">
-    <NuxtLink to="/" class="catalog-link">← Все маршруты</NuxtLink>
+    <NuxtLink to="/" class="catalog-link"><span aria-hidden="true">←</span> {{ t('demo.trip.backToCatalog') }}</NuxtLink>
     <h1>{{ trip.title }}</h1>
     <p class="demo-summary">{{ trip.summary }}</p>
     <dl class="trip-facts">
       <div>
-        <dt>Регион</dt>
+        <dt>{{ t('demo.trip.region') }}</dt>
         <dd>{{ trip.region }}</dd>
       </div>
       <div>
-        <dt>Расстояние</dt>
-        <dd>{{ trip.distanceKm }} км</dd>
+        <dt>{{ t('demo.trip.distance') }}</dt>
+        <dd>{{ n(trip.distanceKm, 'distance') }}</dd>
       </div>
       <div>
-        <dt>Длительность</dt>
-        <dd>{{ trip.duration }}</dd>
+        <dt>{{ t('demo.trip.duration') }}</dt>
+        <dd>{{ n(trip.durationDays, 'duration') }}</dd>
       </div>
     </dl>
     <section class="trip-stops">
-      <h2>Точки маршрута</h2>
+      <h2>{{ t('demo.trip.stops') }}</h2>
       <ol>
         <li v-for="stop in trip.stops" :key="stop">{{ stop }}</li>
       </ol>

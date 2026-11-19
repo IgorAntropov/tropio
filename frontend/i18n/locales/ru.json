@@ -1,0 +1,28 @@
+{
+  "productName": "Тропио",
+  "pageTitle": "{title} · @:productName",
+  "home": {
+    "apiAvailable": "API работает",
+    "apiUnavailable": "API недоступен"
+  },
+  "demo": {
+    "label": "Демо",
+    "catalog": {
+      "title": "Каталог маршрутов",
+      "summary": "Вымышленные маршруты для знакомства с «@:{'productName'}».",
+      "tripFacts": "{distance} · {duration}"
+    },
+    "trip": {
+      "backToCatalog": "Все маршруты",
+      "region": "Регион",
+      "distance": "Расстояние",
+      "duration": "Длительность",
+      "stops": "Точки маршрута"
+    }
+  },
+  "errors": {
+    "notFound": "Страница не найдена",
+    "unexpected": "Не удалось открыть страницу",
+    "backHome": "На главную"
+  }
+}

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { demoTrips } from '../model/trips'
+
+const { t, n } = useI18n()
 </script>
 
 <template>
   <main class="demo-width demo-main">
-    <h1>Каталог маршрутов</h1>
-    <p class="demo-summary">Вымышленные маршруты для знакомства с Tropio.</p>
+    <h1>{{ t('demo.catalog.title') }}</h1>
+    <p class="demo-summary">{{ t('demo.catalog.summary') }}</p>
     <ul class="trip-list">
       <li v-for="trip in demoTrips" :key="trip.slug">
         <NuxtLink :to="`/trips/${trip.slug}/`" class="trip-link">
@@ -13,7 +15,12 @@ import { demoTrips } from '../model/trips'
             <span class="trip-region">{{ trip.region }}</span>
             <strong>{{ trip.title }}</strong>
           </span>
-          <span class="trip-distance">{{ trip.distanceKm }} км · {{ trip.duration }}</span>
+          <span class="trip-distance">
+            {{ t('demo.catalog.tripFacts', {
+              distance: n(trip.distanceKm, 'distance'),
+              duration: n(trip.durationDays, 'duration'),
+            }) }}
+          </span>
           <span aria-hidden="true">↗</span>
         </NuxtLink>
       </li>

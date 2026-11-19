@@ -52,6 +52,16 @@ it('renders the confirmed BFF status in the server-rendered home page', async ()
   expect(await response.text()).toContain('API работает')
 })
 
+it('renders the Russian product name in the home page and document title', async () => {
+  const response = await fetch('/')
+  const html = await response.text()
+
+  expect(response.status).toBe(200)
+  expect(html).toMatch(/<html\b[^>]*\blang="ru"/)
+  expect(html).toContain('<title>Тропио</title>')
+  expect(html).toContain('<h1>Тропио</h1>')
+})
+
 it('returns a gateway error when the BFF health check fails', async () => {
   upstreamStatus = 503
 

@@ -3,7 +3,9 @@ import { TripCatalog } from '@fsd/pages/demo-trips'
 
 defineOptions({ name: 'DemoCatalogPage' })
 
-useSeoMeta({ title: 'Каталог маршрутов · Tropio' })
+const { t } = useI18n()
+
+useSeoMeta({ title: () => t('pageTitle', { title: t('demo.catalog.title') }) })
 </script>
 
 <template>

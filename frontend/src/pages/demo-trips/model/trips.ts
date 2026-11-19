@@ -3,7 +3,7 @@ export interface DemoTrip {
   title: string
   region: string
   distanceKm: number
-  duration: string
+  durationDays: number
   summary: string
   stops: readonly string[]
 }
@@ -14,7 +14,7 @@ export const demoTrips: readonly DemoTrip[] = [
     title: 'Террасы над Катунью',
     region: 'Алтай',
     distanceKm: 18,
-    duration: '2 дня',
+    durationDays: 2,
     summary: 'Двухдневная прогулка от речной долины к обзорной поляне.',
     stops: ['Сосновый берег', 'Верхняя терраса', 'Обзорная поляна'],
   },
@@ -23,7 +23,7 @@ export const demoTrips: readonly DemoTrip[] = [
     title: 'По тихим бухтам',
     region: 'Карелия',
     distanceKm: 12,
-    duration: '1 день',
+    durationDays: 1,
     summary: 'Короткий маршрут вдоль воды с остановкой у гранитного мыса.',
     stops: ['Лесная пристань', 'Гранитный мыс', 'Тихая бухта'],
   },
@@ -32,7 +32,7 @@ export const demoTrips: readonly DemoTrip[] = [
     title: 'Вдоль степного хребта',
     region: 'Хакасия',
     distanceKm: 24,
-    duration: '2 дня',
+    durationDays: 2,
     summary: 'Маршрут по открытым склонам с видом на долину и выходом к озеру.',
     stops: ['Степная тропа', 'Восточный гребень', 'Озёрный берег'],
   },

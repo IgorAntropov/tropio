@@ -6,13 +6,14 @@ defineOptions({ name: 'DemoTripPage' })
 definePageMeta({ key: route => route.path })
 
 const route = useRoute()
+const { t } = useI18n()
 const trip = demoTrips.find(item => item.slug === route.params.slug)
 
 if (!trip) {
-  throw createError({ statusCode: 404, statusMessage: 'Route not found' })
+  throw createError({ status: 404 })
 }
 
-useSeoMeta({ title: `${trip.title} · Tropio` })
+useSeoMeta({ title: () => t('pageTitle', { title: trip.title }) })
 </script>
 
 <template>
