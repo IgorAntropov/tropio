@@ -19,5 +19,9 @@ defineProps<{ name: keyof typeof glyphByName }>()
 </script>
 
 <template>
-  <span class="material-symbols-rounded" aria-hidden="true">{{ glyphByName[name] }}</span>
+  <span class="material-symbols-rounded" aria-hidden="true">
+    <svg width="1em" height="1em" viewBox="0 0 24 24" display="block" focusable="false">
+      <text x="0" y="24" font-size="24" fill="currentColor">{{ glyphByName[name] }}</text>
+    </svg>
+  </span>
 </template>

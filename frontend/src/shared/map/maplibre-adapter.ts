@@ -1,23 +1,29 @@
 import { LngLatBounds, Map, Marker, NavigationControl, ScaleControl } from 'maplibre-gl'
 import type { GeoJSONSource, LineLayerSpecification, MapMouseEvent, StyleSpecification } from 'maplibre-gl'
+import { PointClusters, type ClusterLabels } from './point-clusters'
+import { TripFlightCamera } from './trip-flight'
+import { continuousTrack, nearestWorld } from './world-coordinates'
 import { pilotBasemap, tomskCenter, tomskZoom } from './basemap'
 import type {
   MapCoordinate,
   MapFocus,
+  MapFlightPhase,
   MapPoint,
   MapPosition,
   MapRendererAdapter,
   MapScene,
   MapSelection,
+  MapTripFlight,
 } from './types'
 
 type MapEvents = {
   coordinate(position: MapPosition): void
   select(selection: MapSelection, position: MapPosition): void
   ready(): void
+  flightEnd(): void
 }
 
-type MarkerRecord = { marker: Marker; button: HTMLButtonElement; feature: MapPoint; selection: MapSelection }
+type MarkerRecord = { marker: Marker; button: HTMLButtonElement; label?: HTMLElement; feature: MapPoint; selection: MapSelection }
 
 const layerPrefix = 'tropio-editor-'
 const linesSource = layerPrefix + 'tracks'
@@ -68,18 +74,66 @@ function localResource(path?: string): string | undefined {
   }
 }
 
+type Rect = { x: number; y: number; width: number; height: number }
+type LabelAnchor = { label: HTMLElement; point: { x: number; y: number } }
+
+function overlap(a: Rect, b: Rect) {
+  return Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x))
+    * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y))
+}
+
+function placeTripLabels(container: HTMLElement, items: LabelAnchor[]) {
+  if (!items.length || !container.clientWidth) return
+  const viewport = container.getBoundingClientRect()
+  const frame = container.closest('[data-map-frame]') ?? container
+  const controls = frame.querySelectorAll('[data-map-overlay], .maplibregl-ctrl')
+  const occupied: Rect[] = Array.from(controls, element => {
+    const rect = element.getBoundingClientRect()
+    return { x: rect.left - viewport.left - 3, y: rect.top - viewport.top - 3, width: rect.width + 6, height: rect.height + 6 }
+  })
+  const visible = items.filter(({ point }) => point.x >= 0 && point.y >= 0 && point.x <= viewport.width && point.y <= viewport.height)
+  for (const { point } of visible) occupied.push({ x: point.x - 11, y: point.y - 23, width: 22, height: 25 })
+  for (const { label, point } of visible) {
+    const width = label.offsetWidth
+    const height = label.offsetHeight
+    const centered = point.x - width / 2
+    const below = point.y + 7
+    const choices = [
+      [centered, below], [centered - width / 4, below], [centered + width / 4, below],
+      [centered, below + 8], [point.x - width + 12, below], [point.x - 12, below],
+    ] as const
+    let best: Rect | undefined
+    let penalty = Infinity
+    for (const [left, top] of choices) {
+      const x = Math.max(4, Math.min(left, viewport.width - width - 4))
+      const y = top
+      const rect = { x, y, width, height }
+      const score = occupied.reduce((sum, other) => sum + overlap(rect, other), 0) + Math.abs(x - left) + Math.abs(y - top)
+      if (score < penalty) { best = rect; penalty = score }
+      if (!score) break
+    }
+    if (best) {
+      label.style.setProperty('--label-x', Math.round(best.x - point.x) + 'px')
+      label.style.setProperty('--label-y', Math.round(best.y - point.y) + 'px')
+      occupied.push(best)
+    }
+  }
+}
+
 export class MapLibreRenderer implements MapRendererAdapter {
   private readonly map: Map
   private readonly basemap: StyleSpecification
   private readonly markers = new globalThis.Map<string, MarkerRecord>()
   private scene: MapScene = { points: [], tracks: [], pois: [], mode: 'view' }
+  private clusters?: PointClusters
+  private readonly flight: TripFlightCamera
   private styleUrl?: string
   private hoveredTrack: string | null = null
 
   constructor(
     container: HTMLElement,
     private readonly events: MapEvents,
-    options: { baseURL: string; center?: MapPosition; styleUrl?: string },
+    options: { baseURL: string; center?: MapPosition; styleUrl?: string; clusterLabels?: ClusterLabels },
   ) {
     this.basemap = pilotBasemap(options.baseURL)
     this.styleUrl = localResource(options.styleUrl)
@@ -106,6 +160,13 @@ export class MapLibreRenderer implements MapRendererAdapter {
         'AttributionControl.ToggleAttribution': 'Источники карты',
       },
     })
+    this.flight = new TripFlightCamera(this.map, events.flightEnd)
+    if (options.clusterLabels) {
+      this.clusters = new PointClusters(this.map, options.clusterLabels, () => this.syncMarkers(), point =>
+        this.events.select({ kind: 'point', id: point.id }, point.position))
+    }
+    this.map.on('moveend', this.positionLabels)
+    this.map.on('resize', this.positionLabels)
     this.map.touchZoomRotate.disableRotation()
     this.map.addControl(new NavigationControl({ showCompass: false }), 'top-right')
     this.map.addControl(new ScaleControl({ unit: 'metric' }), 'bottom-left')
@@ -124,12 +185,21 @@ export class MapLibreRenderer implements MapRendererAdapter {
     this.map.setStyle(style || this.basemap, { diff: false })
   }
 
+  approachTrip(flight: MapTripFlight, scene: MapScene): MapFlightPhase {
+    return this.flight.update(flight, scene)
+  }
+
+  leaveTrip(): boolean {
+    return this.flight.leave()
+  }
+
   private fallbackStyle = (): void => {
     if (this.styleUrl && !this.map.getLayer(layerPrefix + 'track')) this.setStyle()
   }
 
   private prepareStyle = (): void => {
     if (!this.map.getStyle() || this.map.getSource(linesSource)) return
+    this.clusters?.install()
     this.map.addSource(linesSource, { type: 'geojson', data: collection([]) })
     this.map.addSource(hintsSource, { type: 'geojson', data: collection([]) })
     const transport: NonNullable<LineLayerSpecification['paint']>['line-color'] = [
@@ -187,6 +257,9 @@ export class MapLibreRenderer implements MapRendererAdapter {
       if (scene.mode === 'view') this.map.doubleClickZoom.enable()
       else this.map.doubleClickZoom.disable()
     }
+    if (scene.clusterPoints !== previous.clusterPoints || (scene.clusterPoints && scene.points !== previous.points)) {
+      this.clusters?.setPoints(scene.clusterPoints ? scene.points : [])
+    }
     if (scene.tracks !== previous.tracks) this.updateTracks()
     if (scene.hint !== previous.hint) this.updateHint()
     if (scene.selection !== previous.selection) this.updateHighlight()
@@ -197,7 +270,7 @@ export class MapLibreRenderer implements MapRendererAdapter {
   private updateTracks(): void {
     const lines = this.scene.tracks
       .filter(track => track.coordinates.length >= 2)
-      .map(track => line(track.coordinates, {
+      .map(track => line(this.map.getRenderWorldCopies() ? continuousTrack(track.coordinates) : track.coordinates, {
         id: track.id,
         transport: track.transportMode ?? '',
         dashed: track.dashed ?? false,
@@ -282,9 +355,16 @@ export class MapLibreRenderer implements MapRendererAdapter {
   private addMarker(feature: MapPoint, selection: MapSelection): MarkerRecord {
     const button = document.createElement('button')
     button.type = 'button'
+    button.setAttribute('role', 'button')
     button.classList.add('route-map-marker', 'route-map-marker--' + selection.kind)
+    const label = this.scene.tripMarkers && selection.kind === 'point' ? document.createElement('span') : undefined
+    if (label) {
+      button.classList.add('route-map-marker--trip')
+      label.className = 'trip-marker-label'
+      button.append(label)
+    }
     const marker = new Marker({ element: button }).setLngLat(coords(feature.position)).addTo(this.map)
-    const record = { marker, button, feature, selection }
+    const record = { marker, button, feature, selection, label }
     button.addEventListener('pointerenter', this.handleLeave)
     button.addEventListener('click', event => {
       event.stopPropagation()
@@ -302,9 +382,10 @@ export class MapLibreRenderer implements MapRendererAdapter {
 
   private syncMarkers(): void {
     const visible = new Set<string>()
-    for (const [kind, features] of [['point', this.scene.points], ['poi', this.scene.pois]] as const) {
+    const points = this.scene.clusterPoints && this.clusters ? this.clusters.visible() : this.scene.points
+    for (const [kind, features] of [['point', points], ['poi', this.scene.pois]] as const) {
       for (const feature of features) {
-        const key = kind + ':' + feature.id
+        const key = (kind === 'point' && this.scene.tripMarkers ? 'trip' : kind) + ':' + feature.id
         visible.add(key)
         const selection = { kind, id: feature.id }
         const record = this.markers.get(key) ?? this.addMarker(feature, selection)
@@ -314,10 +395,15 @@ export class MapLibreRenderer implements MapRendererAdapter {
         record.marker.setLngLat(coords(feature.position))
         record.marker.setDraggable(kind === 'point' && selected && this.scene.mode === 'move')
         record.button.classList.toggle('route-map-marker--selected', selected)
+        record.button.disabled = this.scene.interactiveMarkers === false
         record.button.setAttribute('aria-pressed', String(selected))
         const number = feature.number === undefined ? undefined : ordinal.format(feature.number)
         const label = feature.label || (kind === 'point' ? ('Точка ' + (number ?? '')).trim() : 'Место')
-        record.button.textContent = kind === 'point' ? number ?? '' : ''
+        if (record.label) {
+          if (record.label.textContent !== label) record.label.textContent = label
+        } else {
+          record.button.textContent = kind === 'point' ? number ?? '' : ''
+        }
         record.button.title = label
         record.button.setAttribute('aria-label', label)
       }
@@ -327,6 +413,14 @@ export class MapLibreRenderer implements MapRendererAdapter {
       record.marker.remove()
       this.markers.delete(key)
     }
+    if (this.scene.tripMarkers) this.positionLabels()
+  }
+
+  private positionLabels = (): void => {
+    if (!this.scene.tripMarkers) return
+    const items = Array.from(this.markers.values()).flatMap(({ marker, label }) =>
+      label ? [{ label, point: this.map.project(marker.getLngLat()) }] : [])
+    placeTripLabels(this.map.getContainer(), items)
   }
 
   private fit(positions: MapCoordinate[]): boolean {
@@ -336,7 +430,9 @@ export class MapLibreRenderer implements MapRendererAdapter {
       return true
     }
     const bounds = new LngLatBounds()
-    for (const position of positions) bounds.extend(position)
+    const copies = this.map.getRenderWorldCopies()
+    const first = positions[0]![0]
+    for (const position of positions) bounds.extend(copies ? nearestWorld(position, first) : position)
     const parent = this.map.getContainer()
     const padding = Math.min(92, Math.floor(Math.min(parent.clientWidth, parent.clientHeight) / 4))
     this.map.fitBounds(bounds, { padding, maxZoom: 16, duration: duration() })
@@ -367,9 +463,11 @@ export class MapLibreRenderer implements MapRendererAdapter {
   }
 
   destroy(): void {
+    this.flight.destroy()
     this.map.getCanvas().removeEventListener('keydown', this.handleKeyboard)
     for (const { marker } of this.markers.values()) marker.remove()
     this.markers.clear()
+    this.clusters?.destroy()
     this.map.remove()
   }
 }

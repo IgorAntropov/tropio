@@ -17,6 +17,7 @@ const identityRoutes = new Set([
 ])
 
 const editorRoutes = new Set([
+  'GET catalog/participation',
   'GET trips',
   'POST trips',
   'POST routing/calculate',
@@ -26,6 +27,10 @@ const editorRoutes = new Set([
 ])
 
 const editorPaths = [
+  /^POST trips\/[^/]+\/applications$/,
+  /^PATCH trips\/[^/]+$/,
+  /^POST trips\/[^/]+\/(?:publish|unpublish|archive)$/,
+  /^GET trips\/[^/]+\/publication-operations\/[^/]+$/,
   /^GET trips\/[^/]+\/draft$/,
   /^PUT days\/[^/]+\/route$/,
   /^(GET|PUT) routes\/[^/]+$/,
@@ -40,7 +45,7 @@ const identityCookies = ['tropio_session', 'tropio_registration']
 const editorCookies = ['tropio_session']
 
 function bodyLimit(methodPath: string) {
-  return methodPath === 'POST trips' || /^PUT (?:days\/[^/]+\/route|routes\/[^/]+)$/.test(methodPath)
+  return methodPath === 'POST trips' || /^(?:POST trips\/[^/]+\/publish|PATCH trips\/[^/]+)$/.test(methodPath) || /^PUT (?:days\/[^/]+\/route|routes\/[^/]+)$/.test(methodPath)
     ? 256 * 1024 : 8 * 1024
 }
 
@@ -93,8 +98,11 @@ export default defineEventHandler(async (event) => {
   const incomingId = getRequestHeader(event, 'x-request-id')
   const requestId = incomingId && /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(incomingId) ? incomingId : randomUUID()
   const methodPath = `${method} ${path}`
+  const participation = methodPath === 'GET catalog/participation'
+  if (participation) setResponseHeader(event, 'vary', 'Cookie')
   const identity = identityRoutes.has(methodPath) || /^GET users\/[^/]+$/.test(methodPath)
-  if (!identity && !editorRoutes.has(methodPath) && !editorPaths.some(pattern => pattern.test(methodPath))) {
+  const catalog = methodPath === 'GET catalog/filter-options' || /^GET catalog\/trips(?:\/[^/]+)?$/.test(methodPath)
+  if (!identity && !catalog && !editorRoutes.has(methodPath) && !editorPaths.some(pattern => pattern.test(methodPath))) {
     return problem(event, requestId, 404, 'NOT_FOUND', 'Not found')
   }
   const upstreamPath = safePath(path)
@@ -104,13 +112,13 @@ export default defineEventHandler(async (event) => {
   const media = mediaPath.test(path)
   const accept = media ? imageTypes.join(', ') : 'application/json'
   const headers = new Headers({ accept: `${accept}, application/problem+json`, 'x-request-id': requestId })
-  const allowedHeaders = ['content-type', 'origin', 'x-csrf-token', ...(!identity ? ['idempotency-key'] : [])]
+  const allowedHeaders = catalog || participation ? [] : ['content-type', 'origin', 'x-csrf-token', ...(!identity ? ['idempotency-key'] : [])]
   for (const name of allowedHeaders) {
     const value = getRequestHeader(event, name)
     if (value) headers.set(name, value)
   }
 
-  const cookieNames = identity ? identityCookies : editorCookies
+  const cookieNames = catalog ? [] : identity ? identityCookies : editorCookies
   const cookies = cookieNames.flatMap((name) => {
     const value = getCookie(event, name)
     return value && /^[\w.-]{1,256}$/.test(value) ? [`${name}=${value}`] : []
@@ -153,10 +161,14 @@ export default defineEventHandler(async (event) => {
       await response.body?.cancel()
       return unavailable()
     }
-    const payload = image || response.status === 204 || response.status === 202 ? null : await response.text()
+    const payload = image || response.status === 204 || (identity && response.status === 202) ? null : await response.text()
     setResponseStatus(event, response.status)
     setResponseHeader(event, 'x-request-id', response.headers.get('x-request-id') ?? requestId)
     if (type) setResponseHeader(event, 'content-type', type)
+    const location = response.headers.get('location')
+    if (response.status === 202 && location && /^\/api\/v1\/trips\/[\da-f-]{36}\/publication-operations\/[\da-f-]{36}$/i.test(location)) {
+      setResponseHeader(event, 'location', location)
+    }
     const retryAfter = response.headers.get('retry-after')
     if (retryAfter && /^\d+$/.test(retryAfter)) setResponseHeader(event, 'retry-after', Number(retryAfter))
 

@@ -3,6 +3,7 @@ import type { components } from './openapi'
 type Schemas = components['schemas']
 
 export type IdentityProfile = Schemas['IdentityProfile']
+export type PublicIdentityProfile = Schemas['PublicIdentityProfile']
 export type SystemAvatar = Schemas['SystemAvatar']
 
 export class IdentityResponseError extends Error {

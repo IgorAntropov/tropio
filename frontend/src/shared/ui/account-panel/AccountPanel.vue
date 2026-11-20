@@ -6,6 +6,7 @@ defineProps<{
   wide?: boolean
   auth?: boolean
   backToLogin?: boolean
+  loginLink?: string
 }>()
 
 const { t } = useI18n()
@@ -17,14 +18,14 @@ const { t } = useI18n()
     <div class="account-panel">
       <header class="account-panel-header">
         <NuxtLink
-          v-if="backToLogin" class="account-back" to="/login"
+          v-if="backToLogin" class="account-back" :to="loginLink ?? '/login'"
           :aria-label="t('identity.backToLogin')" :title="t('identity.backToLogin')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="m13 5-7 7 7 7M6 12h13" />
           </svg>
         </NuxtLink>
-        <NuxtLink class="account-brand" to="/">
+        <NuxtLink class="account-brand" :to="auth ? '/catalog' : '/'" :aria-label="auth ? t('identity.catalogBrand', { product: t('productName') }) : undefined">
           <img :width="auth ? 52 : 34" :height="auth ? 52 : 34" src="/logo.png" alt="">
           <span>{{ t('productName') }}</span>
         </NuxtLink>

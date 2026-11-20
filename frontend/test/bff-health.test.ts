@@ -3,6 +3,7 @@ import { createServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
 import { fetch, setup } from '@nuxt/test-utils/e2e'
 import { afterAll, expect, it } from 'vitest'
+import type { PublicTrip, PublicTripSummary } from '../src/shared/api'
 
 let upstreamStatus = 200
 let identityDisconnected = false
@@ -14,7 +15,63 @@ const dayId = '1b3f80cd-f580-4164-9d3c-71e5e058ba95'
 const revision = 'a927c255-8f67-4f16-b9b7-5d3922350956'
 const picture = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
 
+const catalogSummary = {
+  trip_id: routeId, publication_id: revision, organizer: { id: dayId, display_name: 'Анна', avatar: null }, title: 'Тропа от лагеря до смотровой', description: 'Лесной маршрут',
+  start: { lon: 84.96, lat: 56.46 }, start_date: '2026-12-05', end_date: null, day_count: 1,
+  difficulty: null, free_capacity: 3, trip_type: 'foot', lifecycle: 'planned',
+  admission_mode: 'request', confirmed_participants: 1, applications_open: true,
+} satisfies PublicTripSummary
+const catalogDetail = {
+  ...catalogSummary,
+  days: [{
+    position: 1, local_date: catalogSummary.start_date, description: null,
+    lines: [{ type: 'LineString', coordinates: [[84.96, 56.46], [84.99, 56.47]] }],
+    legs: [{ name: 'По лесной тропе', start_name: 'Лагерь', end_name: 'Смотровая', distance_m: 2190, transport_mode: 'foot' }],
+  }],
+  pois: [],
+} satisfies PublicTrip
+let catalogStatus = 200
+let catalogDates: Pick<PublicTripSummary, 'start_date' | 'end_date'> | undefined
+
 const upstream = createServer(async (request, response) => {
+  if (request.url === '/api/v1/catalog/filter-options') {
+    forwarded = request.headers
+    response.writeHead(200, { 'content-type': 'application/json' })
+      .end(JSON.stringify({ regions: [{ value: 'RU-TOM', label: 'Томская область' }], difficulties: [{ value: 'easy', label: 'Лёгкая' }] }))
+    return
+  }
+  if (request.url?.split('?')[0] === '/api/v1/catalog/trips' || request.url === `/api/v1/catalog/trips/${routeId}`) {
+    forwarded = request.headers
+    const list = request.url.split('?')[0] === '/api/v1/catalog/trips'
+    if (catalogStatus !== 200 && !list) {
+      response.writeHead(catalogStatus, { 'content-type': 'application/problem+json' })
+        .end(JSON.stringify({ status: catalogStatus, code: catalogStatus === 404 ? 'NOT_FOUND' : 'DEPENDENCY_UNAVAILABLE' }))
+    } else {
+      response.writeHead(200, { 'content-type': 'application/json' })
+        .end(JSON.stringify(list ? { items: catalogStatus === 200 ? [catalogSummary] : [], next_cursor: null }
+          : { ...catalogDetail, ...catalogDates }))
+    }
+    return
+  }
+  if (request.url === `/api/v1/catalog/participation?trip_ids=${routeId}` && request.method === 'GET') {
+    forwarded = request.headers
+    const member = request.headers.cookie === 'tropio_session=workspace-active'
+    response.writeHead(200, { 'content-type': 'application/json' })
+      .end(JSON.stringify({ viewer_id: member ? dayId : null, trip_ids: [], joined_trip_ids: member ? [routeId] : [] }))
+    return
+  }
+  if (request.url === `/api/v1/trips/${routeId}/applications` && request.method === 'POST') {
+    forwarded = request.headers
+    forwardedBody = (await Array.fromAsync(request)).map(chunk => chunk.toString()).join('')
+    response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ status: 'joined' }))
+    return
+  }
+  if (request.url === `/api/v1/trips/${routeId}/archive` && request.method === 'POST') {
+    forwarded = request.headers
+    request.resume()
+    response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ trip_revision_id: revision, publication_id: null }))
+    return
+  }
   if (request.url === '/api/v1/trips?cursor=a&limit=20') {
     forwarded = request.headers
     response.writeHead(200, { 'content-type': 'application/json', 'x-request-id': requestId })
@@ -158,6 +215,20 @@ it.each(['/', '/login'])('sends an SSR request with a verified session at %s to 
   expect(response.headers.get('cache-control')).toBe('no-store')
 })
 
+it('preserves the participation destination on the sign-in link below registration', async () => {
+  const destination = `/catalog/${routeId}#participation`
+  const response = await fetch('/register?' + new URLSearchParams({ returnTo: destination }))
+  const html = await response.text()
+  expect(response.status).toBe(200)
+  expect(html).toContain('Уже есть аккаунт?')
+  const signIn = html.match(/<a\b[^>]*href="([^"]+)"[^>]*>\s*Войти\s*<\/a>/)
+  expect(signIn).toBeTruthy()
+  const target = new URL(signIn![1]!, 'http://localhost')
+  expect(target.pathname).toBe('/login')
+  expect(target.searchParams.get('returnTo')).toBe(destination)
+  expect(html).toMatch(/<a\b(?=[^>]*class="account-brand")(?=[^>]*href="\/catalog")[^>]*>/)
+})
+
 it('allows server-rendered workspace content with an active session without serializing session secrets', async () => {
   const response = await fetch('/feed', { headers: { cookie: 'tropio_session=workspace-active' } })
   const html = await response.text()
@@ -169,9 +240,9 @@ it('allows server-rendered workspace content with an active session without seri
 })
 
 it.each([
-  ['/', null],
-  ['/map', '/map'],
-])('sends an expired SSR session at %s to login', async (path, returnTo) => {
+  ['/', '/catalog', null],
+  ['/map', '/login', '/map'],
+])('sends an expired SSR session at %s to %s', async (path, destination, returnTo) => {
   const response = await fetch(path, {
     headers: { cookie: 'tropio_session=workspace-expired' },
     redirect: 'manual',
@@ -179,7 +250,7 @@ it.each([
   const location = new URL(response.headers.get('location') ?? '/', 'http://localhost')
 
   expect(response.status).toBe(302)
-  expect(location.pathname).toBe('/login')
+  expect(location.pathname).toBe(destination)
   expect(location.searchParams.get('returnTo')).toBe(returnTo)
 })
 
@@ -330,4 +401,109 @@ it('maps an editor dependency disconnect to a correlated 503 Problem', async () 
   expect(response.status).toBe(503)
   expect(response.headers.get('x-request-id')).toBe(requestId)
   expect(await response.json()).toMatchObject({ code: 'DEPENDENCY_UNAVAILABLE', request_id: requestId })
+})
+
+
+it('renders the same published trip for guests and members and drops revoked SSR metadata', async () => {
+  const headers = { cookie: 'tropio_session=workspace-active', 'x-csrf-token': 'ignore-on-public-read' }
+  try {
+    const catalog = await fetch('/catalog', { headers })
+    expect(catalog.status).toBe(200)
+    const publicHtml = await catalog.text()
+    expect(publicHtml).toContain(catalogSummary.title)
+    const loginLinkContent = publicHtml.match(/<a\b[^>]*href="\/login"[^>]*>([\s\S]*?)<\/a>/)?.[1]
+    expect(loginLinkContent?.replace(/<[^>]+>/g, '').trim()).toBe('Войти')
+    const details = await fetch(`/catalog/${routeId}`, { headers })
+    expect(details.status).toBe(200)
+    expect(details.headers.get('cache-control')).toContain('no-store')
+    expect(await details.text()).toContain(catalogSummary.title)
+    expect(forwarded.cookie).toBeUndefined()
+    expect(forwarded['x-csrf-token']).toBeUndefined()
+    for (const status of [404, 503]) {
+      catalogStatus = status
+      const hidden = await fetch(`/catalog/${routeId}`, { headers })
+      expect(hidden.status).toBe(status)
+      expect(hidden.headers.get('cache-control')).toContain('no-store')
+      expect(await hidden.text()).not.toContain(catalogSummary.title)
+    }
+    const list = await fetch('/catalog', { headers })
+    expect(await list.text()).not.toContain(catalogSummary.title)
+    expect(await (await fetch('/sitemap.xml')).text()).not.toContain(routeId)
+  } finally {
+    catalogStatus = 200
+  }
+})
+
+it.each([
+  ['2026-03-01', null, '1 мар. 2026 г.'],
+  ['2026-12-26', '2026-12-28', '26–28 дек. 2026 г.'],
+  ['2026-03-01', '2026-03-03', '1–3 мар. 2026 г.'],
+  ['2026-03-31', '2026-04-02', '31 мар. – 2 апр. 2026 г.'],
+  ['2026-12-31', '2027-01-02', '31 дек. 2026 г. – 2 янв. 2027 г.'],
+] as const)('renders the localized public trip period from %s to %s', async (start, end, expected) => {
+  catalogDates = { start_date: start, end_date: end }
+  try {
+    const response = await fetch(`/catalog/${routeId}?screen=route&day=1`)
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain(expected)
+  } finally {
+    catalogDates = undefined
+  }
+})
+
+it('serves the public catalog dictionaries without forwarding account credentials', async () => {
+  const response = await fetch('/api/v1/catalog/filter-options', {
+    headers: { cookie: 'tropio_session=workspace-active', 'x-csrf-token': 'unused' },
+  })
+  expect(response.status).toBe(200)
+  expect(response.headers.get('cache-control')).toContain('no-store')
+  expect(await response.json()).toEqual({ regions: [{ value: 'RU-TOM', label: 'Томская область' }], difficulties: [{ value: 'easy', label: 'Лёгкая' }] })
+  expect(forwarded.cookie).toBeUndefined()
+  expect(forwarded['x-csrf-token']).toBeUndefined()
+})
+
+it.each([
+  { cookie: 'tropio_registration=pending', session: undefined, viewer: null, joined: [] },
+  { cookie: 'tropio_registration=pending; tropio_session=workspace-active', session: 'tropio_session=workspace-active', viewer: dayId, joined: [routeId] },
+])('varies participation by session and disables caching for viewer $viewer', async ({ cookie, session, viewer, joined }) => {
+  const response = await fetch(`/api/v1/catalog/participation?trip_ids=${routeId}`, {
+    headers: { cookie, 'x-csrf-token': 'unused-on-read' },
+  })
+  expect(response.status).toBe(200)
+  expect(response.headers.get('cache-control')).toBe('no-store')
+  expect(response.headers.get('vary')?.toLowerCase().split(/,\s*/)).toContain('cookie')
+  expect(await response.json()).toEqual({ viewer_id: viewer, trip_ids: [], joined_trip_ids: joined })
+  expect(forwarded.cookie).toBe(session)
+  expect(forwarded['x-csrf-token']).toBeUndefined()
+})
+
+it('relays the admission mode, session, CSRF and origin when joining a trip', async () => {
+  const body = JSON.stringify({ admission_mode: 'open' })
+  const response = await fetch(`/api/v1/trips/${routeId}/applications`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json', 'cookie': 'tropio_registration=pending; tropio_session=workspace-active',
+      'origin': 'http://127.0.0.1:3000', 'x-csrf-token': 'workspace-csrf-fixture',
+    },
+    body,
+  })
+  expect(response.status).toBe(200)
+  expect(response.headers.get('cache-control')).toBe('no-store')
+  expect(await response.json()).toEqual({ status: 'joined' })
+  expect(forwarded).toMatchObject({
+    'content-type': 'application/json', 'cookie': 'tropio_session=workspace-active',
+    'origin': 'http://127.0.0.1:3000', 'x-csrf-token': 'workspace-csrf-fixture',
+  })
+  expect(forwardedBody).toBe(body)
+})
+
+it('forwards the archive command through the public Nuxt origin', async () => {
+  const result = await fetch(`/api/v1/trips/${routeId}/archive`, {
+    method: 'POST', headers: { cookie: 'tropio_session=workspace-active', 'x-csrf-token': 'csrf', 'idempotency-key': requestId,
+      'content-type': 'application/json' }, body: JSON.stringify({ trip_revision_id: revision }),
+  })
+  expect(result.status).toBe(200)
+  expect(await result.json()).toEqual({ trip_revision_id: revision, publication_id: null })
+  expect(forwarded.cookie).toBe('tropio_session=workspace-active')
+  expect(forwarded['idempotency-key']).toBe(requestId)
 })

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { TripPublication } from '@fsd/features/publish-trip'
 import { editorApi, identityApi } from '@fsd/shared/api'
 import type { CreateTripDraftRequest, MyTripDraftList, TravelDraft } from '@fsd/shared/api'
 import { describeEditorError, editorProblemCode } from '@fsd/features/edit-route'
@@ -30,6 +31,11 @@ const { valid, errors, touch, reset: resetValidation } = useFormValidation({
 })
 const request = new AbortController()
 let pendingCreate: { body: CreateTripDraftRequest; key: string } | null = null
+
+function denied(error: unknown) {
+  draft.value = null
+  failure(error)
+}
 
 function failure(error: unknown) {
   if (request.signal.aborted) return
@@ -135,6 +141,7 @@ onBeforeUnmount(() => request.abort())
           </li>
         </ul>
       </section>
+      <TripPublication v-if="draft" :key="draft.trip_id" :draft="draft" @refresh="draft = $event" @denied="denied" />
       <section v-else-if="!tripId && result" aria-label="Черновики">
         <h2>Черновики</h2>
         <p v-if="!result.items.length">Здесь будут твои путешествия.</p>

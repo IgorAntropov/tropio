@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { identityApi, useIdentityAction } from '@fsd/shared/api'
-import { workspaceMemberKey } from '@fsd/shared/session'
+import { guestHome, workspaceConfirmedKey, workspaceMemberKey } from '@fsd/shared/session'
 import type { WorkspaceMember } from '@fsd/shared/session'
 import { UiAvatar } from '@fsd/shared/ui/kit'
 
@@ -8,6 +8,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const member = useState<WorkspaceMember | null>(workspaceMemberKey, () => null)
+const confirmed = useState(workspaceConfirmedKey, () => false)
 const menu = ref<HTMLElement>()
 const trigger = ref<HTMLButtonElement>()
 const expanded = ref(false)
@@ -36,9 +37,11 @@ async function logout() {
   const signedOut = await run(async (signal) => {
     const current = await identityApi.me(signal)
     await identityApi.logout(current.csrf_token, signal)
-  }, () => { member.value = null })
+  }, () => { expanded.value = false })
   if (signedOut || (problem.value?.status === 401 && problem.value.code === 'SESSION_REQUIRED')) {
-    await router.replace('/login')
+    member.value = null
+    confirmed.value = false
+    await router.replace(guestHome)
   }
 }
 

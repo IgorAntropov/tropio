@@ -110,11 +110,43 @@
   color: var(--tk-accent);
 }
 
+.tk-button-small {
+  --tk-button-size: 2rem;
+  position: relative;
+  min-height: var(--tk-button-size);
+  padding: var(--tk-space-1) var(--tk-space-3);
+  border-radius: var(--tk-space-2);
+  font-size: var(--tk-text-sm);
+}
+
+.tk-button-small::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  min-width: var(--tk-target);
+  min-height: var(--tk-target);
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+}
+
+.tk-button-large {
+  --tk-button-size: 3.5rem;
+  min-height: var(--tk-button-size);
+  padding: var(--tk-space-3) var(--tk-space-5);
+  font-size: 1rem;
+}
+
 .tk-icon-button {
-  width: var(--tk-target);
+  width: var(--tk-button-size, var(--tk-target));
   padding: 0;
   flex: none;
   font-size: 1.35rem;
+}
+
+.tk-icon-button:is(.tk-button-small, .tk-button-medium, .tk-button-large) {
+  height: var(--tk-button-size, var(--tk-target));
 }
 
 .tk-button:focus-visible, .tk-input:focus-visible, .tk-select-trigger:focus-visible,
@@ -291,6 +323,20 @@
   color: var(--tk-on-accent);
   text-align: center;
   font-size: var(--tk-text-sm);
+}
+
+.tk-select-icons {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--tk-space-3);
+  min-width: 0;
+}
+
+.tk-select-icon-summary .tk-select-panel > .tk-button {
+  display: flex;
+  margin-inline-start: auto;
 }
 
 .tk-select-trigger[aria-expanded="true"] {

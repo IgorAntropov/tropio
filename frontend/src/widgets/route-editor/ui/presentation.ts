@@ -1,5 +1,5 @@
 import { useI18n } from 'vue-i18n'
-import type { EditorPosition, EditorTrack } from '../types'
+import type { EditorTrack } from '../types'
 
 const messages = {
   ru: {
@@ -118,23 +118,8 @@ export function useEditorCopy() {
   return useI18n({ useScope: 'local', messages })
 }
 
-export const transportIcons = {
-  car: 'directions_car',
-  bicycle: 'pedal_bike',
-  foot: 'directions_walk',
-} as const
-
-export function coordinateLabel({ lat, lon }: EditorPosition) {
-  return `${lat.toFixed(5)}°, ${lon.toFixed(5)}°`
-}
+export { coordinateLabel, distanceLabel, transportIcons } from '@fsd/shared/ui/route-scheme'
 
 export function routeDistance(tracks: readonly EditorTrack[]) {
   return tracks.reduce((sum, track) => sum + (track.distance_m ?? 0), 0)
-}
-
-const distanceKilometers = new Intl.NumberFormat('ru', { style: 'unit', unit: 'kilometer', unitDisplay: 'short', maximumFractionDigits: 2 })
-const distanceMeters = new Intl.NumberFormat('ru', { style: 'unit', unit: 'meter', unitDisplay: 'short', maximumFractionDigits: 0 })
-
-export function distanceLabel(distance: number) {
-  return distance >= 1000 ? distanceKilometers.format(distance / 1000) : distanceMeters.format(distance)
 }

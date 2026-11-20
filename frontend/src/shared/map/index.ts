@@ -10,4 +10,5 @@ export type {
   MapRendererAdapter,
   MapSelection,
   MapTrack,
+  MapTripFlight,
 } from './types'

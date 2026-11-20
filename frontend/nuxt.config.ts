@@ -17,6 +17,9 @@ export default defineNuxtConfig({
   css: ['@fsd/shared/styles/main.css'],
   routeRules: {
     '/': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+    '/catalog': { headers: { 'cache-control': 'no-store' } },
+    '/catalog/**': { headers: { 'cache-control': 'no-store' } },
+    '/organizers/**': { headers: { 'cache-control': 'no-store' } },
     '/feed': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
     '/map': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
     '/login': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
@@ -49,7 +52,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     bffBaseUrl: 'http://127.0.0.1:3001',
     bffProxySecret: '',
-    public: { routeMapStyle: '' },
+    public: { routeMapStyle: '', siteUrl: 'http://127.0.0.1:3000' },
   },
   app: {
     head: {

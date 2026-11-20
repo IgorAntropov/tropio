@@ -1,4 +1,4 @@
-import { loginReadyKey, workspaceHome, workspaceReturnPath } from '@fsd/shared/session'
+import { guestHome, loginReadyKey, workspaceHome, workspaceReturnPath } from '@fsd/shared/session'
 import { verifyWorkspaceSession } from '../composables/useWorkspaceSession'
 
 export default defineNuxtRouteMiddleware(async (to) => {
@@ -13,6 +13,6 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo(login ? workspaceReturnPath(to.query.returnTo) ?? workspaceHome : workspaceHome, { replace: true })
   }
 
-  if (!login) return navigateTo('/login', { replace: true })
+  if (!login) return navigateTo(guestHome, { replace: true })
   loginReady.value = true
 })

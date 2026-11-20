@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { identityApi, useIdentityAction } from '@fsd/shared/api'
-import { workspaceHome, workspaceReturnPath } from '@fsd/shared/session'
+import { participationReturnPath, workspaceHome, workspaceReturnPath } from '@fsd/shared/session'
 import { AccountPanel } from '@fsd/shared/ui/account-panel'
 import { useFormValidation } from '@fsd/shared/ui/form'
 import { UiTextField } from '@fsd/shared/ui/kit'
@@ -9,6 +9,28 @@ import { isEmailAddress, passwordIssue } from '../validation'
 const props = defineProps<{ mode: 'login' | 'register' | 'recovery' | 'verify' | 'reset' }>()
 const { t } = useI18n()
 const route = useRoute()
+const resetFlow = props.mode === 'recovery' || props.mode === 'reset'
+const emailLink = props.mode === 'verify' || props.mode === 'reset'
+const emailLifetime = resetFlow ? 1800 : 3600
+const emailReturn = useCookie<{ path: string; expiresAt: number } | null>(
+  resetFlow ? 'tropio_reset_return' : 'tropio_registration_return',
+  { sameSite: 'lax', maxAge: emailLifetime, path: useRuntimeConfig().app.baseURL },
+)
+const returnTo = computed(() => {
+  const explicit = workspaceReturnPath(route.query.returnTo)
+  const saved = emailReturn.value
+  if (emailLink && !explicit && saved && saved.expiresAt > Date.now()) return participationReturnPath(saved.path)
+  return explicit
+})
+
+function authLink(path: string) {
+  return returnTo.value ? path + '?' + new URLSearchParams({ returnTo: returnTo.value }).toString() : path
+}
+
+function rememberReturn() {
+  const path = participationReturnPath(returnTo.value)
+  emailReturn.value = path ? { path, expiresAt: Date.now() + emailLifetime * 1000 } : null
+}
 
 const prefilledEmail = useState('identity-recovery-email', () => '')
 const email = ref(props.mode === 'recovery' ? prefilledEmail.value : '')
@@ -104,11 +126,12 @@ async function submit() {
   switch (props.mode) {
     case 'login':
       if (await run(signal => identityApi.login(credentials, signal), () => { password.value = '' })) {
-        await navigateTo(workspaceReturnPath(route.query.returnTo) ?? workspaceHome, { replace: true })
+        await navigateTo(returnTo.value ?? workspaceHome, { replace: true })
       }
       break
     case 'register':
       await run(signal => identityApi.register({ ...credentials, accepted_terms: true }, signal), () => {
+        rememberReturn()
         email.value = normalizedEmail
         password.value = ''
         showPassword.value = false
@@ -117,27 +140,36 @@ async function submit() {
       })
       break
     case 'recovery':
-      await run(signal => identityApi.requestPasswordReset({ email: normalizedEmail }, signal), () => { view.value = 'sent' })
-      break
-    case 'verify':
-      await run(signal => identityApi.verifyEmail({ token: token.value }, signal), () => {
-        view.value = 'done'
-        token.value = ''
+      await run(signal => identityApi.requestPasswordReset({ email: normalizedEmail }, signal), () => {
+        rememberReturn()
+        view.value = 'sent'
       })
       break
-    case 'reset':
-      await run(signal => identityApi.resetPassword({ token: token.value, password: password.value }, signal), () => {
+    case 'verify':
+    case 'reset': {
+      const target = returnTo.value ? authLink('/login') : undefined
+      const completed = await run(signal => props.mode === 'verify'
+        ? identityApi.verifyEmail({ token: token.value }, signal)
+        : identityApi.resetPassword({ token: token.value, password: password.value }, signal), () => {
         view.value = 'done'
         password.value = ''
         token.value = ''
       })
+      if (completed) {
+        emailReturn.value = null
+        if (target) await navigateTo(target, { replace: true })
+      }
       break
+    }
   }
 }
 
 async function resend() {
   resent.value = false
-  await run(signal => identityApi.resendVerification({ email: email.value }, signal), () => { resent.value = true })
+  await run(signal => identityApi.resendVerification({ email: email.value }, signal), () => {
+    rememberReturn()
+    resent.value = true
+  })
 }
 
 function editEmail() {
@@ -153,7 +185,10 @@ function rememberEmail() {
 </script>
 
 <template>
-  <AccountPanel :title="title" auth :back-to-login="backToLogin">
+  <AccountPanel
+    :title="title" auth :class="{ 'account-surface-login': mode === 'login' }"
+    :back-to-login="backToLogin" :login-link="authLink('/login')"
+  >
     <p v-if="findingToken" class="account-notice" role="status">{{ t('identity.loading') }}</p>
     <p v-else-if="invalidToken" class="account-notice">{{ t(`identity.${mode}.invalidHint`) }}</p>
     <div v-else-if="view === 'sent'" class="account-form">
@@ -229,14 +264,19 @@ function rememberEmail() {
       </button>
     </form>
     <p v-if="view === 'sent' && message" class="account-notice account-notice-error" role="alert">{{ t(message) }}</p>
-    <nav v-if="!backToLogin" class="account-links" :aria-label="t('identity.navigation')">
+    <nav
+      v-if="mode !== 'recovery'" class="account-links" :class="{ 'account-login-prompt': mode === 'register' }"
+      :aria-label="t('identity.navigation')">
       <template v-if="mode === 'login'">
-        <NuxtLink to="/request-password-reset" @click="rememberEmail">{{ t('identity.recovery.forgot') }}</NuxtLink>
-        <NuxtLink to="/register">{{ t('identity.register.submit') }}</NuxtLink>
+        <NuxtLink :to="authLink('/register')">{{ t('identity.register.submit') }}</NuxtLink>
+        <NuxtLink :to="authLink('/request-password-reset')" @click="rememberEmail">{{ t('identity.recovery.forgot') }}</NuxtLink>
       </template>
-      <NuxtLink v-else to="/login">{{ t('identity.login.submit') }}</NuxtLink>
-      <NuxtLink v-if="invalidToken && mode === 'reset'" to="/request-password-reset">{{ t('identity.reset.newLink') }}</NuxtLink>
-      <NuxtLink v-if="invalidToken && mode === 'verify'" to="/register">{{ t('identity.verify.retry') }}</NuxtLink>
+      <template v-else>
+        <span v-if="mode === 'register'">{{ t('identity.register.existingAccount') }}</span>
+        <NuxtLink :to="authLink('/login')">{{ t('identity.login.submit') }}</NuxtLink>
+      </template>
+      <NuxtLink v-if="invalidToken && mode === 'reset'" :to="authLink('/request-password-reset')">{{ t('identity.reset.newLink') }}</NuxtLink>
+      <NuxtLink v-if="invalidToken && mode === 'verify'" :to="authLink('/register')">{{ t('identity.verify.retry') }}</NuxtLink>
     </nav>
   </AccountPanel>
 </template>

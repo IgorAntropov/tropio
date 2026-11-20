@@ -3,14 +3,17 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
   MapFocus,
+  MapFlightPhase,
   MapHint,
   MapMode,
   MapPoi,
   MapPoint,
   MapPosition,
   MapRendererAdapter,
+  MapScene,
   MapSelection,
   MapTrack,
+  MapTripFlight,
 } from './types'
 
 const props = withDefaults(defineProps<{
@@ -23,7 +26,11 @@ const props = withDefaults(defineProps<{
   mode?: MapMode
   center?: MapPosition
   styleUrl?: string
+  clusterPoints?: boolean
+  tripMarkers?: boolean
+  unavailableText?: string
   routeKey?: string
+  tripFlight?: MapTripFlight | null
 }>(), {
   points: () => [],
   tracks: () => [],
@@ -34,7 +41,9 @@ const props = withDefaults(defineProps<{
   mode: 'view',
   center: undefined,
   styleUrl: undefined,
+  unavailableText: 'Карта недоступна в этом браузере. Открой схему маршрута.',
   routeKey: undefined,
+  tripFlight: null,
 })
 
 const emit = defineEmits<{
@@ -46,12 +55,19 @@ const emit = defineEmits<{
 const container = ref<HTMLElement>()
 const loading = ref(true)
 const unavailable = ref(false)
+const flightPhase = ref<MapFlightPhase>()
 const { app: { baseURL } } = useRuntimeConfig()
+const { t } = useI18n()
 let renderer: MapRendererAdapter | undefined
 let resize: ResizeObserver | undefined
 let disposed = false
 let fitted = false
 let pendingFocus: MapFocus | null | undefined
+let lastFocus: MapFocus | null | undefined
+let lastRouteKey: string | undefined
+let flightId: string | undefined
+let publicationId: string | undefined
+const emptyScene: MapScene = { points: [], tracks: [], pois: [], mode: 'view' }
 
 function updateCamera(): void {
   if (!renderer || !container.value?.clientWidth || !container.value.clientHeight) return
@@ -66,23 +82,44 @@ function updateCamera(): void {
 }
 
 function syncScene(): void {
-  if (!renderer) return
-  renderer.setScene({
+  if (!renderer || disposed) return
+  const flight = props.tripFlight
+  const changedRoute = lastRouteKey !== props.routeKey
+  lastRouteKey = props.routeKey
+  if (props.focus !== lastFocus) pendingFocus = props.focus
+  lastFocus = props.focus
+  const scene = {
     points: props.points, tracks: props.tracks, pois: props.pois,
     mode: props.mode, selection: props.selection, hint: props.hint,
-  })
+    tripMarkers: !flight && props.tripMarkers,
+    clusterPoints: !flight && props.clusterPoints,
+  }
+  if (flight) {
+    const wasArrived = flightId === flight.id && publicationId === flight.publicationId && flightPhase.value === 'arrived'
+    flightId = flight.id
+    publicationId = flight.publicationId
+    flightPhase.value = renderer.approachTrip(flight, scene)
+    if (flightPhase.value !== 'arrived') {
+      renderer.setScene(flight.marker ? { ...emptyScene, points: [flight.marker], tripMarkers: true, interactiveMarkers: false } : emptyScene)
+      return
+    }
+    if (!wasArrived) fitted = true
+    else if (changedRoute) fitted = false
+  } else if (flightId) {
+    flightId = undefined
+    publicationId = undefined
+    flightPhase.value = undefined
+    pendingFocus = null
+    fitted = renderer.leaveTrip()
+  } else if (changedRoute) fitted = false
+  renderer.setScene(scene)
   updateCamera()
 }
 
-watch(() => [props.points, props.tracks, props.pois, props.mode, props.selection, props.hint], syncScene)
-watch(() => props.focus, target => {
-  pendingFocus = target
-  updateCamera()
-})
-watch(() => props.routeKey, () => {
-  fitted = false
-  syncScene()
-})
+watch(() => [
+  props.points, props.tracks, props.pois, props.mode, props.selection, props.hint, props.focus,
+  props.routeKey, props.tripFlight, props.clusterPoints, props.tripMarkers,
+], syncScene, { flush: 'post' })
 watch(() => props.styleUrl, value => renderer?.setStyle(value))
 watch(() => props.center, value => {
   if (value) renderer?.center(value)
@@ -95,17 +132,23 @@ onMounted(async () => {
     renderer = new MapLibreRenderer(container.value, {
       coordinate: position => emit('coordinate', position),
       select: (selection, position) => emit('select', selection, position),
+      flightEnd: () => queueMicrotask(syncScene),
       ready: () => {
         loading.value = false
         emit('ready')
       },
-    }, { baseURL, center: props.center, styleUrl: props.styleUrl })
-    pendingFocus = props.focus
+    }, {
+      baseURL, center: props.center, styleUrl: props.styleUrl,
+      clusterLabels: props.clusterPoints ? {
+        zoomGroup: count => t('catalog.zoomCluster', { count }),
+        unnamedTrip: t('catalog.unnamedTrip'),
+      } : undefined,
+    })
     syncScene()
     resize = new ResizeObserver(() => {
       if (!container.value?.clientWidth || !container.value.clientHeight) return
       renderer?.resize()
-      updateCamera()
+      syncScene()
     })
     resize.observe(container.value)
   } catch {
@@ -125,10 +168,11 @@ onBeforeUnmount(() => {
   <div
     class="route-map"
     :data-map-ready="!loading && !unavailable ? 'true' : undefined"
+    :data-trip-flight="flightPhase"
   >
-    <div ref="container" class="route-map__canvas" />
+    <div ref="container" class="route-map__canvas" :inert="flightPhase === 'flying'" />
     <p v-if="loading" class="route-map__message" role="status">Карта загружается…</p>
-    <p v-if="unavailable" class="route-map__message" role="alert">Карта недоступна в этом браузере. Открой схему маршрута.</p>
+    <p v-if="unavailable" class="route-map__message" role="alert">{{ unavailableText }}</p>
   </div>
 </template>
 
@@ -171,7 +215,8 @@ onBeforeUnmount(() => {
   overflow: hidden;
   border: 1px solid #fffdf3;
   border-radius: 0.75rem;
-  background: #f7faf1;
+  background: var(--route-control-background, #f7faf1);
+  backdrop-filter: var(--route-control-backdrop, none);
   box-shadow: 0 2px 9px #29443a2a;
 }
 
@@ -244,6 +289,101 @@ onBeforeUnmount(() => {
 .route-map :deep(.maplibregl-canvas:focus-visible) {
   outline: 2px solid #075b62;
   outline-offset: -2px;
+}
+
+.route-map :deep(.route-map-marker--trip) {
+  width: 44px;
+  height: 44px;
+  z-index: 1;
+}
+
+.route-map :deep(.route-map-marker--trip::before) {
+  inset: auto;
+  top: 0;
+  width: 21px;
+  height: 21px;
+  border-radius: 50% 50% 50% 0;
+  border: 2px solid white;
+  background: var(--tk-accent);
+  transform: rotate(-45deg);
+}
+
+.route-map :deep(.route-map-marker--trip::after) {
+  position: absolute;
+  top: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: white;
+  content: '';
+}
+
+.route-map :deep(.trip-marker-label) {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(var(--label-x, -50%), var(--label-y, 7px));
+  width: max-content;
+  max-width: 10.5rem;
+  padding: .25rem .5rem;
+  border: 1px solid rgb(255 255 255 / 70%);
+  border-radius: .5rem;
+  background: color-mix(in srgb, var(--tk-surface) 64%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: var(--tk-ink);
+  box-shadow: 0 1px 4px #203c372b;
+  font: 650 .75rem/1.25 Inter, sans-serif;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.route-map :deep(.route-map-marker--trip:is([aria-pressed="true"], :focus-visible, :hover)) {
+  z-index: 2;
+}
+
+.route-map :deep(.route-map-marker--trip[aria-pressed="true"] .trip-marker-label) {
+  border-color: color-mix(in srgb, var(--tk-accent) 75%, transparent);
+  background: color-mix(in srgb, var(--tk-selected) 70%, transparent);
+  color: var(--tk-accent);
+}
+
+.route-map :deep(.route-map-cluster::before) {
+  content: '';
+  display: block;
+  margin: auto;
+  width: 15px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  box-shadow: 3px -3px var(--tk-accent), 4px -4px currentColor;
+}
+
+.route-map :deep(.trip-cluster-list) {
+  display: grid;
+  gap: 2px;
+  max-height: 13rem;
+  overflow: auto;
+}
+
+.route-map :deep(.trip-cluster-list button) {
+  min-height: 44px;
+  border: 0;
+  border-radius: .5rem;
+  padding: .4rem .75rem;
+  color: var(--tk-ink);
+  background: var(--tk-surface);
+  text-align: start;
+  font: 600 .81rem/1.35 Inter, sans-serif;
+  cursor: pointer;
+}
+
+.route-map :deep(.trip-cluster-list button:is(:hover, :focus-visible)) {
+  background: var(--tk-selected);
 }
 
 @media (max-width: 620px) {

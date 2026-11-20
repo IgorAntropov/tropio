@@ -20,6 +20,15 @@ export type DraftDay = Schemas['DraftDay']
 export type TripDraftSummary = Schemas['TripDraftSummary']
 export type MyTripDraftList = Schemas['MyTripDraftList']
 export type CreateTripDraftRequest = Input<'createTripDraft'>
+export type UpdateTripDraftRequest = Input<'updateTripDraft'>
+export type PublishCommand = Input<'publishTrip'>
+export type UnpublishCommand = Input<'unpublishTrip'>
+export type PublicationOperation = Schemas['PublicationOperation']
+export type PublicTrip = Schemas['PublicTrip']
+export type PublicTripSummary = Schemas['PublicTripSummary']
+export type PublicTripPage = Schemas['PublicTripPage']
+export type CatalogFilterOptions = Output<'getCatalogFilterOptions'>
+export type CatalogQuery = NonNullable<operations['listPublicTrips']['parameters']['query']>
 export type EnsureTripDayRouteRequest = Input<'ensureTripDayRoute'>
 
 export type RouteDraft = Schemas['RouteDraft']
@@ -79,11 +88,12 @@ function queryPath(path: string, query: Record<string, string | number | readonl
 }
 
 async function call<T>(path: string, options: {
-  method?: 'POST' | 'PUT'
+  method?: 'POST' | 'PUT' | 'PATCH'
   body?: object
   csrf?: string
   key?: string
   signal?: AbortSignal
+  credentials?: RequestCredentials
 } = {}): Promise<T> {
   const { body, csrf, key, method = 'GET', signal } = options
   const headers = new Headers({ accept: 'application/json, application/problem+json' })
@@ -97,7 +107,7 @@ async function call<T>(path: string, options: {
     headers,
     signal,
     cache: 'no-store',
-    credentials: 'same-origin',
+    credentials: options.credentials ?? 'same-origin',
   })
   if (!response.ok) {
     const problem: unknown = await response.json().catch(() => null)
@@ -108,12 +118,28 @@ async function call<T>(path: string, options: {
 }
 
 export const editorApi = {
+  getCatalogParticipation: (ids: readonly string[], signal: AbortSignal) =>
+    call<Output<'getCatalogParticipation'>>(queryPath('/catalog/participation', { trip_ids: ids.join(',') }), { signal }),
+  requestTripParticipation: (tripId: string, mode: Schemas['TripAdmissionMode'], options: EditorRequest) =>
+    call<Output<'requestTripParticipation'>>(`/trips/${encodeURIComponent(tripId)}/applications`, {
+      ...options, method: 'POST', body: { admission_mode: mode },
+    }),
   listTrips: (query?: TripListQuery, signal?: AbortSignal) =>
     call<MyTripDraftList>(queryPath('/trips', query), { signal }),
   createTrip: (body: CreateTripDraftRequest, command: EditorCommand) =>
     call<TravelDraft>('/trips', { ...command, method: 'POST', body }),
   getTrip: (tripId: string, signal?: AbortSignal) =>
     call<TravelDraft>(`/trips/${encodeURIComponent(tripId)}/draft`, { signal }),
+  getPublicTrip: (tripId: string, signal?: AbortSignal) =>
+    call<PublicTrip>(`/catalog/trips/${encodeURIComponent(tripId)}`, { signal, credentials: 'omit' }),
+  updateTrip: (tripId: string, body: UpdateTripDraftRequest, command: EditorCommand) =>
+    call<TravelDraft>(`/trips/${encodeURIComponent(tripId)}`, { ...command, method: 'PATCH', body }),
+  publishTrip: (tripId: string, body: PublishCommand, command: EditorCommand) =>
+    call<PublicationOperation>(`/trips/${encodeURIComponent(tripId)}/publish`, { ...command, method: 'POST', body }),
+  getPublicationOperation: (tripId: string, operationId: string, signal?: AbortSignal) =>
+    call<PublicationOperation>(`/trips/${encodeURIComponent(tripId)}/publication-operations/${encodeURIComponent(operationId)}`, { signal }),
+  unpublishTrip: (tripId: string, body: UnpublishCommand, command: EditorCommand) =>
+    call<Output<'unpublishTrip'>>(`/trips/${encodeURIComponent(tripId)}/unpublish`, { ...command, method: 'POST', body }),
   ensureDayRoute: (dayId: string, body: EnsureTripDayRouteRequest, command: EditorCommand) =>
     call<TravelDraft>(`/days/${encodeURIComponent(dayId)}/route`, { ...command, method: 'PUT', body }),
   getRoute: (routeId: string, signal?: AbortSignal) =>

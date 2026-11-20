@@ -10,6 +10,17 @@ export type MapPoint = {
 
 export type MapPoi = MapPoint
 
+export type MapTripFlight = {
+  id: string
+  bottomInset?: number
+  publicationId?: string
+  marker?: MapPoint
+  ready: boolean
+  animate: boolean
+}
+
+export type MapFlightPhase = 'waiting' | 'flying' | 'arrived'
+
 export type MapTrack = {
   id: string
   coordinates: MapCoordinate[]
@@ -35,11 +46,16 @@ export type MapScene = {
   selection?: MapSelection | null
   mode: MapMode
   hint?: MapHint | null
+  tripMarkers?: boolean
+  clusterPoints?: boolean
+  interactiveMarkers?: boolean
 }
 
 export interface MapRendererAdapter {
   setScene(scene: MapScene): void
   setStyle(styleUrl?: string): void
+  approachTrip(flight: MapTripFlight, scene: MapScene): MapFlightPhase
+  leaveTrip(): boolean
   focus(target: MapFocus): boolean
   fitRoute(): boolean
   center(position: MapPosition): void

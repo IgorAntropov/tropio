@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { UiAvatar, UiDialog, UiSegmented, UiSelect, UiStatus, UiTextField } from '@kit'
+import { UiAvatar, UiButton, UiDialog, UiSegmented, UiSelect, UiStatus, UiTextField } from '@kit'
 
 const themes = [{ value: 'light', label: 'Светлая' }, { value: 'dark', label: 'Тёмная' }]
 const views = [{ value: 'map', label: 'Карта' }, { value: 'list', label: 'Список' }]
@@ -35,6 +35,12 @@ const colors = [
   { token: 'danger', label: 'Ошибка' },
 ]
 const spacings = [4, 8, 12, 16, 24, 32]
+const buttonSizes = [
+  { value: 'small', label: 'Маленькая' },
+  { value: 'medium', label: 'Средняя' },
+  { value: 'large', label: 'Большая' },
+] as const
+const formButtonSize = ref<(typeof buttonSizes)[number]['value']>('medium')
 const sections = [
   { id: 'controls', label: 'Управление' },
   { id: 'feedback', label: 'Состояния' },
@@ -146,6 +152,16 @@ function openForm(mode: 'track' | 'trip') {
             <article class="sample">
               <h3>Форма редактирования</h3>
               <p class="tk-muted form-description">Модальное окно на широком экране. Отдельный экран на смартфоне.</p>
+              <fieldset class="button-size-field">
+                <legend>Размер кнопок формы</legend>
+                <div class="button-size-options">
+                  <UiButton
+                    v-for="size in buttonSizes" :key="size.value" :size="size.value"
+                    :aria-pressed="formButtonSize === size.value" @click="formButtonSize = size.value">
+                    {{ size.label }}
+                  </UiButton>
+                </div>
+              </fieldset>
               <div class="form-examples">
                 <button type="button" class="tk-button tk-button-primary" @click="openForm('track')">Редактировать трек</button>
                 <button type="button" class="tk-button" @click="openForm('trip')">Новое путешествие</button>
@@ -195,8 +211,8 @@ function openForm(mode: 'track' | 'trip') {
         </template>
         <UiTextField v-else v-model="tripName" name="tripName" label="Название путешествия" placeholder="Например, Новый год у реки" :error="fieldError" required />
         <div class="dialog-actions">
-          <button type="button" class="tk-button" @click="dialogOpen = false">Отмена</button>
-          <button type="submit" class="tk-button tk-button-primary">Сохранить пример</button>
+          <UiButton :size="formButtonSize" @click="dialogOpen = false">Отмена</UiButton>
+          <UiButton type="submit" :size="formButtonSize" class="tk-button-primary">Сохранить пример</UiButton>
         </div>
       </form>
     </UiDialog>
@@ -265,6 +281,10 @@ body { margin: 0; }
 .people-list .tk-avatar { flex: none; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--tk-space-2); flex-wrap: wrap; margin-top: var(--tk-space-3); }
 .form-examples { display: flex; flex-wrap: wrap; gap: var(--tk-space-2); }
+.button-size-field { margin: 0 0 var(--tk-space-4); padding: 0; border: 0; min-width: 0; }
+.button-size-field legend { padding: 0; font-weight: 600; font-size: var(--tk-text-sm); }
+.button-size-options { display: flex; align-items: center; flex-wrap: wrap; gap: var(--tk-space-3); padding-block: var(--tk-space-2); }
+.button-size-options [aria-pressed=true] { border-color: var(--tk-accent); background: var(--tk-selected); }
 .showcase .form-description { margin-bottom: var(--tk-space-4); }
 .showcase .save-confirmation { margin-top: var(--tk-space-3); }
 .sample-colors { grid-column: 1 / -1; }

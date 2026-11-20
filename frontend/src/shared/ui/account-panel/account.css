@@ -41,8 +41,9 @@ body:has(.account-surface) {
 .account-surface-auth {
   position: relative;
   isolation: isolate;
-  align-content: center;
-  min-block-size: 100dvh;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: center;
+  block-size: 100dvh;
   padding: var(--tk-space-5) var(--tk-space-4);
 }
 
@@ -55,12 +56,20 @@ body:has(.account-surface) {
 .account-surface-auth .account-panel {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
   inline-size: min(100%, 29rem);
-  min-block-size: 28rem;
+  block-size: min(31rem, 100%);
+  overflow-y: auto;
   padding: clamp(18px, 3vw, 28px);
   box-shadow: 0 16px 54px rgb(28 67 61 / 13%);
+}
+
+.account-surface-login .account-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.account-surface-login .account-panel > * {
+  flex-shrink: 0;
 }
 
 .account-surface-auth .account-panel-header {
@@ -257,6 +266,19 @@ body:has(.account-surface) {
   margin-block-start: var(--tk-space-2);
 }
 
+.account-surface-login .account-links {
+  margin-block-start: auto;
+  padding-block-start: var(--tk-space-2);
+}
+
+.account-surface-auth .account-login-prompt {
+  justify-content: center;
+  gap: var(--tk-space-2);
+  color: var(--tk-muted);
+  font-size: var(--tk-text-base);
+  text-align: center;
+}
+
 .account-surface-auth .account-links a {
   margin-inline: calc(-1 * var(--tk-space-2));
   padding-inline: var(--tk-space-2);
@@ -286,6 +308,18 @@ body:has(.account-surface) {
 @media (max-width: 430px) {
   .account-surface-auth h1 {
     margin-block: 13px 17px;
+  }
+}
+
+@media (max-width: 360px) {
+  .account-surface-login .account-links {
+    column-gap: var(--tk-space-2);
+  }
+
+  .account-surface-login .account-links a {
+    margin-inline: 0;
+    padding-inline: 0;
+    font-size: var(--tk-text-sm);
   }
 }
 

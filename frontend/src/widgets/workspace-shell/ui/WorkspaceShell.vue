@@ -43,6 +43,7 @@ onBeforeUnmount(() => compactMedia?.removeEventListener('change', syncSidebar))
 
 const entries = [
   { id: 'feed', path: '/feed', label: 'workspace.feed.title', compactLabel: 'workspace.feed.title', icon: 'M5 3h11l3 3v15H5z M8 8h7 M8 12h8 M8 16h8' },
+  { id: 'catalog', path: '/catalog', label: 'catalog.short', compactLabel: 'catalog.short', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M16 8l-2.5 5.5L8 16l2.5-5.5z' },
   { id: 'map', path: '/map', label: 'workspace.map', compactLabel: 'workspace.map', icon: 'm3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2z M9 3v16 M15 5v16' },
   { id: 'trips', path: '/trips', label: 'workspace.trips', compactLabel: 'workspace.tripsCompact', icon: 'M5 7h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M8 11v6 M16 11v6' },
 ] as const
