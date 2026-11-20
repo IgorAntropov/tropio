@@ -6,6 +6,7 @@
   --tk-ink: #172824;
   --tk-muted: #536963;
   --tk-line: #cedbd7;
+  --tk-field-line: #81958d;
   --tk-accent: #075b62;
   --tk-brand-mint: #45c5ac;
   --tk-brand-orange: #ff971b;
@@ -40,6 +41,7 @@
   --tk-ink: #ecf5f1;
   --tk-muted: #a8bfb6;
   --tk-line: #3c5650;
+  --tk-field-line: #758b83;
   --tk-accent: #92ded7;
   --tk-on-accent: #102e2b;
   --tk-focus: #a4ebe4;
@@ -151,6 +153,118 @@
   opacity: 1;
 }
 
+.tk-text-control {
+  --tk-text-start: 14px;
+  --tk-text-end: 14px;
+  --tk-text-border: 1px;
+  --tk-text-color: var(--tk-field-line);
+  position: relative;
+  min-inline-size: 0;
+}
+
+.tk-text-control-with-action {
+  --tk-text-end: calc(var(--tk-target) + var(--tk-space-2));
+}
+
+.tk-text-control-with-action .tk-text-input::-ms-reveal {
+  display: none;
+}
+
+.tk-text-control .tk-text-input {
+  display: block;
+  min-block-size: max(54px, 2.8em);
+  padding-block: calc(var(--tk-space-3) - var(--tk-text-border));
+  padding-inline: calc(var(--tk-text-start) - var(--tk-text-border)) calc(var(--tk-text-end) - var(--tk-text-border));
+  border: var(--tk-text-border) solid var(--tk-text-color);
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.tk-text-input:focus {
+  --tk-text-color: var(--tk-focus);
+}
+
+.tk-text-control .tk-text-input:focus-visible {
+  --tk-text-border: 2px;
+  outline: none;
+}
+
+.tk-text-input[aria-invalid="true"] {
+  --tk-text-color: var(--tk-danger);
+}
+
+.tk-text-input:not(:focus)::placeholder {
+  opacity: 0;
+}
+
+.tk-text-label {
+  position: absolute;
+  inset-inline-start: calc(var(--tk-text-start) - var(--tk-space-1));
+  inset-block-start: var(--tk-text-label-resting, 50%);
+  max-inline-size: calc(100% - var(--tk-text-start) - var(--tk-text-end) + var(--tk-space-1));
+  padding-inline: var(--tk-space-1);
+  transform: translateY(-50%);
+  color: var(--tk-muted);
+  font-size: var(--tk-text-base);
+  font-weight: 500;
+  line-height: 1.15;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  transition: inset-block-start .15s ease, font-size .15s ease, color .15s ease;
+}
+
+.tk-textarea {
+  resize: vertical;
+}
+
+.tk-textarea + .tk-text-label {
+  --tk-text-label-resting: calc(var(--tk-space-3) + .7rem);
+}
+
+.tk-text-input:is(:focus, :not(:placeholder-shown), :autofill, :-webkit-autofill) + .tk-text-label {
+  inset-block-start: 0;
+  background: var(--tk-surface);
+  font-size: var(--tk-text-sm);
+}
+
+.tk-text-input:focus + .tk-text-label {
+  color: var(--tk-focus);
+}
+
+.tk-text-input[aria-invalid="true"] + .tk-text-label {
+  color: var(--tk-danger);
+}
+
+.tk-text-input:disabled + .tk-text-label {
+  opacity: .72;
+}
+
+.tk-text-input:is(:autofill, :-webkit-autofill) {
+  animation: tk-text-autofill .01s;
+}
+
+@keyframes tk-text-autofill {
+  from { --tk-text-autofilled: 0; }
+  to { --tk-text-autofilled: 1; }
+}
+
+.tk-text-trailing {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: var(--tk-space-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: var(--tk-target);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-text-label { transition: none; }
+}
+
 .tk-select-anchor {
   position: relative;
 }
@@ -203,7 +317,7 @@
   top: calc(100% + var(--tk-space-2));
   inset-inline: 0;
   max-height: min(360px, 70vh);
-  overflow: auto;
+  overflow: hidden auto;
   overscroll-behavior: contain;
   padding: var(--tk-space-2);
   border: 1px solid var(--tk-line);
@@ -241,6 +355,12 @@
   border-radius: 8px;
   cursor: pointer;
   font-weight: 500;
+  line-height: 1.35;
+}
+
+.tk-select-option-label {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 
 .tk-select-option:hover {
@@ -284,6 +404,11 @@
 }
 
 .tk-select .material-symbols-rounded {
+  display: grid;
+  flex: none;
+  inline-size: 1em;
+  block-size: 1em;
+  place-items: center;
   color: var(--tk-accent);
   font-size: 1.2rem;
 }
@@ -430,6 +555,10 @@
   display: flex;
   justify-content: space-between;
   gap: var(--tk-space-4);
+}
+
+.tk-dialog-header-centered {
+  align-items: center;
 }
 
 .tk-dialog-header h2, .tk-dialog-header p { margin: 0; }

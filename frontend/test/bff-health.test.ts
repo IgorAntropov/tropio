@@ -7,9 +7,38 @@ import { afterAll, expect, it } from 'vitest'
 let upstreamStatus = 200
 let identityDisconnected = false
 let forwarded: Record<string, string | string[] | undefined> = {}
+let forwardedBody = ''
 const requestId = 'baf65e50-9760-4ca7-9d3f-09f71db01b05'
+const routeId = '6933c278-1263-4f4e-a23e-d49572b0bc4d'
+const dayId = '1b3f80cd-f580-4164-9d3c-71e5e058ba95'
+const revision = 'a927c255-8f67-4f16-b9b7-5d3922350956'
+const picture = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
 
-const upstream = createServer((request, response) => {
+const upstream = createServer(async (request, response) => {
+  if (request.url === '/api/v1/trips?cursor=a&limit=20') {
+    forwarded = request.headers
+    response.writeHead(200, { 'content-type': 'application/json', 'x-request-id': requestId })
+      .end(JSON.stringify({ items: [], next_cursor: null }))
+    return
+  }
+  if (request.url === `/api/v1/routes/${routeId}` && request.method === 'PUT') {
+    forwarded = request.headers
+    forwardedBody = (await Array.fromAsync(request)).map(chunk => chunk.toString()).join('')
+    response.writeHead(409, { 'content-type': 'application/problem+json; charset=utf-8', 'x-request-id': requestId })
+      .end(JSON.stringify({
+        type: 'about:blank', title: 'Conflict', status: 409, code: 'ROUTE_REVISION_CONFLICT',
+        request_id: requestId, current_route_revision_id: revision,
+      }))
+    return
+  }
+  if (request.url === `/api/v1/days/${dayId}/route`) {
+    request.socket.destroy()
+    return
+  }
+  if (request.url === `/api/v1/pois/${routeId}/media/${revision}`) {
+    response.writeHead(200, { 'content-type': 'image/png', 'x-request-id': requestId }).end(picture)
+    return
+  }
   if (request.url === '/api/v1/auth/register') {
     forwarded = request.headers
     request.resume()
@@ -31,6 +60,13 @@ const upstream = createServer((request, response) => {
   }
   if (request.url === '/api/v1/me' && identityDisconnected) {
     request.socket.destroy()
+    return
+  }
+  if (request.url === '/api/v1/me' && request.headers.cookie === 'tropio_session=workspace-active') {
+    response.writeHead(200, { 'content-type': 'application/json', 'x-request-id': requestId })
+      .end(JSON.stringify({
+        id: routeId, display_name: 'Путешественник', bio: null, avatar: null, csrf_token: 'workspace-csrf-fixture',
+      }))
     return
   }
   if (request.url?.startsWith('/api/v1/users/') || request.url === '/api/v1/me') {
@@ -91,21 +127,75 @@ it('returns the BFF health response through the Nuxt origin', async () => {
   expect(await response.json()).toEqual({ status: 'ok' })
 })
 
-it('renders the confirmed BFF status in the server-rendered home page', async () => {
-  const response = await fetch('/')
+it.each(['/', '/login', '/feed'])('renders a neutral session check in SSR at %s without the API-scoped cookie', async (path) => {
+  const response = await fetch(path)
+  const html = await response.text()
 
   expect(response.status).toBe(200)
-  expect(await response.text()).toContain('API работает')
+  expect(response.headers.get('cache-control')).toBe('no-store')
+  expect(html).toContain('Проверяем сессию')
+  expect(html).not.toContain('<h1>Вход по почте</h1>')
+  expect(html).not.toContain('<h1>Лента</h1>')
 })
 
-it('renders the Russian product name in the home page and document title', async () => {
+it('renders the Russian document language and product title at the entry route', async () => {
   const response = await fetch('/')
   const html = await response.text()
 
   expect(response.status).toBe(200)
   expect(html).toMatch(/<html\b[^>]*\blang="ru"/)
   expect(html).toContain('<title>Тропио</title>')
-  expect(html).toContain('<h1>Тропио</h1>')
+})
+
+it.each(['/', '/login'])('sends an SSR request with a verified session at %s to the feed', async (path) => {
+  const response = await fetch(path, {
+    headers: { cookie: 'tropio_session=workspace-active' },
+    redirect: 'manual',
+  })
+
+  expect(response.status).toBe(302)
+  expect(response.headers.get('location')).toBe('/feed')
+  expect(response.headers.get('cache-control')).toBe('no-store')
+})
+
+it('allows server-rendered workspace content with an active session without serializing session secrets', async () => {
+  const response = await fetch('/feed', { headers: { cookie: 'tropio_session=workspace-active' } })
+  const html = await response.text()
+
+  expect(response.status).toBe(200)
+  expect(html).toMatch(/<h1[^>]*>Лента<\/h1>/)
+  expect(html).not.toContain('workspace-csrf-fixture')
+  expect(html).not.toContain('workspace-active')
+})
+
+it.each([
+  ['/', null],
+  ['/map', '/map'],
+])('sends an expired SSR session at %s to login', async (path, returnTo) => {
+  const response = await fetch(path, {
+    headers: { cookie: 'tropio_session=workspace-expired' },
+    redirect: 'manual',
+  })
+  const location = new URL(response.headers.get('location') ?? '/', 'http://localhost')
+
+  expect(response.status).toBe(302)
+  expect(location.pathname).toBe('/login')
+  expect(location.searchParams.get('returnTo')).toBe(returnTo)
+})
+
+it.each(['/', '/login', '/feed'])('returns 503 at %s when session verification is unavailable', async (path) => {
+  identityDisconnected = true
+  try {
+    const response = await fetch(path, {
+      headers: { cookie: 'tropio_session=workspace-active' },
+      redirect: 'manual',
+    })
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('location')).toBeNull()
+  } finally {
+    identityDisconnected = false
+  }
 })
 
 it('returns a gateway error when the BFF health check fails', async () => {
@@ -183,4 +273,61 @@ it('maps an unavailable Identity upstream to a correlated 503 Problem', async ()
   } finally {
     identityDisconnected = false
   }
+})
+
+it('passes Travel pagination and only the session cookie', async () => {
+  const response = await fetch('/api/v1/trips?cursor=a&limit=20', {
+    headers: { cookie: 'tropio_session=current; tropio_registration=pending; ignored=value' },
+  })
+  expect(response.status).toBe(200)
+  expect(response.headers.get('cache-control')).toBe('no-store')
+  expect(await response.json()).toEqual({ items: [], next_cursor: null })
+  expect(forwarded.cookie).toBe('tropio_session=current')
+})
+
+it('relays the Geo conflict and preserves the write body, CSRF, Origin and command key', async () => {
+  const body = JSON.stringify({ route_revision_id: null, points: [], tracks: [], padding: 'a'.repeat(16_000) })
+  const response = await fetch(`/api/v1/routes/${routeId}`, {
+    method: 'PUT',
+    headers: {
+      'content-type': 'application/json', 'x-csrf-token': 'csrf', 'idempotency-key': revision,
+      'origin': 'http://127.0.0.1:3000', 'cookie': 'tropio_session=active',
+    },
+    body,
+  })
+  expect(response.status).toBe(409)
+  expect(response.headers.get('x-request-id')).toBe(requestId)
+  expect(response.headers.get('cache-control')).toBe('no-store')
+  expect(await response.json()).toMatchObject({ code: 'ROUTE_REVISION_CONFLICT', current_route_revision_id: revision, request_id: requestId })
+  expect(forwarded).toMatchObject({
+    'content-type': 'application/json', 'x-csrf-token': 'csrf', 'idempotency-key': revision,
+    'origin': 'http://127.0.0.1:3000', 'cookie': 'tropio_session=active',
+  })
+  expect(forwardedBody).toBe(body)
+})
+
+it('serves POI images without modifying the bytes or enabling caching', async () => {
+  const response = await fetch(`/api/v1/pois/${routeId}/media/${revision}`)
+  expect(response.status).toBe(200)
+  expect(response.headers.get('content-type')).toBe('image/png')
+  expect(response.headers.get('cache-control')).toBe('no-store')
+  expect(new Uint8Array(await response.arrayBuffer())).toEqual(picture)
+})
+
+it('rejects undeclared editor operations and encoded route separators', async () => {
+  const unexpected = await fetch(`/api/v1/routes/${routeId}`, { method: 'DELETE' })
+  const invalid = await fetch('/api/v1/routes/%2Fshadow')
+  expect(unexpected.status).toBe(404)
+  expect(await unexpected.json()).toMatchObject({ code: 'NOT_FOUND' })
+  expect(invalid.status).toBe(400)
+  expect(await invalid.json()).toMatchObject({ code: 'INVALID_REQUEST' })
+})
+
+it('maps an editor dependency disconnect to a correlated 503 Problem', async () => {
+  const response = await fetch(`/api/v1/days/${dayId}/route`, {
+    method: 'PUT', headers: { 'x-request-id': requestId },
+  })
+  expect(response.status).toBe(503)
+  expect(response.headers.get('x-request-id')).toBe(requestId)
+  expect(await response.json()).toMatchObject({ code: 'DEPENDENCY_UNAVAILABLE', request_id: requestId })
 })

@@ -331,6 +331,27 @@ describe('GIS-04 through the BFF', () => {
     expect(restored.tracks).toEqual(original.tracks)
   })
 
+  it('replaces a day route with an empty revision and restores its points and tracks', async () => {
+    const draft = await trip(owner)
+    const path = routePath(draft)
+    const original = await json<Route>(await send('PUT', path, owner, draftBody(positions.slice(0, 2), ['foot'])), 200)
+    const cleared = await json<Route>(await send('PUT', path, owner, {
+      route_revision_id: original.route_revision_id, points: [], tracks: [],
+    }), 200)
+
+    expect(cleared.route_id).toBe(original.route_id)
+    expect(cleared.route_revision_id).not.toBe(original.route_revision_id)
+    expect(cleared.points).toEqual([])
+    expect(cleared.tracks).toEqual([])
+    expect(await json<Route>(await send('GET', path, owner), 200)).toEqual(cleared)
+
+    const restored = await json<Route>(await send('POST', `${path}/restore`, owner, {
+      route_revision_id: cleared.route_revision_id, target_revision_id: original.route_revision_id,
+    }), 200)
+    expect(restored.points).toEqual(original.points)
+    expect(restored.tracks).toEqual(original.tracks)
+  })
+
   it('AT-03 preserves an off-network requested point and explicitly offers a manual continuation', async () => {
     const payload = { from: positions[0], to: { lon: 85.15, lat: 56.48 }, transport_mode: 'car' }
     const result = await json<{ status: string; reason?: string; to: { requested: Position }; alternatives: { build_mode: string }[] }>(

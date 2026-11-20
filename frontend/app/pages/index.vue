@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { HomePage } from '@fsd/pages/home'
+import { SessionCheck } from '@fsd/shared/ui/session-check'
+
+definePageMeta({ middleware: 'session-entry' })
+useSeoMeta({ robots: 'noindex' })
 </script>
 
 <template>
-  <HomePage />
+  <main>
+    <SessionCheck />
+  </main>
 </template>

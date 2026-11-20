@@ -127,7 +127,7 @@ watch(() => props.disabled || props.pending, blocked => { if (blocked) close() }
               @keydown.enter="choose($event, option.value)" @keydown.space="choose($event, option.value)"
             >
             <MaterialSymbol v-if="option.icon" :name="option.icon" />
-            <span>{{ option.label }}</span>
+            <span class="tk-select-option-label">{{ option.label }}</span>
             <i v-if="!multiple && model.includes(option.value)" class="tk-checkmark" aria-hidden="true" />
           </label>
         </fieldset>

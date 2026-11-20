@@ -5,6 +5,12 @@
     "apiAvailable": "API работает",
     "apiUnavailable": "API недоступен"
   },
+  "tripDrafts": {
+    "title": "Название путешествия",
+    "titleRequired": "Укажи название путешествия.",
+    "titleTooLong": "Название может содержать до 120 символов.",
+    "titleInvalid": "Удали недопустимые символы."
+  },
   "demo": {
     "label": "Демо",
     "catalog": {
@@ -25,6 +31,34 @@
     "unexpected": "Не удалось открыть страницу",
     "backHome": "На главную"
   },
+  "workspace": {
+    "navigation": "Основная навигация",
+    "sessionChecking": "Проверяем сессию…",
+    "skipToContent": "К содержимому",
+    "openFeed": "Тропио — к ленте",
+    "map": "Карта",
+    "backToMap": "К карте",
+    "trips": "Мои путешествия",
+    "tripsCompact": "Поездки",
+    "profile": "Профиль",
+    "accountMenu": "Меню профиля",
+    "ratingUnavailable": "Рейтинг —",
+    "collapseSidebar": "Свернуть боковую панель",
+    "collapseSidebarShort": "Свернуть",
+    "expandSidebar": "Развернуть боковую панель",
+    "createTrip": "Создать путешествие",
+    "feed": {
+      "title": "Лента",
+      "empty": "В ленте пока нет записей.",
+      "mapAction": "Открыть карту",
+      "tripsAction": "Мои путешествия"
+    }
+  },
+  "routeEditor": {
+    "clearTitle": "Очистить маршрут дня?",
+    "clearMessage": "Будут удалены все маршрутные точки и треки этого дня. POI путешествия сохранятся.",
+    "clearAction": "Очистить маршрут"
+  },
   "identity": {
     "navigation": "Аккаунт",
     "email": "Электронная почта",
@@ -33,6 +67,8 @@
     "hidePassword": "Скрыть пароль",
     "emailError": "Введи корректный адрес электронной почты.",
     "passwordError": "Введи пароль.",
+    "passwordFormatError": "Удали из пароля недопустимый символ.",
+    "backToLogin": "Назад ко входу",
     "passwordHint": "Минимум 12 символов.",
     "passwordMaxError": "Максимум 128 символов.",
     "termsError": "Для регистрации нужно принять условия использования.",
@@ -87,6 +123,7 @@
       "name": "Отображаемое имя",
       "nameError": "Введи отображаемое имя.",
       "nameMaxError": "В имени может быть до 80 символов.",
+      "invalidText": "Удали недопустимые символы.",
       "bio": "Обо мне",
       "bioMaxError": "В описании может быть до 1000 символов.",
       "preview": "Предпросмотр профиля",

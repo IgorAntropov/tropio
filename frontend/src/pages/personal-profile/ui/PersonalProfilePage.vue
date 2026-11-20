@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { identityApi, useIdentityAction } from '@fsd/shared/api'
 import type { IdentityProfile, SystemAvatar } from '@fsd/shared/api'
+import { workspaceMemberKey, workspaceMemberOf } from '@fsd/shared/session'
+import type { WorkspaceMember } from '@fsd/shared/session'
 import { AccountPanel } from '@fsd/shared/ui/account-panel'
+import { hasInvalidText, useFormValidation } from '@fsd/shared/ui/form'
 import { UiAvatar, UiStatus, UiTextField } from '@fsd/shared/ui/kit'
 
 const { t } = useI18n()
 const profile = shallowRef<IdentityProfile>()
+const member = useState<WorkspaceMember | null>(workspaceMemberKey, () => null)
 const assets = shallowRef<SystemAvatar[]>()
 const name = ref('')
 const bio = ref('')
-const nameError = ref('')
-const bioError = ref('')
 const editingAvatar = ref(false)
 const selectedId = ref('')
 const feedback = ref('')
@@ -27,6 +29,18 @@ const { pending: loadingAssets, message: assetsError } = loadAssets
 const signInNeeded = computed(() => profileProblem.value?.status === 401 && profileProblem.value.code === 'SESSION_REQUIRED')
 const sessionExpired = computed(() => saveProblem.value?.status === 401 && saveProblem.value.code === 'SESSION_REQUIRED')
 const hasEdits = computed(() => name.value.trim() !== profile.value?.display_name || (bio.value || null) !== profile.value?.bio)
+const { valid, errors, touch, reset: resetValidation } = useFormValidation({
+  name: () => {
+    const value = name.value.trim()
+    if (!value) return t('identity.profile.nameError')
+    if (hasInvalidText(value)) return t('identity.profile.invalidText')
+    if ([...value].length > 80) return t('identity.profile.nameMaxError')
+  },
+  bio: () => {
+    if (hasInvalidText(bio.value)) return t('identity.profile.invalidText')
+    if ([...bio.value].length > 1000) return t('identity.profile.bioMaxError')
+  },
+})
 const avatar = computed(() => editingAvatar.value
   ? assets.value?.find(item => item.id === selectedId.value) ?? profile.value?.avatar
   : profile.value?.avatar)
@@ -43,15 +57,19 @@ onMounted(reloadProfile)
 function resetFields() {
   name.value = profile.value?.display_name ?? ''
   bio.value = profile.value?.bio ?? ''
-  nameError.value = ''
-  bioError.value = ''
+  resetValidation()
 }
 
 async function reloadProfile() {
   await loadProfile.run(identityApi.me, (result) => {
-    profile.value = result
+    applyProfile(result)
     resetFields()
   })
+}
+
+function applyProfile(result: IdentityProfile) {
+  profile.value = result
+  member.value = workspaceMemberOf(result)
 }
 
 async function reloadAssets() {
@@ -83,20 +101,15 @@ function cancelProfile() {
 
 async function saveProfile() {
   const current = profile.value
-  if (!current || pending.value || !hasEdits.value) return
+  if (!current || pending.value || !hasEdits.value || !valid.value) return
   save.reset()
   feedback.value = ''
   const displayName = name.value.trim()
-  nameError.value = !displayName ? t('identity.profile.nameError')
-    : [...displayName].length > 80 ? t('identity.profile.nameMaxError') : ''
-  bioError.value = [...bio.value].length > 1000 ? t('identity.profile.bioMaxError') : ''
-  if (nameError.value || bioError.value) return
-
   await save.run(signal => identityApi.updateProfile({
     display_name: displayName,
     bio: bio.value || null,
   }, current.csrf_token, signal), (result) => {
-    profile.value = result
+    applyProfile(result)
     resetFields()
     feedback.value = 'identity.profile.saved'
   })
@@ -105,21 +118,13 @@ async function saveProfile() {
 async function saveAvatar() {
   const current = profile.value
   const chosen = avatar.value
-  if (!current || !chosen || !avatarChanged.value || pending.value) return
+  if (!current || !chosen || !avatarChanged.value || pending.value || loadingAssets.value) return
   const saved = await save.run(signal => identityApi.selectAvatar({
     avatar_id: chosen.id,
-  }, current.csrf_token, signal), (result) => { profile.value = result })
+  }, current.csrf_token, signal), applyProfile)
   if (saved) {
     feedback.value = 'identity.profile.avatarSaved'
     await closeAvatars()
-  }
-}
-
-async function logout() {
-  const current = profile.value
-  if (!current) return
-  if (await save.run(signal => identityApi.logout(current.csrf_token, signal), () => { profile.value = undefined })) {
-    await navigateTo('/login')
   }
 }
 </script>
@@ -146,16 +151,13 @@ async function logout() {
           <div class="account-form">
             <UiTextField
               v-model="name" :label="t('identity.profile.name')" name="display-name" autocomplete="nickname"
-              :maxlength="160" :error="nameError" :disabled="pending" required
+              :maxlength="160" :error="errors.name" :disabled="pending" required
+              @blur="touch('name')"
             />
-            <div class="tk-field">
-              <label class="tk-label" for="profile-bio">{{ t('identity.profile.bio') }}</label>
-              <textarea
-                id="profile-bio" v-model="bio" class="tk-input profile-bio" rows="4" maxlength="2000" :disabled="pending"
-                :aria-invalid="bioError ? true : undefined" :aria-describedby="bioError ? 'profile-bio-error' : undefined"
-              />
-              <p v-if="bioError" id="profile-bio-error" class="tk-field-error" role="alert">{{ bioError }}</p>
-            </div>
+            <UiTextField
+              v-model="bio" :label="t('identity.profile.bio')" name="bio" :rows="4" :maxlength="2000"
+              :error="errors.bio" :disabled="pending" @blur="touch('bio')"
+            />
           </div>
           <section class="profile-preview" :aria-label="t('identity.profile.preview')">
             <h2>{{ t('identity.profile.preview') }}</h2>
@@ -175,7 +177,7 @@ async function logout() {
           <UiStatus v-if="feedback" tone="success">{{ t(feedback) }}</UiStatus>
           <div class="account-actions">
             <button class="tk-button" type="button" :disabled="pending || !hasEdits" @click="cancelProfile">{{ t('identity.cancel') }}</button>
-            <button class="tk-button tk-button-primary" type="submit" :disabled="pending || !hasEdits">
+            <button class="tk-button tk-button-primary" type="submit" :disabled="pending || !hasEdits || !valid">
               {{ t(pending ? 'identity.working' : 'identity.save') }}
             </button>
           </div>
@@ -212,15 +214,12 @@ async function logout() {
         <footer class="profile-footer">
           <div class="account-actions">
             <button class="tk-button" type="button" :disabled="pending" @click="closeAvatars">{{ t('identity.cancel') }}</button>
-            <button class="tk-button tk-button-primary" type="submit" :disabled="pending || !avatarChanged">
+            <button class="tk-button tk-button-primary" type="submit" :disabled="pending || loadingAssets || !avatarChanged">
               {{ t(pending ? 'identity.working' : 'identity.save') }}
             </button>
           </div>
         </footer>
       </form>
-      <button v-if="!editingAvatar" class="tk-button tk-button-text profile-logout" type="button" :disabled="pending" @click="logout">
-        {{ t('identity.logout') }}
-      </button>
     </template>
   </AccountPanel>
 </template>
@@ -232,13 +231,6 @@ async function logout() {
   gap: var(--tk-space-4);
   align-items: start;
   min-inline-size: 0;
-}
-
-.profile-bio {
-  resize: vertical;
-  min-block-size: 7rem;
-  padding-block: var(--tk-space-3);
-  line-height: 1.45;
 }
 
 .profile-preview {
@@ -287,10 +279,6 @@ async function logout() {
   gap: var(--tk-space-2);
   padding-block-start: var(--tk-space-4);
   border-block-start: 1px solid var(--tk-line);
-}
-
-.profile-logout {
-  margin-block-start: var(--tk-space-3);
 }
 
 .profile-avatar-fieldset {

@@ -16,12 +16,17 @@ export default defineNuxtConfig({
   },
   css: ['@fsd/shared/styles/main.css'],
   routeRules: {
+    '/': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+    '/feed': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+    '/map': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
     '/login': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
     '/register': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
     '/verify-email': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
     '/request-password-reset': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
     '/reset-password': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
     '/profile': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+    '/trips': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+    '/trips/**': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
   },
   alias: {
     '@fsd': fileURLToPath(new URL('./src', import.meta.url)),
@@ -29,9 +34,22 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
   },
+  hooks: {
+    async 'nitro:config'(config) {
+      if (!config.dev) return
+
+      const { developmentLoginPath, prefillDevelopmentLogin } = await import('./server/dev/login-prefill.ts')
+      config.devHandlers ??= []
+      config.devHandlers.push({
+        route: developmentLoginPath,
+        handler: event => prefillDevelopmentLogin(event.node.req, event.node.res),
+      })
+    },
+  },
   runtimeConfig: {
     bffBaseUrl: 'http://127.0.0.1:3001',
     bffProxySecret: '',
+    public: { routeMapStyle: '' },
   },
   app: {
     head: {

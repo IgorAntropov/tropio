@@ -13,4 +13,5 @@ node_modules/
 /frontend/ui-kit/dist
 dist/
 coverage/
+*.log
 *.tsbuildinfo

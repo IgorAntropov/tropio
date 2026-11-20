@@ -16,7 +16,7 @@ watch([open, dialog], ([visible, element]) => {
 <template>
   <dialog ref="dialog" class="tk-dialog" :aria-labelledby="id" @close="open = false">
     <div class="tk-dialog-inner">
-      <header class="tk-dialog-header">
+      <header class="tk-dialog-header" :class="{ 'tk-dialog-header-centered': !subtitle }">
         <div>
           <h2 :id="id">{{ title }}</h2>
           <p v-if="subtitle" class="tk-muted">{{ subtitle }}</p>
