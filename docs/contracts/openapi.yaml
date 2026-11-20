@@ -1,9 +1,9 @@
 openapi: 3.1.1
 info:
   title: Tropio GIS MVP
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    Проект POC-04 для внешнего API BFF. URL и UUID-ревизии относятся к предложению.
+    Внешний API BFF. Identity описывает GIS-02. URL и UUID-ревизии Travel и Geo относятся к проекту POC-04.
     Каждый ответ этого контракта получает Cache-Control: no-store и X-Request-Id.
     Недоступные или неизвестные объекты дают одинаковый 404. Публичные операции
     используют гостевой контекст, даже если браузер отправил сессию.
@@ -12,6 +12,363 @@ servers:
 security:
   - session: []
 paths:
+  /auth/register:
+    post:
+      operationId: registerIdentity
+      tags: [Identity]
+      summary: Начать регистрацию по email
+      description: Identity принимает заявку на регистрацию. Ответ одинаков для новых и известных адресов. Учётная запись создаётся при подтверждении адреса.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterIdentityRequest'
+      responses:
+        '202':
+          description: Запрос принят.
+          headers:
+            Set-Cookie:
+              description: Обновление cookie tropio_registration.
+              schema: {type: string}
+        '400':
+          $ref: '#/components/responses/IdentityInvalidRequest'
+        '403':
+          $ref: '#/components/responses/IdentityCsrfRejected'
+        '429':
+          $ref: '#/components/responses/IdentityRateLimited'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /auth/resend-verification:
+    post:
+      operationId: resendIdentityVerification
+      tags: [Identity]
+      summary: Повторить запрос подтверждения адреса
+      description: Повтор использует cookie исходного браузера. Ответ одинаков при любом состоянии регистрации.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityEmailRequest'
+      responses:
+        '202':
+          description: Запрос принят.
+          headers:
+            Set-Cookie:
+              description: При наличии регистрационной cookie браузер может получить её обновление.
+              schema: {type: string}
+        '400':
+          $ref: '#/components/responses/IdentityInvalidRequest'
+        '403':
+          $ref: '#/components/responses/IdentityCsrfRejected'
+        '429':
+          $ref: '#/components/responses/IdentityRateLimited'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /auth/verify-email:
+    post:
+      operationId: verifyIdentityEmail
+      tags: [Identity]
+      summary: Подтвердить адрес электронной почты
+      description: Откройте ссылку в браузере, где началась регистрация. Identity однократно создаёт аккаунт и назначает случайный активный системный аватар.
+      security:
+        - registration: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityTokenRequest'
+      responses:
+        '204':
+          description: Операция выполнена.
+          headers:
+            Set-Cookie:
+              description: Обновление cookie tropio_registration.
+              schema: {type: string}
+        '400':
+          $ref: '#/components/responses/IdentityInvalidRequest'
+        '403':
+          $ref: '#/components/responses/IdentityCsrfRejected'
+        '422':
+          $ref: '#/components/responses/IdentityInvalidAuthToken'
+        '429':
+          $ref: '#/components/responses/IdentityRateLimited'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /auth/login:
+    post:
+      operationId: loginIdentity
+      tags: [Identity]
+      summary: Войти по email и паролю
+      description: Identity выдаёт сессию после подтверждения адреса. Ответ об ошибке не раскрывает состояние аккаунта.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginIdentityRequest'
+      responses:
+        '200':
+          description: Актуальные данные.
+          headers:
+            Set-Cookie:
+              description: Обновление cookie tropio_session.
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityProfile'
+        '400':
+          $ref: '#/components/responses/IdentityInvalidRequest'
+        '401':
+          $ref: '#/components/responses/IdentityInvalidCredentials'
+        '403':
+          $ref: '#/components/responses/IdentityCsrfRejected'
+        '429':
+          $ref: '#/components/responses/IdentityRateLimited'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /auth/refresh:
+    post:
+      operationId: refreshIdentitySession
+      tags: [Identity]
+      summary: Обновить сессию
+      description: При успешном обновлении прежний токен сессии перестаёт действовать.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      responses:
+        '200':
+          description: Актуальные данные.
+          headers:
+            Set-Cookie:
+              description: Обновление cookie tropio_session.
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityProfile'
+        '401':
+          $ref: '#/components/responses/IdentitySessionRequired'
+        '403':
+          $ref: '#/components/responses/IdentityCsrfRejected'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /auth/logout:
+    post:
+      operationId: logoutIdentity
+      tags: [Identity]
+      summary: Завершить текущую сессию
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      responses:
+        '204':
+          description: Операция выполнена.
+          headers:
+            Set-Cookie:
+              description: Обновление cookie tropio_session.
+              schema: {type: string}
+        '401':
+          $ref: '#/components/responses/IdentitySessionRequired'
+        '403':
+          $ref: '#/components/responses/IdentityCsrfRejected'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /auth/request-password-reset:
+    post:
+      operationId: requestIdentityPasswordReset
+      tags: [Identity]
+      summary: Запросить восстановление пароля
+      description: Ответ одинаков для известных и неизвестных адресов.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityEmailRequest'
+      responses:
+        '202':
+          description: Запрос принят.
+        '400':
+          $ref: '#/components/responses/IdentityInvalidRequest'
+        '403':
+          $ref: '#/components/responses/IdentityCsrfRejected'
+        '429':
+          $ref: '#/components/responses/IdentityRateLimited'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /auth/reset-password:
+    post:
+      operationId: resetIdentityPassword
+      tags: [Identity]
+      summary: Установить новый пароль по ссылке
+      description: При успешной установке пароля Identity отзывает прежние сессии.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetIdentityPasswordRequest'
+      responses:
+        '204':
+          description: Операция выполнена.
+        '400':
+          $ref: '#/components/responses/IdentityInvalidRequest'
+        '403':
+          $ref: '#/components/responses/IdentityCsrfRejected'
+        '422':
+          $ref: '#/components/responses/IdentityInvalidAuthToken'
+        '429':
+          $ref: '#/components/responses/IdentityRateLimited'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /me:
+    get:
+      operationId: readMyIdentityProfile
+      tags: [Identity]
+      summary: Получить собственный профиль
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Актуальные данные.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityProfile'
+        '401':
+          $ref: '#/components/responses/IdentitySessionRequired'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+    patch:
+      operationId: updateMyIdentityProfile
+      tags: [Identity]
+      summary: Изменить имя и описание собственного профиля
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIdentityProfileRequest'
+      responses:
+        '200':
+          description: Актуальные данные.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityProfile'
+        '400':
+          $ref: '#/components/responses/IdentityInvalidRequest'
+        '401':
+          $ref: '#/components/responses/IdentitySessionRequired'
+        '403':
+          $ref: '#/components/responses/IdentityCsrfRejected'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /me/avatar:
+    patch:
+      operationId: selectMyIdentityAvatar
+      tags: [Identity]
+      summary: Выбрать системный аватар
+      description: Операция изменяет аватар собственного профиля.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelectIdentityAvatarRequest'
+      responses:
+        '200':
+          description: Актуальные данные.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityProfile'
+        '400':
+          $ref: '#/components/responses/IdentityInvalidRequest'
+        '401':
+          $ref: '#/components/responses/IdentitySessionRequired'
+        '403':
+          $ref: '#/components/responses/IdentityCsrfRejected'
+        '422':
+          $ref: '#/components/responses/IdentityAvatarUnavailable'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /avatar-assets:
+    get:
+      operationId: listIdentityAvatarAssets
+      tags: [Identity]
+      summary: Получить доступные системные аватары
+      security: []
+      responses:
+        '200':
+          description: Актуальные данные.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemAvatarList'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /users/{id}:
+    get:
+      operationId: readPublicIdentityProfile
+      tags: [Identity]
+      summary: Получить публичный профиль
+      description: Identity включает только доступные посетителю поля.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Актуальные данные.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicIdentityProfile'
+        '400':
+          $ref: '#/components/responses/IdentityInvalidRequest'
+        '404':
+          $ref: '#/components/responses/IdentityNotFound'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
   /trips/{tripId}/draft:
     parameters:
       - $ref: '#/components/parameters/TripId'
@@ -415,8 +772,24 @@ components:
       type: apiKey
       in: cookie
       name: tropio_session
-      description: Рабочее имя сессионной cookie. Identity и защита CSRF уточняются в GIS-02.
+      description: HttpOnly, SameSite=Lax; в production также Secure.
+    csrf:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Токен из csrf_token собственного профиля для изменения данных и сессии.
+    registration:
+      type: apiKey
+      in: cookie
+      name: tropio_registration
+      description: HttpOnly cookie браузера, в котором началась регистрация.
   parameters:
+    IdentityOrigin:
+      name: Origin
+      in: header
+      required: true
+      schema: {type: string, format: uri}
+      description: Должен совпадать с настроенным origin приложения.
     TripId:
       name: tripId
       in: path
@@ -479,6 +852,109 @@ components:
         maximum: 100
         default: 30
   responses:
+    IdentityInvalidRequest:
+      description: Поля или формат запроса недопустимы.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 400}
+                  code: {const: INVALID_REQUEST}
+    IdentitySessionRequired:
+      description: Требуется действующая сессия.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 401}
+                  code: {const: SESSION_REQUIRED}
+    IdentityInvalidCredentials:
+      description: Вход отклонён. Проверьте учётные данные и подтверждение почты.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 401}
+                  code: {const: INVALID_CREDENTIALS}
+    IdentityCsrfRejected:
+      description: Origin или токен защиты запроса отклонён.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 403}
+                  code: {const: CSRF_REJECTED}
+    IdentityNotFound:
+      description: Профиль отсутствует или недоступен.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 404}
+                  code: {const: NOT_FOUND}
+    IdentityInvalidAuthToken:
+      description: Ссылка недействительна или больше не может быть использована.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 422}
+                  code: {const: INVALID_AUTH_TOKEN}
+    IdentityAvatarUnavailable:
+      description: Аватар недоступен для выбора.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 422}
+                  code: {const: AVATAR_UNAVAILABLE}
+    IdentityRateLimited:
+      description: Слишком много попыток. Повторите запрос позже.
+      headers:
+        Retry-After:
+          description: Время до повторной попытки в секундах.
+          schema: {type: integer, minimum: 1}
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 429}
+                  code: {const: RATE_LIMITED}
+    IdentityUnavailable:
+      description: Обязательная зависимость Identity недоступна.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 503}
+                  code: {const: DEPENDENCY_UNAVAILABLE}
     BadRequest:
       description: Некорректный запрос, UUID, фильтр или обязательный заголовок
       content:
@@ -522,6 +998,93 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    IdentityProfile:
+      type: object
+      additionalProperties: false
+      required: [id, display_name, bio, avatar, csrf_token]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        display_name: {type: string}
+        bio: {type: [string, 'null']}
+        avatar:
+          anyOf:
+            - $ref: '#/components/schemas/SystemAvatar'
+            - type: 'null'
+        csrf_token: {type: string, minLength: 1}
+    PublicIdentityProfile:
+      type: object
+      additionalProperties: false
+      required: [id, display_name, bio, avatar]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        display_name: {type: string}
+        bio: {type: [string, 'null']}
+        avatar:
+          anyOf:
+            - $ref: '#/components/schemas/SystemAvatar'
+            - type: 'null'
+    SystemAvatar:
+      type: object
+      additionalProperties: false
+      required: [id, url]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        url: {type: string, format: uri-reference}
+    SystemAvatarList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/SystemAvatar'}
+    RegisterIdentityRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, accepted_terms]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, minLength: 12, maxLength: 128, writeOnly: true}
+        accepted_terms: {const: true}
+    LoginIdentityRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, minLength: 1, maxLength: 128, writeOnly: true}
+    IdentityEmailRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+    IdentityTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token: {type: string, minLength: 1, maxLength: 256, writeOnly: true}
+    ResetIdentityPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [token, password]
+      properties:
+        token: {type: string, minLength: 1, maxLength: 256, writeOnly: true}
+        password: {type: string, minLength: 12, maxLength: 128, writeOnly: true}
+    UpdateIdentityProfileRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name: {type: string, minLength: 1, maxLength: 80}
+        bio: {type: [string, 'null'], maxLength: 1000}
+    SelectIdentityAvatarRequest:
+      type: object
+      additionalProperties: false
+      required: [avatar_id]
+      properties:
+        avatar_id: {$ref: '#/components/schemas/Uuid'}
     Uuid:
       type: string
       format: uuid

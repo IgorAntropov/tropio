@@ -15,6 +15,14 @@ export default defineNuxtConfig({
     detectBrowserLanguage: false,
   },
   css: ['@fsd/shared/styles/main.css'],
+  routeRules: {
+    '/login': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+    '/register': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+    '/verify-email': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+    '/request-password-reset': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+    '/reset-password': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+    '/profile': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+  },
   alias: {
     '@fsd': fileURLToPath(new URL('./src', import.meta.url)),
   },
@@ -23,6 +31,7 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     bffBaseUrl: 'http://127.0.0.1:3001',
+    bffProxySecret: '',
   },
   app: {
     head: {

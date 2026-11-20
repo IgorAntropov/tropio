@@ -10,13 +10,14 @@
   <main>
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Контракты, дизайн и приёмка</nav>
     <h1>Ошибки BFF и восстановление</h1>
-    <p>HTTP-статус сообщает исход запроса, а машинный <code>code</code> помогает выбрать действие в интерфейсе. После потери ответа команда могла уже сохраниться. В таком случае клиент проверяет известную операцию или повторяет исходный запрос с тем же ключом. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#5-общие-соглашения-api">Соглашения POC-04</a></p>
-    <p class="document-note"><strong>Статус.</strong> Статья описывает проект внешнего API GIS MVP <code>0.1.0</code>. Реакции клиента сведены из сценариев ТЗ и POC-04. Варианты интерфейса и параметры повторов уточняются при реализации. Текущий health-маршрут Nuxt при недоступности BFF возвращает <code>502</code>. <a href="openapi.yaml">OpenAPI</a> · <a href="../../.agents/docs/MEMORY.md#что-уже-работает">Что уже работает</a></p>
+    <p>HTTP-статус сообщает исход запроса, а машинный <code>code</code> помогает выбрать действие в интерфейсе. После потери ответа клиент перепроверяет состояние. Для команд Travel и Geo с предусмотренным контрактом ключом повтор использует исходный ключ. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#5-общие-соглашения-api">Соглашения POC-04</a></p>
+    <p class="document-note"><strong>Статус.</strong> OpenAPI <code>0.2.0</code> содержит реализованные в GIS-02 операции Identity и проект операций Travel и Geo из POC-04. Для каждого отказа Identity контракт фиксирует HTTP-статус и машинный код. Текущий health-маршрут Nuxt при недоступности BFF возвращает <code>502</code>. <a href="openapi.yaml">OpenAPI</a> · <a href="../../.agents/docs/MEMORY.md#что-уже-работает">Что уже работает</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
         <li><a href="#response">Формат ответа</a></li>
         <li><a href="#statuses">HTTP-статусы и коды</a></li>
+        <li><a href="#identity">Ошибки аккаунта и профиля</a></li>
         <li><a href="#states">Ответы 2xx и состояния клиента</a></li>
         <li><a href="#recovery">Когда повторять запрос</a></li>
         <li><a href="#acceptance">Приёмка</a></li>
@@ -26,7 +27,7 @@
 
     <section aria-labelledby="response">
       <h2 id="response">Формат ответа</h2>
-      <p>Отказы POC-04 описаны как <code>application/problem+json</code> со схемой <code>Problem</code>. Проект добавляет к ответам <code>X-Request-Id</code> и <code>Cache-Control: no-store</code>. Identity удостоверяет сессию, Travel и Geo проверяют объектные права. Клиент выбирает реакцию по HTTP-статусу и <code>code</code>. <a href="openapi.yaml">Схема Problem</a> · <a href="../../.agents/docs/microservices.md#31-внешние-api">Границы BFF</a></p>
+      <p>Отказы BFF имеют формат <code>application/problem+json</code> со схемой <code>Problem</code>. В ответах Identity <code>X-Request-Id</code> совпадает с <code>request_id</code> ошибки и применяется <code>Cache-Control: no-store</code>. Identity удостоверяет сессию, Travel и Geo проверяют объектные права. Клиент выбирает реакцию по HTTP-статусу и <code>code</code>. <a href="openapi.yaml">Схема Problem</a> · <a href="../../.agents/docs/microservices.md#31-внешние-api">Границы BFF</a></p>
       <ul>
         <li><code>type</code> — ссылка на тип ошибки, <code>title</code> — краткий заголовок, <code>status</code> — статус HTTP, <code>code</code> — машинный код, <code>request_id</code> — UUID запроса для диагностики.</li>
         <li>В конфликте могут прийти <code>current_trip_revision_id</code>, <code>current_route_revision_id</code> или <code>current_poi_revision_id</code>. Сервер раскрывает актуальную ревизию только после проверки прав. Клиент перечитывает объект перед новым изменением.</li>
@@ -53,7 +54,7 @@
 
     <section aria-labelledby="statuses">
       <h2 id="statuses">HTTP-статусы и коды</h2>
-      <p>Таблица покрывает группы ошибок проекта. Набор ответов для конкретной ручки задан в OpenAPI. Имена конфликтов ревизий следуют соглашению <code>*_REVISION_CONFLICT</code>. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#5-общие-соглашения-api">Список кодов POC-04</a></p>
+      <p>Таблица покрывает группы ошибок POC-04. Набор ответов для конкретной операции задан в OpenAPI. Имена конфликтов ревизий следуют соглашению <code>*_REVISION_CONFLICT</code>. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#5-общие-соглашения-api">Список кодов POC-04</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="HTTP-статусы, коды и реакции клиента">
         <table>
           <thead><tr><th scope="col">HTTP и код</th><th scope="col">Что произошло</th><th scope="col">Что показывает клиент и как продолжить</th></tr></thead>
@@ -75,6 +76,35 @@
       <p><strong>Отдельно о health.</strong> Фактический <code>GET /api/v1/health</code> на стороне Nuxt возвращает <code>502</code>, если получить подтверждённый статус BFF не удалось. Для продуктовых ручек Travel/Geo в проекте POC-04 временный отказ описан как <code>503</code>. <a href="../../frontend/server/api/v1/health.get.ts">Обработчик health</a> · <a href="../../frontend/test/bff-health.test.ts">Тест health</a></p>
     </section>
 
+    <section aria-labelledby="identity">
+      <h2 id="identity">Ошибки аккаунта и профиля</h2>
+      <p>В 13 операциях Identity описаны 48 пар статусов и кодов. Точный перечень для каждого пути приведён в OpenAPI. Успешный <code>202</code> для регистрации, запроса повторной ссылки и восстановления пароля означает, что запрос принят. Экран показывает нейтральное подтверждение, а статус сам по себе не подтверждает существование аккаунта или доставку письма. <a href="openapi.yaml">Контракт Identity</a> · <a href="../identity/account.html#api">Операции аккаунта</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="HTTP-ошибки Identity">
+        <table>
+          <thead><tr><th scope="col">HTTP и код</th><th scope="col">Причина</th><th scope="col">Реакция клиента</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>400 INVALID_REQUEST</code></th><td>Недопустимые поля, UUID или формат запроса.</td><td>Предложить проверить поля. Оставить введённые данные для исправления.</td></tr>
+            <tr><th scope="row"><code>401 INVALID_CREDENTIALS</code></th><td>Identity отклонил вход по почте.</td><td>Предложить проверить почту и пароль без уточнения состояния аккаунта.</td></tr>
+            <tr><th scope="row"><code>401 SESSION_REQUIRED</code></th><td>Сессия отсутствует, истекла или отозвана.</td><td>Для чтения «Моего профиля» показать предложение войти. Перечитать профиль после входа.</td></tr>
+            <tr><th scope="row"><code>403 CSRF_REJECTED</code></th><td>Origin или токен защиты запроса отклонён.</td><td>Предложить обновить страницу. Перед повторной командой получить текущую сессию и её токен.</td></tr>
+            <tr><th scope="row"><code>404 NOT_FOUND</code></th><td>Публичный профиль недоступен или отсутствует.</td><td>Сообщить о недоступности профиля.</td></tr>
+            <tr><th scope="row"><code>422 INVALID_AUTH_TOKEN</code></th><td>Ссылка неверна, недействительна или открыта вне исходного браузера при подтверждении почты.</td><td>Показать экран недействительной ссылки с действием для получения новой.</td></tr>
+            <tr><th scope="row"><code>422 AVATAR_UNAVAILABLE</code></th><td>Выбранный системный аватар недоступен для назначения.</td><td>Предложить выбрать другой. Сохранённый аватар остаётся текущим.</td></tr>
+            <tr><th scope="row"><code>429 RATE_LIMITED</code></th><td>Слишком много запросов в окне ограничения.</td><td>Предложить подождать и повторить действие позже.</td></tr>
+            <tr><th scope="row"><code>503 DEPENDENCY_UNAVAILABLE</code></th><td>Identity, его хранилище или локальный транспорт недоступны.</td><td>Показать временный сбой и сохранить ввод. При ошибке загрузки профиля или коллекции дать повторить чтение. Nuxt приводит сбой соединения с BFF к этой паре.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Пример отказа входа</h3>
+      <pre><code>{
+  "type": "about:blank",
+  "title": "Invalid credentials",
+  "status": 401,
+  "code": "INVALID_CREDENTIALS",
+  "request_id": "ee556795-7d67-42e3-95bf-e2e70aaf6608"
+}</code></pre>
+    </section>
+
     <section aria-labelledby="states">
       <h2 id="states">Ответы 2xx и состояния клиента</h2>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Состояния успешного HTTP-ответа">
@@ -93,6 +123,7 @@
 
     <section aria-labelledby="recovery">
       <h2 id="recovery">Когда повторять запрос</h2>
+      <p>Правила исходного <code>Idempotency-Key</code> ниже относятся к командам Travel и Geo из POC-04. Для аккаунта, сессии и профиля применяются <a href="#identity">сценарии Identity</a>.</p>
       <ol>
         <li><strong>Чтение временно недоступно.</strong> Повтори <code>GET</code> после восстановления сети или сервиса, пока экран и параметры ещё актуальны. Отменяй устаревшие чтения при смене фильтра или экрана. Поздний ответ не должен заменять данные более нового запроса.</li>
         <li><strong>Ответ команды потерян, результат неизвестен.</strong> После обрыва сети, таймаута или <code>503</code> показывай неподтверждённое сохранение. Если адрес операции известен, опрашивай её через <code>GET</code>. Иначе повторяй исходную команду с тем же <code>Idempotency-Key</code>, ресурсом, ожидаемой ревизией и телом.</li>
@@ -104,7 +135,7 @@
 
     <section aria-labelledby="acceptance">
       <h2 id="acceptance">Приёмка</h2>
-      <p>С первой продуктовой операции допустимые пары HTTP-статуса и машинного <code>code</code> фиксируются в OpenAPI. Интеграционные тесты в CI проверяют статус, код и формат <code>application/problem+json</code> в реальных HTTP-ответах BFF. При подключении операции клиентские тесты проверяют реакцию интерфейса на эти ответы и на сетевой сбой, если он влияет на сценарий. При изменении контракта ошибок тесты и затронутые статьи справочника обновляют в том же шаге. <a href="openapi.yaml">OpenAPI</a></p>
+      <p>С первой продуктовой операции допустимые пары HTTP-статуса и машинного <code>code</code> фиксируются в OpenAPI. Для Identity команда <code>pnpm db:test:identity</code> внутри <code>pnpm check</code> сверяет реальные HTTP-ответы BFF с OpenAPI. При подключении операции клиентские тесты проверяют реакцию интерфейса на эти ответы и на сетевой сбой, если он влияет на сценарий. При изменении контракта ошибок тесты и затронутые статьи справочника обновляют в том же шаге. <a href="openapi.yaml">OpenAPI</a> · <a href="../../backend/test/identity-http.test.ts">HTTP-тесты Identity</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Кейсы проверки ошибок и восстановления">
         <table>
           <thead><tr><th scope="col">Кейс</th><th scope="col">Что проверить</th><th scope="col">Ожидаемый результат</th></tr></thead>
@@ -127,7 +158,7 @@
     <section aria-labelledby="open">
       <h2 id="open">Открытые вопросы</h2>
       <ul>
-        <li><strong>Сессия и CSRF.</strong> Имя cookie, выдача токена и проверка origin уточняются в GIS-02.</li>
+        <li><strong>Сессия и CSRF.</strong> GIS-02 задаёт cookie <code>tropio_session</code>, проверку <code>Origin</code> и заголовок <code>X-CSRF-Token</code>. Подключение Travel и Geo к сессии проверяется в задачах их API. <a href="../identity/account.html">Сценарии Identity</a></li>
         <li><strong>Клиентские повторы.</strong> Предел автоматических попыток, задержки и поведение между перезапусками клиента нужно определить для конкретных сценариев.</li>
         <li><strong>Интерфейс ошибок.</strong> Тексты общего сбоя, конфликта и подтверждения повторного действия уточняются по сценариям UX-01 и при подключении продуктовых ручек.</li>
       </ul>

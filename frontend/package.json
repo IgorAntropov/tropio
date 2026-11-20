@@ -9,6 +9,8 @@
     "start": "node .output/server/index.mjs",
     "lint": "nuxt prepare && eslint . --max-warnings 0",
     "typecheck": "nuxt typecheck",
+    "api:types": "node scripts/identity-types.mjs",
+    "api:types:check": "node scripts/identity-types.mjs --check",
     "test": "nuxt prepare && vitest run"
   },
   "dependencies": {
@@ -23,6 +25,7 @@
     "@tailwindcss/vite": "4.3.5",
     "@types/node": "24.19.2",
     "eslint": "10.15.0",
+    "openapi-typescript": "7.13.0",
     "tailwindcss": "4.3.5",
     "typescript": "6.0.3",
     "vite": "8.3.8",

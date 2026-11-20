@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Аккаунт, сессия и системный аватар — справочник Tropio</title>
+  <link rel="stylesheet" href="../handbook.css">
+</head>
+<body>
+  <main>
+    <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Аккаунт и профиль</nav>
+    <h1>Аккаунт, сессия и системный аватар</h1>
+    <p>Identity принимает регистрацию по электронной почте, открывает сессию после подтверждения адреса и хранит профиль. При подтверждении новой учётной записи сервис назначает случайный активный системный аватар. Владелец профиля может изменить имя, описание и системный аватар. <a href="../../.agents/docs/tropio_tz_v1.1.md#71-регистрация-и-вход">ТЗ · Регистрация и вход</a> · <a href="../../.agents/docs/tropio_tz_v1.1.md#73-fr-15-гендерно-нейтральные-системные-аватары">ТЗ · Системные аватары</a></p>
+    <p class="document-note"><strong>Объём GIS-02.</strong> Регистрация, подтверждение адреса, вход, сессия, восстановление пароля, описание профиля и выбор системного аватара работают с PostgreSQL через BFF. Для разработки ссылки доступны в локальных JSON-файлах. Шаблоны писем, отправка через Mailpit и production-доставка относятся к GIS-09 и GIS-10. <a href="../contracts/openapi.yaml">OpenAPI 0.2.0</a> · <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
+
+    <nav class="document-links" aria-label="На этой странице">
+      <ul>
+        <li><a href="#register">Регистрация по почте</a></li>
+        <li><a href="#session">Вход, сессия и восстановление</a></li>
+        <li><a href="#profile">Профиль и аватар</a></li>
+        <li><a href="#local">Локальный запуск и ссылки</a></li>
+        <li><a href="#api">Операции API и права</a></li>
+        <li><a href="#acceptance">Приёмка</a></li>
+      </ul>
+    </nav>
+
+    <section aria-labelledby="register">
+      <h2 id="register">Регистрация по почте</h2>
+      <ol>
+        <li>Посетитель открывает <code>/register</code>, вводит электронную почту и пароль от 12 символов и принимает условия использования. Ошибки ввода показаны у полей. Пароль можно показать и снова скрыть. Во время отправки форма блокирует повторное нажатие.</li>
+        <li>Подтверждение приёма заявки показывает введённый адрес и предлагает открыть ссылку в этом же браузере. Отсюда можно исправить адрес и отправить форму снова или запросить повторную ссылку. Ответ о приёме заявки одинаков для новых и известных адресов.</li>
+        <li>Ссылка открывает <code>/verify-email</code>. Identity проверяет одноразовый токен вместе с <code>HttpOnly</code> cookie <code>tropio_registration</code> исходного браузера. Для новой учётной записи сервис записывает согласие с версией условий и назначает активный системный аватар в той же транзакции.</li>
+        <li>После успешного подтверждения пользователь переходит к входу. При просроченной или использованной ссылке либо в другом браузере экран сообщает, что ссылка больше не действует. Можно вернуться к регистрации и получить действующую ссылку.</li>
+      </ol>
+      <p>На десктопе и смартфоне переходы открываются на отдельных страницах. Поля, состояние ожидания и действия доступны без горизонтальной прокрутки. <a href="../../.agents/images/layouts/desktop/email-registration-start.png">Макет регистрации на десктопе</a> · <a href="../../.agents/images/layouts/mobile/email-registration-check.png">Макет ожидания на смартфоне</a></p>
+    </section>
+
+    <section aria-labelledby="session">
+      <h2 id="session">Вход, сессия и восстановление</h2>
+      <ul>
+        <li>На <code>/login</code> пользователь вводит адрес и пароль. При успехе BFF устанавливает <code>HttpOnly</code> cookie <code>tropio_session</code> и клиент открывает <code>/profile</code>. При отказе форма предлагает проверить адрес и пароль. Этот ответ одинаков при неверном пароле, неподтверждённом адресе или отсутствии учётной записи.</li>
+        <li>Обновление сессии заменяет токен cookie. Предыдущий токен теряет силу. Действие «Выйти» отзывает текущую сессию. По отсутствующей, истёкшей или отозванной сессии собственный профиль предлагает вход.</li>
+        <li>Действие «Забыли пароль?» открывает <code>/request-password-reset</code> и подставляет адрес из формы входа. Экран подтверждает приём запроса одинаково для известных и неизвестных адресов.</li>
+        <li>Ссылка восстановления открывает <code>/reset-password</code>. Пользователь вводит новый пароль от 12 символов. После сохранения ссылка и прежние сессии становятся недействительны. С просроченной или использованной ссылки можно открыть форму запроса новой.</li>
+      </ul>
+      <p><a href="../../.agents/images/layouts/desktop/email-sign-in-initial.png">Макет входа на десктопе</a> · <a href="../../.agents/images/layouts/mobile/password-reset-form.png">Макет нового пароля на смартфоне</a> · <a href="../contracts/bff-errors.html#identity">Ошибки Identity</a></p>
+    </section>
+
+    <section aria-labelledby="profile">
+      <h2 id="profile">Профиль и аватар</h2>
+      <ol>
+        <li>Владелец открывает «Мой профиль». Пока BFF загружает профиль, показывается ожидание. При сбое чтение можно повторить. Без действующей сессии доступны переходы ко входу и регистрации.</li>
+        <li>Имя обязательно, описание «Обо мне» можно очистить. Предпросмотр отражает ввод сразу. «Сохранить» обновляет профиль после ответа BFF. «Отменить» возвращает сохранённые значения. При сбое сохранения введённые данные остаются в форме.</li>
+        <li>Действие «Сменить аватар» открывает коллекцию с текущим аватаром. На десктопе и смартфоне выбор открывается внутри страницы профиля. Список поддерживает ожидание загрузки, пустую коллекцию и повтор чтения. Выбранное изображение сначала показывается в предпросмотре.</li>
+        <li>Сохранение аватара использует отдельную операцию. Имя и описание сохраняют свои значения. Отмена закрывает выбор. Если выбранный аватар деактивировали до сохранения, интерфейс предлагает выбрать другой.</li>
+      </ol>
+      <p>Публичный ответ включает только разрешённые данные. Описание скрыто от посетителя, пока настройка профиля не разрешает публикацию. Для закрытого или отсутствующего профиля API возвращает одинаковый <code>404</code>. Загрузка своего фото и управление видимостью присутствия остаются за рамками текущего сценария. <a href="../../.agents/docs/tropio_tz_v1.1.md#72-профиль-туриста">ТЗ · Профиль туриста</a> · <a href="../../.agents/images/layouts/desktop/profile-edit-changed.png">Макет предпросмотра профиля</a> · <a href="../../.agents/images/layouts/mobile/avatar-picker-preview.png">Макет выбора аватара на смартфоне</a></p>
+    </section>
+
+    <section aria-labelledby="local">
+      <h2 id="local">Локальный запуск и ссылки</h2>
+      <ol>
+        <li>Из корня выполни <code>pnpm dev:all</code> с работающим Docker и заполненным <code>.env</code>. Команда запускает Compose, применяет миграции и при отсутствии <code>TROPIO_IDENTITY_DATABASE_URL</code> выдаёт backend временную учётную запись PostgreSQL с ролью <code>tropio_identity_runtime</code>.</li>
+        <li>Открой приложение по адресу <code>http://127.0.0.1:3000</code> или по адресу из <code>TROPIO_BROWSER_ORIGIN</code>. После запроса регистрации или восстановления найди свежий JSON-файл в <code>.local/identity-mail</code>. Каталог можно задать переменной <code>TROPIO_AUTH_OUTBOX_DIR</code>.</li>
+        <li>Открой значение <code>url</code> из файла. Ссылка содержит фрагмент <code>#token=…</code>. Для подтверждения почты используй исходный браузер и тот же origin. Сохраняй каталог закрытым. Файлы создаются с правами <code>0600</code>.</li>
+      </ol>
+      <p>Файловый транспорт доступен в режиме разработки. Production-доставку и версию условий использования настраивают отдельно. <a href="../contracts/postgres-migrations.html#commands">Миграции и команды запуска</a> · <a href="../../backend/migrations/run-identity.mjs">Локальный запуск Identity</a> · <a href="../../backend/src/identity/identity.config.ts">Настройки Identity</a></p>
+    </section>
+
+    <section aria-labelledby="api">
+      <h2 id="api">Операции API и права</h2>
+      <p>Внешние операции доступны через BFF под <code>/api/v1</code>. Identity владеет заявками регистрации, учётными записями, сессиями, профилями и коллекциями аватаров. Запросы <code>POST</code> и <code>PATCH</code> требуют точного <code>Origin</code>. Для команд в сессии клиент присылает <code>X-CSRF-Token</code> из <code>csrf_token</code> собственного профиля. Cookie имеют <code>HttpOnly</code> и <code>SameSite=Lax</code>, в production также <code>Secure</code>. <a href="../contracts/openapi.yaml">OpenAPI 0.2.0</a> · <a href="../../.agents/docs/microservices.md#31-внешние-api">Границы сервисов</a></p>
+      <p>Для ограничения попыток Nuxt передаёт адрес соединения с серверным секретом. <code>pnpm dev:all</code> передаёт общий секрет обоим приложениям. Для раздельного запуска задай одно значение в <code>TROPIO_BFF_PROXY_SECRET</code> у BFF и <code>NUXT_BFF_PROXY_SECRET</code> у Nuxt.</p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Операции API Identity">
+        <table>
+          <thead><tr><th scope="col">Метод и путь после <code>/api/v1</code></th><th scope="col"><code>operationId</code></th><th scope="col">Доступ, входные данные и успех</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>POST /auth/register</code></th><td><code>registerIdentity</code></td><td>Посетитель передаёт <code>email</code>, <code>password</code>, <code>accepted_terms: true</code>. <code>202</code> и <code>Set-Cookie: tropio_registration</code>.</td></tr>
+            <tr><th scope="row"><code>POST /auth/resend-verification</code></th><td><code>resendIdentityVerification</code></td><td><code>email</code> и регистрационная cookie исходного браузера для действующей заявки. Нейтральный <code>202</code> с возможным обновлением cookie.</td></tr>
+            <tr><th scope="row"><code>POST /auth/verify-email</code></th><td><code>verifyIdentityEmail</code></td><td><code>token</code> из ссылки и <code>tropio_registration</code>. <code>204</code> и очистка регистрационной cookie.</td></tr>
+            <tr><th scope="row"><code>POST /auth/login</code></th><td><code>loginIdentity</code></td><td><code>email</code> и <code>password</code>. <code>200</code>, собственный профиль и <code>Set-Cookie: tropio_session</code>.</td></tr>
+            <tr><th scope="row"><code>POST /auth/refresh</code></th><td><code>refreshIdentitySession</code></td><td>Текущая сессия и CSRF, без тела. <code>200</code>, собственный профиль и обновлённая cookie.</td></tr>
+            <tr><th scope="row"><code>POST /auth/logout</code></th><td><code>logoutIdentity</code></td><td>Текущая сессия и CSRF, без тела. <code>204</code> и очистка cookie сессии.</td></tr>
+            <tr><th scope="row"><code>POST /auth/request-password-reset</code></th><td><code>requestIdentityPasswordReset</code></td><td>Посетитель передаёт <code>email</code>. Нейтральный <code>202</code>.</td></tr>
+            <tr><th scope="row"><code>POST /auth/reset-password</code></th><td><code>resetIdentityPassword</code></td><td><code>token</code> из ссылки и новый <code>password</code>. <code>204</code>.</td></tr>
+            <tr><th scope="row"><code>GET /me</code></th><td><code>readMyIdentityProfile</code></td><td>Текущая сессия. <code>200</code> и собственный профиль с <code>csrf_token</code>.</td></tr>
+            <tr><th scope="row"><code>PATCH /me</code></th><td><code>updateMyIdentityProfile</code></td><td>Текущая сессия и CSRF. <code>display_name</code>, <code>bio</code> или оба поля. <code>200</code> и сохранённый профиль.</td></tr>
+            <tr><th scope="row"><code>PATCH /me/avatar</code></th><td><code>selectMyIdentityAvatar</code></td><td>Текущая сессия и CSRF. <code>avatar_id</code> активного изображения. <code>200</code> и сохранённый профиль.</td></tr>
+            <tr><th scope="row"><code>GET /avatar-assets</code></th><td><code>listIdentityAvatarAssets</code></td><td>Публичное чтение. <code>200</code> и <code>items</code> активных аватаров с <code>id</code> и <code>url</code>.</td></tr>
+            <tr><th scope="row"><code>GET /users/{id}</code></th><td><code>readPublicIdentityProfile</code></td><td>Публичное чтение по UUID. <code>200</code> и разрешённые поля профиля.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Пример тела запроса выбора аватара</h3>
+      <pre><code>{
+  "avatar_id": "f7cbe6d3-4c13-55f6-951f-a0009613c54c"
+}</code></pre>
+      <p>Запросы с телом используют <code>application/json</code>. Ошибки возвращаются в формате <code>application/problem+json</code>. Карта клиента выбирает сообщение по паре HTTP-статуса и машинного <code>code</code>. <a href="../contracts/bff-errors.html#identity">Пары ошибок и восстановление</a></p>
+    </section>
+
+    <section aria-labelledby="acceptance">
+      <h2 id="acceptance">Приёмка</h2>
+      <ul>
+        <li><strong>AT-15.</strong> Зарегистрировать нового пользователя без фотографии, подтвердить адрес и войти. Профиль возвращает UUID аватара из текущей активной коллекции.</li>
+        <li><strong>AT-16.</strong> Изменить имя и описание, затем выбрать другой системный аватар. После сохранения и повторного чтения меняется только аватар. Проверить также отмену предпросмотра.</li>
+        <li><strong>Контракт ошибок.</strong> <code>pnpm db:test:identity</code> проверяет реальные HTTP-ответы NestJS с временной базой PostgreSQL. Тесты сверяют 13 операций и 48 пар статуса и кода с OpenAPI, включая сессию, Origin и CSRF, просроченные или использованные ссылки, ограничения частоты и отказ зависимости. Команда входит в <code>pnpm check</code>.</li>
+      </ul>
+      <p><a href="../../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">ТЗ · AT-15/16</a> · <a href="../../backend/test/identity-http.test.ts">Интеграционные тесты Identity</a> · <a href="../contracts/postgres-migrations.html#checks">Проверочные базы</a></p>
+    </section>
+  </main>
+</body>
+</html>

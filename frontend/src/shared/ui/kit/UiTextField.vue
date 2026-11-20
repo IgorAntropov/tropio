@@ -11,6 +11,9 @@ defineProps<{
   error?: string
   required?: boolean
   disabled?: boolean
+  type?: 'text' | 'email' | 'password'
+  autocomplete?: string
+  maxlength?: number
 }>()
 </script>
 
@@ -19,6 +22,7 @@ defineProps<{
     <label class="tk-label" :for="id">{{ label }} <span v-if="required" class="tk-required" aria-hidden="true">*</span></label>
     <input
       :id="id" v-model="model" class="tk-input" :name="name" :placeholder="placeholder"
+      :type="type" :autocomplete="autocomplete" :maxlength="maxlength"
       :required="required" :disabled="disabled" :aria-invalid="error ? 'true' : undefined"
       :aria-describedby="error ? `${id}-error` : hint ? `${id}-hint` : undefined"
     >

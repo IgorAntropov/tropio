@@ -8,13 +8,14 @@
   },
   "scripts": {
     "dev": "pnpm -r --parallel dev",
-    "dev:all": "docker compose up -d --wait --wait-timeout 180 && pnpm db:migrate && pnpm run dev",
+    "dev:all": "docker compose up -d --wait --wait-timeout 180 && pnpm db:migrate && node --env-file-if-exists=.env backend/migrations/run-identity.mjs dev",
     "db:migrate": "node backend/migrations/migrate.mjs",
     "db:test:migrations": "node backend/migrations/verify.mjs",
+    "db:test:identity": "node backend/migrations/run-identity.mjs test",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm --filter @tropio/frontend api:types:check && pnpm lint && pnpm typecheck && pnpm test && pnpm db:test:identity && pnpm build"
   }
 }
