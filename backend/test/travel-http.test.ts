@@ -29,6 +29,7 @@ type Day = {
   notes: string | null
 }
 type TripSummary = {
+  admission_mode: 'open' | 'request'
   trip_id: string
   trip_revision_id: string
   publication_id: string | null
@@ -282,16 +283,17 @@ describe('Travel HTTP contract', () => {
     const listOwner = await registerUser()
     const draft = await create('Минимальное путешествие', {}, listOwner)
     const sibling = await create('Поездка через Новый год', {
-      start_date: '2026-12-31', end_date: '2027-01-02',
+      start_date: '2026-12-31', end_date: '2027-01-02', admission_mode: 'open',
     }, listOwner)
     await create('Trip of a different account', {}, visitor)
 
     expect(draft).toMatchObject({
-      title: 'Минимальное путешествие', publication_id: null, visibility: 'private',
+      title: 'Минимальное путешествие', publication_id: null, visibility: 'private', admission_mode: 'request',
       start_date: null, end_date: null, equipment: [],
       days: [{ position: 1, route_id: null, local_date: null }],
     })
     expect(sibling).toMatchObject({
+      admission_mode: 'open',
       start_date: '2026-12-31', end_date: '2027-01-02',
       days: [{ position: 1, route_id: null, local_date: '2026-12-31' }],
     })

@@ -17,7 +17,7 @@ function jsonBodyKind(request: IncomingMessage): 'large' | 'default' | undefined
   if (contentType !== 'application/json') return undefined
 
   const method = request.method
-  if ((method === 'POST' && (path === '/api/v1/trips' || /^\/api\/v1\/trips\/[^/]+\/days$/.test(path)))
+  if ((method === 'POST' && (path === '/api/v1/trips' || /^\/api\/v1\/trips\/[^/]+\/(?:days|publish)$/.test(path)))
     || (method === 'PATCH' && /^\/api\/v1\/(trips|days)\/[^/]+$/.test(path))
     || (method === 'PUT' && /^\/api\/v1\/(days\/[^/]+\/route|routes\/[^/]+)$/.test(path))) return 'large'
 

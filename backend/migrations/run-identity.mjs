@@ -74,7 +74,7 @@ async function testService(service) {
   try {
     applyMigrations({ database })
     const args = ['--filter', '@tropio/backend', 'exec', 'vitest', 'run', `test/${service}-http.test.ts`]
-    return await withDatabaseRoles(database, services.slice(0, services.indexOf(service) + 1), true,
+    return await withDatabaseRoles(database, service === 'publication' ? services : services.slice(0, services.indexOf(service) + 1), true,
       env => runPnpm(args, env))
   } finally {
     composeSql(`DROP DATABASE ${database};`)
@@ -94,6 +94,6 @@ async function startDevelopment() {
 }
 
 const command = process.argv[2]
-const testCommands = { test: 'identity', 'test-travel': 'travel', 'test-geo': 'geo' }
-if (command !== 'dev' && !Object.hasOwn(testCommands, command)) throw new Error('Укажи dev, test, test-travel или test-geo')
+const testCommands = { test: 'identity', 'test-travel': 'travel', 'test-geo': 'geo', 'test-publication': 'publication' }
+if (command !== 'dev' && !Object.hasOwn(testCommands, command)) throw new Error('Укажи dev, test, test-travel, test-geo или test-publication')
 process.exitCode = await (command === 'dev' ? startDevelopment() : testService(testCommands[command]))

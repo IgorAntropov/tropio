@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { Inject, Injectable } from '@nestjs/common'
 import type { PoolClient } from 'pg'
 import { BffProblem } from '../http/bff-problem.js'
+import { manifestColumns, revokePublication } from './publication-state.js'
 import { TravelDatabase } from './travel-database.js'
 import type { DayFields, EquipmentItem, TripFields } from './travel-input.js'
 
@@ -18,6 +19,7 @@ type Dates = Pick<TripFields, 'start_date' | 'end_date'>
 type TripWriteFields = Omit<TripFields, 'equipment'>
 
 interface TripSummary extends Dates {
+  admission_mode: TripFields['admission_mode']
   trip_id: string
   trip_revision_id: string
   publication_id: string | null
@@ -33,7 +35,14 @@ interface DraftDay extends DayFields {
   route_id: string | null
 }
 
+interface PublishedManifest {
+  trip_revision_id: string
+  routes: { day_id: string; route_id: string; route_revision_id: string }[]
+  poi_count: number
+}
+
 interface TripDraft extends TripRow {
+  published_manifest?: PublishedManifest
   equipment: EquipmentItem[]
   days: DraftDay[]
 }
@@ -53,7 +62,7 @@ interface Command {
 }
 
 const summaryColumns = `
-  t.id AS trip_id, t.trip_revision_id, t.publication_id, t.visibility, t.title,
+  t.id AS trip_id, t.trip_revision_id, t.publication_id, t.visibility, t.title, t.admission_mode,
   to_char(t.start_date, 'YYYY-MM-DD') AS start_date, to_char(t.end_date, 'YYYY-MM-DD') AS end_date
 `
 
@@ -97,9 +106,13 @@ async function storeReceipt(client: PoolClient, command: Command, draft: TripDra
   )
 }
 
-async function getDraft(client: PoolClient, ownerId: string, id: string): Promise<TripDraft> {
-  const { rows: [draft] } = await client.query<TripDraft>(
+export async function getDraft(client: PoolClient, ownerId: string, id: string): Promise<TripDraft> {
+  const { rows: [row] } = await client.query<Omit<TripDraft, 'published_manifest'> & { published_manifest: PublishedManifest | null }>(
     `SELECT ${draftColumns},
+      (SELECT jsonb_build_object('trip_revision_id', o.result_trip_revision_id, 'routes', m.routes, 'poi_count', cardinality(m."poiIds"))
+       FROM travel.trip_versions v JOIN travel.route_operations o ON o.id = v.operation_id
+       CROSS JOIN LATERAL (SELECT ${manifestColumns('o.id')}) m
+       WHERE (v.trip_id,v.publication_id) = (t.id,t.publication_id)) AS published_manifest,
       COALESCE((
         SELECT jsonb_agg(jsonb_build_object('label', e.label, 'required', e.required) ORDER BY e.position)
         FROM travel.trip_equipment e
@@ -118,8 +131,9 @@ async function getDraft(client: PoolClient, ownerId: string, id: string): Promis
      WHERE t.id = $1 AND t.owner_user_id = $2 AND t.archived_at IS NULL`,
     [id, ownerId],
   )
-  if (!draft) throw new BffProblem('NOT_FOUND')
-  return draft
+  if (!row) throw new BffProblem('NOT_FOUND')
+  const { published_manifest, ...draft } = row
+  return published_manifest ? { ...draft, published_manifest } : draft
 }
 
 async function lockTrip(client: PoolClient, ownerId: string, target: Target): Promise<TripRow> {
@@ -254,9 +268,10 @@ export class TravelService {
 
   async createTrip(editor: TravelEditor, key: string, input: Partial<TripFields> & Pick<TripFields, 'title'>): Promise<TripDraft> {
     const { title, description = null, start_date = null, end_date = null, timezone = null, free_capacity = null,
-      difficulty = null, participation_rules = null, equipment = [] } = input
+      difficulty = null, participation_rules = null, equipment = [], admission_mode = 'request' } = input
     const command = makeCommand(editor.userId, 'trip.create', editor.userId, key, {
       title, description, start_date, end_date, timezone, free_capacity, difficulty, participation_rules, equipment,
+      ...(admission_mode === 'open' ? { admission_mode } : {}),
     })
 
     return this.database.transaction(async (client) => {
@@ -277,9 +292,9 @@ export class TravelService {
       assertTripDates({ start_date, end_date })
       const { rows: [trip] } = await client.query<{ id: string }>(
         `INSERT INTO travel.trips (owner_user_id, created_by_user_id, title, description, start_date, end_date, timezone,
-           free_capacity, difficulty, participation_rules)
-         VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-        [editor.userId, title, description, start_date, end_date, timezone, free_capacity, difficulty, participation_rules],
+           free_capacity, difficulty, participation_rules, admission_mode)
+         VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+        [editor.userId, title, description, start_date, end_date, timezone, free_capacity, difficulty, participation_rules, admission_mode],
       )
       if (!trip) throw new BffProblem('DEPENDENCY_UNAVAILABLE')
 
@@ -321,8 +336,8 @@ export class TravelService {
       if (changedId) {
         await client.query(
           `UPDATE travel.trips SET trip_revision_id = gen_random_uuid(), version = version + 1,
-             updated_at = greatest(updated_at, clock_timestamp()) WHERE id = $1`,
-          [trip.trip_id],
+             updated_at = greatest(updated_at, clock_timestamp()) WHERE id = $1 AND trip_revision_id = $2`,
+          [trip.trip_id, trip.trip_revision_id],
         )
         await audit(client, trip.trip_id, command, changedId)
       }
@@ -332,7 +347,7 @@ export class TravelService {
     })
   }
 
-  async updateTrip(editor: TravelEditor, tripId: string, key: string, input: DraftEdit<TripFields>): Promise<TripDraft> {
+  async updateTrip(editor: TravelEditor, tripId: string, key: string, input: DraftEdit<TripFields & { visibility: 'private' | 'public' }>): Promise<TripDraft> {
     return this.editDraft(editor, { kind: 'trip', id: tripId }, 'trip.update', key, input, async (client, trip) => {
       const { equipment, ...patch } = input.patch
       const updated = { ...trip, ...patch }
@@ -340,11 +355,14 @@ export class TravelService {
       if (patch.start_date !== undefined || patch.end_date !== undefined) {
         await assertExistingDayDates(client, tripId, updated)
       }
+      if (updated.visibility === 'private' && trip.visibility === 'public') {
+        await revokePublication(client, trip, editor.userId, key, 'private')
+      }
       await client.query(
         `UPDATE travel.trips SET title = $2, description = $3, start_date = $4, end_date = $5, timezone = $6,
-           free_capacity = $7, difficulty = $8, participation_rules = $9 WHERE id = $1`,
+           free_capacity = $7, difficulty = $8, participation_rules = $9, visibility = $10, admission_mode = $11 WHERE id = $1`,
         [tripId, updated.title, updated.description, updated.start_date, updated.end_date, updated.timezone,
-          updated.free_capacity, updated.difficulty, updated.participation_rules],
+          updated.free_capacity, updated.difficulty, updated.participation_rules, updated.visibility, updated.admission_mode],
       )
       if (equipment !== undefined) {
         await client.query('DELETE FROM travel.trip_equipment WHERE trip_id = $1', [tripId])

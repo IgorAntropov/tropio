@@ -104,6 +104,32 @@ $$;
 RESET ROLE;
 SET LOCAL ROLE tropio_travel_runtime;
 
+DO $catalog$
+BEGIN
+    IF EXISTS (
+        SELECT FROM (VALUES
+            ('RU-TOM', 82.90, 58.31),
+            ('RU-NVS', 82.92, 55.03),
+            ('RU-MOW', 37.62, 55.75),
+            ('RU-MOS', 38.14, 55.09)
+        ) AS locality(region, lon, lat)
+        WHERE (SELECT array_agg(r.code ORDER BY r.code)
+               FROM travel.catalog_regions r
+               WHERE public.ST_Covers(r.boundary, public.ST_SetSRID(public.ST_MakePoint(locality.lon, locality.lat), 4326))
+              ) IS DISTINCT FROM ARRAY[locality.region]
+    ) THEN
+        RAISE EXCEPTION 'A published starting point does not resolve to its administrative region';
+    END IF;
+
+    IF EXISTS (
+        SELECT FROM (VALUES ('catalog_regions'), ('catalog_difficulties'), ('catalog_difficulty_aliases')) AS reference(name)
+        WHERE has_table_privilege(current_user, 'travel.' || reference.name, 'INSERT,UPDATE,DELETE')
+    ) THEN
+        RAISE EXCEPTION 'A system catalog dictionary permits runtime writes';
+    END IF;
+END;
+$catalog$;
+
 DO $$
 DECLARE
     owner_id uuid := gen_random_uuid();

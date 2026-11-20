@@ -6,6 +6,13 @@ export interface EquipmentItem {
   required: boolean
 }
 
+export type AdmissionMode = 'request' | 'open'
+
+export function admissionMode(value: unknown): AdmissionMode {
+  if (value !== 'request' && value !== 'open') throw new BffProblem('INVALID_REQUEST')
+  return value
+}
+
 export interface TripFields {
   title: string
   description: string | null
@@ -15,6 +22,7 @@ export interface TripFields {
   free_capacity: number | null
   difficulty: string | null
   participation_rules: string | null
+  admission_mode: AdmissionMode
   equipment: EquipmentItem[]
 }
 
@@ -26,11 +34,11 @@ export interface DayFields {
 
 const tripKeys = [
   'title', 'description', 'start_date', 'end_date', 'timezone', 'free_capacity',
-  'difficulty', 'participation_rules', 'equipment',
+  'difficulty', 'participation_rules', 'equipment', 'admission_mode',
 ]
 const dayKeys = ['local_date', 'description', 'notes']
 
-function fields(value: unknown, allowed: string[]): Record<string, unknown> {
+export function fields(value: unknown, allowed: string[]): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)
     || Object.keys(value).some((key) => !allowed.includes(key))) {
     throw new BffProblem('INVALID_REQUEST')
@@ -54,7 +62,7 @@ function nullableText(value: unknown, maximum: number): string | null {
   return value === null ? null : cleanText(value, maximum) || null
 }
 
-function date(value: unknown): string | null {
+export function date(value: unknown): string | null {
   if (value === null) return null
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new BffProblem('INVALID_REQUEST')
 
@@ -107,6 +115,7 @@ function tripFields(input: Record<string, unknown>): Partial<TripFields> {
   if (Object.hasOwn(input, 'difficulty')) result.difficulty = nullableText(input.difficulty, 80)
   if (Object.hasOwn(input, 'participation_rules')) result.participation_rules = nullableText(input.participation_rules, 4000)
   if (Object.hasOwn(input, 'equipment')) result.equipment = equipment(input.equipment)
+  if (Object.hasOwn(input, 'admission_mode')) result.admission_mode = admissionMode(input.admission_mode)
   return result
 }
 
@@ -129,8 +138,12 @@ export function createTripInput(value: unknown): Partial<TripFields> & Pick<Trip
 }
 
 export function updateTripInput(value: unknown) {
-  const input = fields(value, ['trip_revision_id', ...tripKeys])
-  const patch = tripFields(input)
+  const input = fields(value, ['trip_revision_id', 'visibility', ...tripKeys])
+  const patch: Partial<TripFields> & { visibility?: 'public' | 'private' } = tripFields(input)
+  if (Object.hasOwn(input, 'visibility')) {
+    if (input.visibility !== 'public' && input.visibility !== 'private') throw new BffProblem('INVALID_REQUEST')
+    patch.visibility = input.visibility
+  }
   if (Object.keys(patch).length === 0) throw new BffProblem('INVALID_REQUEST')
   return { trip_revision_id: travelUuid(input.trip_revision_id), patch }
 }

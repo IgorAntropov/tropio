@@ -21,15 +21,8 @@ export class GeoAccess {
     return this.identity.authenticate(requireSession(request))
   }
 
-  async optionalViewer(request: NodeRequest): Promise<string | null> {
-    const token = readToken(request, sessionCookie)
-    if (!token) return null
-    try {
-      return await this.identity.authenticate(token)
-    } catch (error) {
-      if (error instanceof BffProblem && error.code === 'SESSION_REQUIRED') return null
-      throw error
-    }
+  optionalViewer(request: NodeRequest): Promise<string | null> {
+    return this.identity.optionalViewer(readToken(request, sessionCookie))
   }
 
   async mutation(request: NodeRequest, body = true) {

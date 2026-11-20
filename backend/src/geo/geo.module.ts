@@ -7,6 +7,7 @@ import type { GeoOptions } from './geo.config.js'
 import { GeoController } from './geo.controller.js'
 import { PoiAccess } from './pois/poi-access.js'
 import { PoiService } from './pois/poi.service.js'
+import { GeoPublicationService } from './publication/geo-publication.service.js'
 import { GeoProviders } from './providers/index.js'
 import { RouteService } from './routes/route.service.js'
 
@@ -21,11 +22,13 @@ export class GeoModule {
         { provide: GEO_OPTIONS, useValue: options },
         { provide: GeoProviders, useFactory: () => new GeoProviders(options.providers) },
         GeoDatabase,
+        GeoPublicationService,
         GeoAccess,
         RouteService,
         PoiAccess,
         PoiService,
       ],
+      exports: [GeoPublicationService],
     }
   }
 }

@@ -56,6 +56,8 @@ function profile(row: ProfileRow) {
   }
 }
 
+export type PublicOrganizer = Pick<ReturnType<typeof profile>, 'id' | 'display_name' | 'avatar'>
+
 function privateProfile(row: ProfileRow, token: string) {
   return { ...profile(row), csrf_token: csrfToken(token) }
 }
@@ -261,6 +263,16 @@ export class IdentityService {
     return this.database.transaction(async (client) => (await loadSession(client, token)).id)
   }
 
+  async optionalViewer(token: string | undefined): Promise<string | null> {
+    if (!token) return null
+    try {
+      return await this.authenticate(token)
+    } catch (error) {
+      if (error instanceof BffProblem && error.code === 'SESSION_REQUIRED') return null
+      throw error
+    }
+  }
+
   async getMe(token: string) {
     return this.database.transaction(async (client) => privateProfile(await loadSession(client, token), token))
   }
@@ -336,21 +348,32 @@ export class IdentityService {
     })
   }
 
-  async getPublicProfile(id: string) {
+  private async publicProfiles(ids: string[]) {
+    if (!ids.length) return []
     return this.database.transaction(async (client) => {
-      const { rows: [row] } = await client.query<ProfileRow>(
+      const { rows } = await client.query<ProfileRow>(
         `SELECT u.id, u.display_name,
                 CASE WHEN p.privacy_settings->>'bio' = 'public' THEN u.bio END AS bio,
                 a.id AS avatar_id, a.object_key
          FROM identity.users u
          LEFT JOIN identity.avatar_assets a ON a.id = u.avatar_asset_id
          LEFT JOIN identity.user_preferences p ON p.user_id = u.id
-         WHERE u.id = $1 AND u.status = 'active' AND u.email_verified_at IS NOT NULL`,
-        [id],
+         WHERE u.id = ANY($1::uuid[]) AND u.status = 'active' AND u.email_verified_at IS NOT NULL`,
+        [ids],
       )
-      if (!row) throw new BffProblem('NOT_FOUND')
-      return profile(row)
+      return rows.map(profile)
     })
+  }
+
+  async getPublicProfile(id: string) {
+    const [user] = await this.publicProfiles([id])
+    if (!user) throw new BffProblem('NOT_FOUND')
+    return user
+  }
+
+  async publicOrganizers(ids: string[]): Promise<Map<string, PublicOrganizer>> {
+    const users = await this.publicProfiles(ids)
+    return new Map(users.map(({ id, display_name, avatar }) => [id, { id, display_name, avatar }]))
   }
 
   async requestPasswordReset(email: string): Promise<void> {

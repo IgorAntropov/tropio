@@ -1,273 +1,32 @@
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import process from 'node:process'
-import type { NestNodeApplication } from '@nestjs/platform-node'
-import pg from 'pg'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { parse } from 'yaml'
-import { createApplication } from '../src/create-application.js'
-
-type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-type Actor = { id: string; cookie: string; csrf: string }
-type Server = { app: NestNodeApplication; origin: string }
-type Position = { lon: number; lat: number }
-type Point = { point_id: string; position: Position }
-type Track = {
-  track_id: string
-  start_point_id: string
-  end_point_id: string
-  geometry: { type: string; coordinates: number[][] }
-  status: string
-  transport_mode: string
-  build_mode: string
-  distance_m: number
-  estimated_duration_s?: number
-  elevation_profile?: { source: string; vertical_datum: string; profile: { elevation_m: number | null }[] }
-}
-type Route = {
-  route_id: string
-  route_revision_id: string
-  availability: string
-  points: Point[]
-  tracks: Track[]
-  trip_type: string | null
-}
-type Poi = { poi_id: string; poi_revision_id: string; name: string; media: { media_id: string }[] }
-type Trip = { trip_id: string; trip_revision_id: string; days: { day_id: string; route_id: string }[] }
-type ContractSchema = {
-  allOf?: ContractSchema[]
-  oneOf?: ContractSchema[]
-  properties?: { code?: { const?: string; enum?: string[] } }
-}
-type ContractResponse = {
-  $ref: string
-  content: Record<string, { schema: ContractSchema }>
-}
-type Operation = { tags?: string[]; responses: Record<string, { $ref?: string }> }
-type ErrorProbe = { method: Method; path: string; endpoint: string; actor?: Actor; body?: object; badEndpoint?: string; foreignActor?: Actor }
-type Contract = {
-  paths: Record<string, Partial<Record<Lowercase<Method>, Operation>>>
-  components: { responses: Record<string, ContractResponse> }
-}
-
-const browserOrigin = 'http://127.0.0.1:3000'
-const password = 'geo-pilot-verification-password'
-const uuidFormat = /^[0-9a-f-]{36}$/
-const contract = parse(readFileSync(new URL('../../docs/contracts/openapi.yaml', import.meta.url), 'utf8')) as Contract
-const mail: { email: string; token: string }[] = []
-const servers: Server[] = []
-const seen = new Set<string>()
-let identityPool: pg.Pool
-let geoPool: pg.Pool
-let server: Server
-let unavailable: Server
-let owner: Actor
-let visitor: Actor
-let moderator: Actor
-let ownerTrip: Trip
-let visitorTrip: Trip
-let categoryId: string
-
-const positions = [
-  { lon: 84.94, lat: 56.48 },
-  { lon: 84.945, lat: 56.48 },
-  { lon: 84.95, lat: 56.48 },
-  { lon: 84.96, lat: 56.48 },
-] as const
-
-function encodeShape(points: Position[]): string {
-  let lastLat = 0
-  let lastLon = 0
-  let result = ''
-  for (const point of points) {
-    const lat = Math.round(point.lat * 1e6)
-    const lon = Math.round(point.lon * 1e6)
-    for (const delta of [lat - lastLat, lon - lastLon]) {
-      let value = delta < 0 ? -(delta * 2) - 1 : delta * 2
-      while (value >= 32) {
-        result += String.fromCharCode((value & 31) + 95)
-        value >>= 5
-      }
-      result += String.fromCharCode(value + 63)
-    }
-    lastLat = lat
-    lastLon = lon
-  }
-  return result
-}
-
-async function start(databaseUrl: string, identityUrl: string, travelUrl: string, routing: 'mock' | 'down' | 'pilot' = 'mock') {
-  const app = await createApplication({ logger: false }, {
-    databaseUrl: identityUrl,
-    browserOrigin,
-    secureCookies: false,
-    mailer: { send: async (item) => { mail.push(item) } },
-  }, { databaseUrl: travelUrl }, {
-    databaseUrl,
-    providers: routing === 'pilot' ? undefined : {
-      demManifestPath: '',
-      valhallaUrl: 'http://127.0.0.1:1',
-      graphVersion: 'http-test-osm',
-      coverage: [[84.8, 56.4, 85.2, 56.6]],
-      fetcher: async (_input, options) => {
-        if (routing === 'down') return new Response('unavailable', { status: 503 })
-        const request = JSON.parse(String(options?.body)) as { locations: Position[] }
-        if (request.locations.some((position) => position.lon > 85.1)) {
-          return Response.json({ error_code: 171 }, { status: 400 })
-        }
-        const snapped = request.locations.map((position) => ({
-          ...position, lat: position.lon === 85 ? position.lat + 0.0001 : position.lat,
-        }))
-        return Response.json({ trip: {
-          status: 0, summary: { time: 120.6 }, legs: [{ shape: encodeShape(snapped) }],
-        } })
-      },
-    },
-  })
-  await app.listen(0, '127.0.0.1')
-  const result = { app, origin: await app.getUrl() }
-  servers.push(result)
-  return result
-}
-
-function send(method: Method, path: string, actor?: Actor, body?: object, options: {
-  server?: Server; key?: string | false; csrf?: string; origin?: string; cookie?: string
-} = {}): Promise<Response> {
-  const headers = new Headers()
-  if (actor || options.cookie) headers.set('cookie', options.cookie ?? actor?.cookie ?? '')
-  if (method !== 'GET') {
-    headers.set('origin', options.origin ?? browserOrigin)
-    if (actor) headers.set('x-csrf-token', options.csrf ?? actor.csrf)
-    if (options.key !== false) headers.set('idempotency-key', options.key ?? randomUUID())
-  }
-  if (body !== undefined) headers.set('content-type', 'application/json')
-  return fetch(`${(options.server ?? server).origin}/api/v1${path}`, {
-    method, headers, body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
-
-async function json<T>(response: Response, status: number): Promise<T> {
-  expect(response.status, `${response.url}: ${response.status !== status ? await response.clone().text() : ''}`).toBe(status)
-  expect(response.headers.get('cache-control')).toContain('no-store')
-  return response.json() as Promise<T>
-}
-
-function cookie(response: Response, name: string): string {
-  const value = response.headers.getSetCookie().find(item => item.startsWith(`${name}=`))?.split(';')[0]
-  if (!value) throw new Error(`Expected cookie ${name}`)
-  return value
-}
-
-async function actor(): Promise<Actor> {
-  const email = `geo-${randomUUID()}@example.test`
-  const registration = await send('POST', '/auth/register', undefined, { email, password, accepted_terms: true })
-  expect(registration.status).toBe(202)
-  const token = mail.find(item => item.email === email)?.token
-  const registrationCookie = cookie(registration, 'tropio_registration')
-  const verified = await send('POST', '/auth/verify-email', undefined, { token }, { cookie: registrationCookie })
-  expect(verified.status).toBe(204)
-  const loggedIn = await send('POST', '/auth/login', undefined, { email, password })
-  const profile = await json<{ id: string; csrf_token: string }>(loggedIn, 200)
-  return { id: profile.id, csrf: profile.csrf_token, cookie: cookie(loggedIn, 'tropio_session') }
-}
-
-async function trip(actor: Actor): Promise<Trip> {
-  const draft = await json<Trip>(await send('POST', '/trips', actor, { title: 'Поездка на Томи' }), 201)
-  return json<Trip>(await send('PUT', `/days/${draft.days[0]!.day_id}/route`, actor, {
-    trip_revision_id: draft.trip_revision_id,
-  }), 200)
-}
-
-function codes(schema: ContractSchema): string[] {
-  return [
-    ...(schema.properties?.code?.const ? [schema.properties.code.const] : []),
-    ...(schema.properties?.code?.enum ?? []),
-    ...(schema.allOf ?? []).flatMap(codes),
-    ...(schema.oneOf ?? []).flatMap(codes),
-  ]
-}
-
-function declaredErrors(): string[] {
-  return Object.entries(contract.paths).flatMap(([path, operations]) =>
-    Object.entries(operations).flatMap(([method, operation]) => operation?.tags?.includes('Geo')
-      ? Object.entries(operation.responses).filter(([status]) => Number(status) >= 400).flatMap(([status, response]) => {
-        const schema = contract.components.responses[response.$ref?.split('/').at(-1) ?? '']?.content['application/problem+json']?.schema
-        if (!schema) throw new Error(`Missing error schema for ${method} ${path} ${status}`)
-        return codes(schema).map(code => `${method.toUpperCase()} ${path} ${status} ${code}`)
-      }) : []),
-  )
-}
-
-async function problem(response: Response, method: Method, path: string, status: number, code: string) {
-  const schemaRef = contract.paths[path]?.[method.toLowerCase() as Lowercase<Method>]?.responses[status]?.$ref
-  const schema = contract.components.responses[schemaRef?.split('/').at(-1) ?? '']
-    ?.content['application/problem+json']?.schema
-  expect(schema && codes(schema), `${method} ${path} ${status}`).toContain(code)
-  expect(response.headers.get('content-type')).toMatch(/^application\/problem\+json(?:;|$)/)
-  const actual = await json<{ status: number; code: string; type: string; title: string; request_id: string;
-    current_route_revision_id?: string; current_poi_revision_id?: string }>(response, status)
-  expect(actual).toMatchObject({ status, code, type: `urn:tropio:problem:${code.toLowerCase()}`,
-    title: expect.any(String), request_id: expect.stringMatching(uuidFormat) })
-  expect(actual.request_id).toBe(response.headers.get('x-request-id'))
-  expect(Object.keys(actual).sort()).toEqual(['code', 'request_id', 'status', 'title', 'type',
-    ...(actual.current_route_revision_id ? ['current_route_revision_id'] : []),
-    ...(actual.current_poi_revision_id ? ['current_poi_revision_id'] : []),
-  ].sort())
-  seen.add(`${method} ${path} ${status} ${code}`)
-  return actual
-}
-
-function draftBody(points: Position[], transports: ('car' | 'foot' | 'bicycle')[], revision: string | null = null) {
-  return {
-    route_revision_id: revision,
-    points: points.map(position => ({ position })),
-    tracks: transports.map(transport_mode => ({
-      transport_mode, build_mode: transport_mode === 'foot' ? 'straight' : 'automatic',
-    })),
-  }
-}
-
-function routePath(draft: Trip): string {
-  return `/routes/${draft.days[0]!.route_id}`
-}
-
-async function createPoi(actor: Actor, visibility: 'private' | 'global' | 'trip', scopeTrip?: string) {
-  return json<Poi>(await send('POST', '/pois', actor, {
-    category_id: categoryId, name: 'Вид на Томь', position: positions[0], visibility,
-    ...(scopeTrip ? { scope_trip_id: scopeTrip } : {}),
-  }), 201)
-}
-
-async function approve(poi: Poi) {
-  return json<{ poi_revision_id: string }>(await send('POST', `/pois/${poi.poi_id}/moderation`, moderator, {
-    decision: 'approved', poi_revision_id: poi.poi_revision_id,
-  }), 200)
-}
-
-beforeAll(async () => {
-  const identityUrl = process.env.TROPIO_IDENTITY_TEST_DATABASE_URL
-  const travelUrl = process.env.TROPIO_TRAVEL_TEST_DATABASE_URL
-  const geoUrl = process.env.TROPIO_GEO_TEST_DATABASE_URL
-  if (!identityUrl || !travelUrl || !geoUrl) throw new Error('Use pnpm db:test:geo to provision the three database roles')
-  identityPool = new pg.Pool({ connectionString: identityUrl })
-  geoPool = new pg.Pool({ connectionString: geoUrl })
-  server = await start(geoUrl, identityUrl, travelUrl)
-  unavailable = await start('postgresql://127.0.0.1:1/unavailable', identityUrl, travelUrl, 'down')
-  owner = await actor()
-  visitor = await actor()
-  moderator = await actor()
-  await identityPool.query('INSERT INTO identity.user_roles (user_id, role_code) VALUES ($1, $2)', [moderator.id, 'poi_moderator'])
-  ownerTrip = await trip(owner)
-  visitorTrip = await trip(visitor)
-  const categories = await json<{ items: { category_id: string }[] }>(await send('GET', '/poi-categories'), 200)
-  categoryId = categories.items[0]!.category_id
-}, 30_000)
-
-afterAll(async () => {
-  await Promise.all(servers.map(({ app }) => app.close()))
-  await Promise.all([identityPool?.end(), geoPool?.end()])
-})
+import { describe, expect, it, vi } from 'vitest'
+import { GeoPublicationService } from '../src/geo/publication/geo-publication.service.js'
+import {
+  seen,
+  geoPool,
+  server,
+  unavailable,
+  owner,
+  visitor,
+  moderator,
+  ownerTrip,
+  visitorTrip,
+  categoryId,
+  positions,
+  start,
+  send,
+  json,
+  trip,
+  declaredErrors,
+  problem,
+  draftBody,
+  routePath,
+  createPoi,
+  approve,
+} from './geo-http-fixture.js'
+import type { Position, Track, Route, Poi, ErrorProbe, Trip } from './geo-http-fixture.js'
 
 describe('GIS-04 through the BFF', () => {
   it('AT-01 saves an ordered auto → auto → straight foot route', async () => {
@@ -668,5 +427,101 @@ describe('GIS-04 through the BFF', () => {
       'DELETE', poiApi, 409, 'IDEMPOTENCY_KEY_REUSED')
     await problem(await send('POST', '/pois', owner, createBody, { key: createKey }), 'POST', createApi, 404, 'NOT_FOUND')
     expect([...seen].sort()).toEqual(declaredErrors().sort())
+  })
+})
+
+describe('Geo publication holds', () => {
+  it('requires a connected route and keeps a moved POI from authorizing its former position', async () => {
+    const geo = server.app.get(GeoPublicationService)
+    const draft = await trip(owner)
+    const day = draft.days[0]!
+    const place = await createPoi(owner, 'global')
+    const approved = await approve(place)
+    const route = await json<Route>(await send('PUT', routePath(draft), owner, {
+      route_revision_id: null, points: [{ position: positions[0], poi_id: place.poi_id }], tracks: [],
+    }), 200)
+    const manifest = { operationId: randomUUID(), tripId: draft.trip_id, poiIds: [],
+      routes: [{ day_id: day.day_id, route_id: day.route_id, route_revision_id: route.route_revision_id }] }
+    await expect(geo.prepare(manifest)).rejects.toMatchObject({ code: 'ROUTE_NOT_READY' })
+    const ready = await json<Route>(await send('PUT', routePath(draft), owner, {
+      route_revision_id: route.route_revision_id,
+      points: [{ position: positions[0], poi_id: place.poi_id }, { position: positions[3] }],
+      tracks: [{ build_mode: 'straight', transport_mode: 'foot' }],
+    }), 200)
+    manifest.routes[0]!.route_revision_id = ready.route_revision_id
+    await expect(geo.prepare({ ...manifest, poiIds: [place.poi_id] })).rejects.toMatchObject({ code: 'POI_PUBLICATION_RESTRICTED' })
+    await geo.prepare(manifest)
+    const moved = await json<Poi>(await send('PATCH', `/pois/${place.poi_id}`, owner, {
+      poi_revision_id: approved.poi_revision_id, position: positions[1],
+    }), 200)
+    await approve(moved)
+    await expect(geo.read(manifest)).resolves.toBeNull()
+    await expect(geo.readStarts([manifest])).resolves.toEqual([null])
+    await expect(geo.verify(manifest)).rejects.toMatchObject({ code: 'POI_PUBLICATION_RESTRICTED' })
+    await expect(geo.prepare({ ...manifest, operationId: randomUUID() })).rejects.toMatchObject({ code: 'POI_PUBLICATION_RESTRICTED' })
+  })
+
+  it('pins the entire ordered batch and rejects a stale head without retaining the other days', async () => {
+    const geo = server.app.get(GeoPublicationService)
+    const draft = await trip(owner)
+    const withDay = await json<Trip>(await send('POST', `/trips/${draft.trip_id}/days`, owner, {
+      trip_revision_id: draft.trip_revision_id,
+    }), 201)
+    const secondDay = withDay.days[1]!
+    const bound = await json<Trip>(await send('PUT', `/days/${secondDay.day_id}/route`, owner, {
+      trip_revision_id: withDay.trip_revision_id,
+    }), 200)
+    const routes = []
+    for (const [index, day] of bound.days.entries()) {
+      const route = await json<Route>(await send('PUT', `/routes/${day.route_id}`, owner,
+        draftBody([positions[index]!, positions[3]], [index ? 'bicycle' : 'foot'])), 200)
+      routes.push({ day_id: day.day_id, route_id: day.route_id, route_revision_id: route.route_revision_id })
+    }
+    const manifest = { operationId: randomUUID(), tripId: bound.trip_id, routes, poiIds: [] }
+    const altered = { ...manifest, routes: routes.map((r, i) => i ? { ...r, route_revision_id: randomUUID() } : r) }
+    await expect(geo.prepare(altered)).rejects.toMatchObject({ code: 'ROUTE_REVISION_CONFLICT' })
+    const count = async () => (await geoPool.query(
+      'SELECT count(*)::int AS n FROM geo.route_geometry_holds WHERE travel_operation_id = $1', [manifest.operationId],
+    )).rows[0].n
+    expect(await count()).toBe(0)
+    await Promise.all([geo.prepare(manifest), geo.prepare(manifest)])
+    expect(await count()).toBe(2)
+    const saved = await geo.read(manifest)
+    expect(saved?.days.map(day => day.lines[0]!.coordinates[0])).toEqual(positions.slice(0, 2).map(p => [p.lon, p.lat]))
+    await expect(geo.verify(manifest)).resolves.toEqual({ start: positions[0], tripType: 'combined' })
+    await expect(geo.prepare({ ...manifest, routes: [...routes].reverse() })).rejects.toMatchObject({ code: 'PUBLICATION_PRECONDITION_FAILED' })
+    const first = routes[0]!
+    await json(await send('PUT', `/routes/${first.route_id}`, owner,
+      draftBody([positions[1], positions[2]], ['foot'], first.route_revision_id)), 200)
+    await geo.prepare(manifest)
+    expect(await geo.read(manifest)).toEqual(saved)
+    const legacy = { ...manifest, operationId: randomUUID() }
+    await geoPool.query('INSERT INTO geo.route_hold_batches (travel_operation_id, trip_id) VALUES ($1, $2)', [legacy.operationId, legacy.tripId])
+    await geoPool.query(`INSERT INTO geo.route_geometry_holds (travel_operation_id, route_id, route_version)
+      SELECT $1, route_id, route_version FROM geo.route_geometry_holds WHERE travel_operation_id = $2`, [legacy.operationId, manifest.operationId])
+    expect(await geo.read(legacy)).toEqual(saved)
+    await expect(geo.prepare({ ...altered, operationId: legacy.operationId })).rejects.toMatchObject({ code: 'PUBLICATION_PRECONDITION_FAILED' })
+    await geo.release(manifest.operationId, manifest.tripId)
+    expect(await count()).toBe(0)
+    await expect(geo.prepare(manifest)).rejects.toMatchObject({ code: 'PUBLICATION_CANCELLED' })
+  })
+
+  it('keeps a release tombstone even when it wins the first prepare race', async () => {
+    const geo = server.app.get(GeoPublicationService)
+    const draft = await trip(owner)
+    const day = draft.days[0]!
+    const route = await json<Route>(await send('PUT', routePath(draft), owner,
+      draftBody([positions[1], positions[2]], ['foot'])), 200)
+    const manifest = { operationId: randomUUID(), tripId: draft.trip_id, poiIds: [],
+      routes: [{ day_id: day.day_id, route_id: day.route_id, route_revision_id: route.route_revision_id }] }
+    await geo.release(manifest.operationId, manifest.tripId)
+    await geo.release(manifest.operationId, manifest.tripId)
+    await expect(geo.prepare(manifest)).rejects.toMatchObject({ code: 'PUBLICATION_CANCELLED' })
+    const racing = { ...manifest, operationId: randomUUID() }
+    const [prepare, release] = await Promise.allSettled([geo.prepare(racing), geo.release(racing.operationId, racing.tripId)])
+    expect(release.status).toBe('fulfilled')
+    if (prepare.status === 'rejected') expect(prepare.reason).toMatchObject({ code: 'PUBLICATION_CANCELLED' })
+    await expect(geo.verify(racing)).rejects.toMatchObject({ code: 'PUBLICATION_CANCELLED' })
+    await expect(geo.prepare(racing)).rejects.toMatchObject({ code: 'PUBLICATION_CANCELLED' })
   })
 })

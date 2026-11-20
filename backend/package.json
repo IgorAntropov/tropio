@@ -8,7 +8,7 @@
     "start": "node dist/main.js",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --exclude test/identity-http.test.ts --exclude test/travel-http.test.ts --exclude test/geo-http.test.ts"
+    "test": "vitest run --exclude test/identity-http.test.ts --exclude test/travel-http.test.ts --exclude test/geo-http.test.ts --exclude test/publication-http.test.ts"
   },
   "dependencies": {
     "@nestjs/common": "12.5.1",

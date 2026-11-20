@@ -1,11 +1,10 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Put, Query, Req } from '@nestjs/common'
 import type { NodeRequest } from '@nestjs/platform-node'
-import { BffProblem } from '../http/bff-problem.js'
-import { requireJson } from '../http/json-request.js'
-import { mutationSession, requireSession } from '../identity/identity-session.js'
+import { requireSession } from '../identity/identity-session.js'
 import { IDENTITY_SETTINGS } from '../identity/identity.config.js'
 import type { IdentitySettings } from '../identity/identity.config.js'
 import { IdentityService } from '../identity/identity.service.js'
+import { travelCommandContext } from './travel-command-context.js'
 import { createTripInput, dayInput, routeInput, travelUuid, tripListInput, updateTripInput } from './travel-input.js'
 import { TravelService } from './travel.service.js'
 
@@ -18,18 +17,7 @@ export class TravelController {
   ) {}
 
   private async commandContext(request: NodeRequest) {
-    const token = mutationSession(request, this.identitySettings.browserOrigin)
-    const userId = await this.identity.authenticate(token)
-    requireJson(request)
-    return {
-      key: travelUuid(request.headers['idempotency-key']),
-      editor: {
-        userId,
-        confirmSession: async () => {
-          if (await this.identity.authenticate(token) !== userId) throw new BffProblem('SESSION_REQUIRED')
-        },
-      },
-    }
+    return travelCommandContext(request, this.identity, this.identitySettings.browserOrigin)
   }
 
   @Get('trips')

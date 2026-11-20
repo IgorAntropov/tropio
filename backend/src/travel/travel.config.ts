@@ -2,6 +2,7 @@ import process from 'node:process'
 
 export interface TravelOptions {
   databaseUrl?: string
+  publicationWorker?: boolean
 }
 
 export const TRAVEL_DATABASE_URL = Symbol('travel database url')

@@ -1,9 +1,9 @@
 openapi: 3.1.1
 info:
   title: Tropio GIS MVP
-  version: 0.4.0
+  version: 0.5.0
   description: |
-    Внешний API BFF. Identity реализован в GIS-02, черновики Travel в GIS-03. Редактор маршрутов, расчёт треков и POI реализованы в GIS-04. Публикация относится к проекту POC-04.
+    Внешний API BFF. Identity реализован в GIS-02, черновики Travel в GIS-03. Редактор маршрутов, расчёт треков и POI реализованы в GIS-04. В GIS-06 Travel публикует закреплённые версии, а публичный каталог проверяет действующий доступ к геометрии.
     Каждый ответ этого контракта получает Cache-Control: no-store и X-Request-Id.
     Недоступные или неизвестные объекты дают одинаковый 404. Публичные операции
     используют гостевой контекст, даже если браузер отправил сессию.
@@ -616,10 +616,14 @@ paths:
       - $ref: '#/components/parameters/TripId'
     post:
       operationId: publishTrip
+      tags: [Travel publications]
       summary: Запустить явную публикацию набора точных ревизий
+      security:
+        - session: []
+          csrf: []
       parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
         - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -647,19 +651,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/PublicationTerminal'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/TravelInvalidRequest'
         '401':
-          $ref: '#/components/responses/Unauthenticated'
+          $ref: '#/components/responses/TravelSessionRequired'
         '403':
-          $ref: '#/components/responses/ForbiddenRequest'
+          $ref: '#/components/responses/TravelCsrfRejected'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/TravelDraftNotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/TravelWriteConflict'
         '422':
-          $ref: '#/components/responses/Unprocessable'
+          $ref: '#/components/responses/InvalidPublicationManifest'
         '503':
-          $ref: '#/components/responses/Unavailable'
+          $ref: '#/components/responses/TravelUnavailable'
   /trips/{tripId}/publication-operations/{operationId}:
     parameters:
       - $ref: '#/components/parameters/TripId'
@@ -670,6 +674,7 @@ paths:
           $ref: '#/components/schemas/Uuid'
     get:
       operationId: getPublicationOperation
+      tags: [Travel publications]
       summary: Получить состояние операции публикации
       responses:
         '200':
@@ -679,22 +684,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/PublicationOperation'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/TravelInvalidRequest'
         '401':
-          $ref: '#/components/responses/Unauthenticated'
+          $ref: '#/components/responses/TravelSessionRequired'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/TravelDraftNotFound'
         '503':
-          $ref: '#/components/responses/Unavailable'
+          $ref: '#/components/responses/TravelUnavailable'
   /trips/{tripId}/unpublish:
     parameters:
       - $ref: '#/components/parameters/TripId'
     post:
       operationId: unpublishTrip
+      tags: [Travel publications]
       summary: Снять текущую публикацию и остановить конкурентные публикации
+      security:
+        - session: []
+          csrf: []
       parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
         - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -709,23 +718,211 @@ paths:
               schema:
                 $ref: '#/components/schemas/UnpublishResult'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/TravelInvalidRequest'
         '401':
-          $ref: '#/components/responses/Unauthenticated'
+          $ref: '#/components/responses/TravelSessionRequired'
         '403':
-          $ref: '#/components/responses/ForbiddenRequest'
+          $ref: '#/components/responses/TravelCsrfRejected'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/TravelDraftNotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/TravelWriteConflict'
         '503':
-          $ref: '#/components/responses/Unavailable'
+          $ref: '#/components/responses/TravelUnavailable'
+  /trips/{tripId}/archive:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+    post:
+      operationId: archiveTrip
+      tags: [Travel publications]
+      summary: Архивировать свою поездку и отозвать публичный доступ
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveTripCommand'
+      responses:
+        '200':
+          description: Поездка архивирована, публикация снята.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnpublishResult'
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '401':
+          $ref: '#/components/responses/TravelSessionRequired'
+        '403':
+          $ref: '#/components/responses/TravelCsrfRejected'
+        '404':
+          $ref: '#/components/responses/TravelDraftNotFound'
+        '409':
+          $ref: '#/components/responses/TravelWriteConflict'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
+  /catalog/participation:
+    get:
+      operationId: getCatalogParticipation
+      tags: [Travel participation]
+      summary: Получить состояние участия зрителя для видимых карточек
+      security: [{}, {session: []}]
+      parameters:
+        - name: trip_ids
+          in: query
+          required: true
+          style: form
+          explode: false
+          schema:
+            type: array
+            uniqueItems: true
+            minItems: 1
+            maxItems: 100
+            items: {$ref: '#/components/schemas/Uuid'}
+      responses:
+        '200':
+          description: Идентификатор зрителя, его ожидающие заявки и подтверждённые участия в доступных поездках. Для гостя возвращаются null и два пустых списка.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [viewer_id, trip_ids, joined_trip_ids]
+                properties:
+                  joined_trip_ids:
+                    description: Запрошенные доступные поездки с подтверждённым участием зрителя.
+                    type: array
+                    uniqueItems: true
+                    items: {$ref: '#/components/schemas/Uuid'}
+                  viewer_id:
+                    anyOf:
+                      - $ref: '#/components/schemas/Uuid'
+                      - type: 'null'
+                  trip_ids:
+                    type: array
+                    uniqueItems: true
+                    items: {$ref: '#/components/schemas/Uuid'}
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
+  /trips/{tripId}/applications:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+    post:
+      operationId: requestTripParticipation
+      tags: [Travel participation]
+      summary: Отправить запрос на участие в опубликованной поездке
+      description: Повтор возвращает уже отправленную заявку пользователя. При свободном входе команда подтверждает участие. Для вступления клиент явно передаёт open. Запрос, отправленный в режиме request, ожидает решения организатора.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                admission_mode: {$ref: '#/components/schemas/TripAdmissionMode'}
+      responses:
+        '200':
+          description: Текущее состояние участия пользователя.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status]
+                properties:
+                  status: {type: string, enum: [pending, joined]}
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '401':
+          $ref: '#/components/responses/TravelSessionRequired'
+        '403':
+          $ref: '#/components/responses/TravelCsrfRejected'
+        '404':
+          $ref: '#/components/responses/TravelDraftNotFound'
+        '409':
+          $ref: '#/components/responses/TravelApplicationUnavailable'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
+  /catalog/filter-options:
+    get:
+      operationId: getCatalogFilterOptions
+      tags: [Travel publications]
+      summary: Получить справочники регионов и уровней сложности каталога
+      security: []
+      responses:
+        '200':
+          description: Регионы с административными границами и доступные уровни сложности
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogFilterOptions'
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
   /catalog/trips:
     get:
       operationId: listPublicTrips
+      tags: [Travel publications]
       summary: Получить общий набор результатов для списка и карты
       security: []
       parameters:
+        - name: near
+          in: query
+          style: form
+          explode: false
+          description: Долгота и широта пользователя. Результаты упорядочиваются по расстоянию до старта первого дня в метрах.
+          schema:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items: {type: number}
+        - name: radius_km
+          in: query
+          description: Радиус в километрах вокруг near.
+          schema: {type: number, exclusiveMinimum: 0, maximum: 20100}
+        - name: q
+          in: query
+          description: Поиск подстроки в опубликованном названии без учёта регистра.
+          schema: {type: string, maxLength: 120}
+        - name: trip_type
+          in: query
+          style: form
+          explode: false
+          schema:
+            type: array
+            uniqueItems: true
+            items: {enum: [foot, bicycle, car, combined]}
+        - name: start_date
+          in: query
+          description: Начало календарного диапазона включительно.
+          schema: {type: string, format: date}
+        - name: end_date
+          in: query
+          description: Конец календарного диапазона включительно. Фильтр проверяет пересечение с датами поездки.
+          schema: {type: string, format: date}
+        - name: difficulty
+          in: query
+          description: Ключ из справочника сложности. Ссылки с прежним текстовым значением поддерживаются.
+          schema: {type: string, maxLength: 80}
+        - name: region
+          in: query
+          description: Код региона старта первого дня. Для кода вне справочника выдача пуста.
+          schema: {type: string, pattern: '^[A-Z]{2}-[A-Z0-9]{1,3}$', example: RU-TOM}
         - $ref: '#/components/parameters/Bbox'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
@@ -737,14 +934,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/PublicTripPage'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/TravelInvalidRequest'
         '503':
-          $ref: '#/components/responses/Unavailable'
+          $ref: '#/components/responses/TravelUnavailable'
   /catalog/trips/{tripId}:
     parameters:
       - $ref: '#/components/parameters/TripId'
     get:
       operationId: getPublicTrip
+      tags: [Travel publications]
       summary: Получить актуальный опубликованный снимок с картой и днями
       security: []
       responses:
@@ -755,11 +953,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/PublicTrip'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/TravelInvalidRequest'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/TravelDraftNotFound'
         '503':
-          $ref: '#/components/responses/Unavailable'
+          $ref: '#/components/responses/TravelUnavailable'
   /routes/{routeId}:
     parameters:
       - $ref: '#/components/parameters/RouteId'
@@ -1624,6 +1822,17 @@ components:
                 properties:
                   status: {const: 409}
                   code: {const: IDEMPOTENCY_KEY_REUSED}
+    TravelApplicationUnavailable:
+      description: Пользователь организует поездку либо приём новых заявок закрыт.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 409}
+                  code: {const: TRIP_APPLICATION_UNAVAILABLE}
     TravelWriteConflict:
       description: Текущая ревизия поездки изменилась либо ключ повтора занят.
       content:
@@ -1643,6 +1852,17 @@ components:
                     properties:
                       status: {const: 409}
                       code: {const: IDEMPOTENCY_KEY_REUSED}
+    InvalidPublicationManifest:
+      description: Состав дней и маршрутов либо видимость поездки препятствуют публикации.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 422}
+                  code: {const: INVALID_PUBLICATION_MANIFEST}
     TravelInvalidDates:
       description: Диапазон поездки или дата дня не согласованы с программой.
       content:
@@ -1938,6 +2158,10 @@ components:
     TripText:
       type: [string, 'null']
       maxLength: 4000
+    TripAdmissionMode:
+      type: string
+      enum: [request, open]
+      default: request
     TripDifficulty:
       type: [string, 'null']
       maxLength: 80
@@ -1970,6 +2194,7 @@ components:
       additionalProperties: false
       required: [title]
       properties:
+        admission_mode: {$ref: '#/components/schemas/TripAdmissionMode'}
         title: {$ref: '#/components/schemas/TripTitle'}
         description: {$ref: '#/components/schemas/TripText'}
         start_date: {$ref: '#/components/schemas/TripCalendarDate'}
@@ -1986,6 +2211,8 @@ components:
       minProperties: 2
       properties:
         trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+        visibility: {enum: [public, private]}
+        admission_mode: {$ref: '#/components/schemas/TripAdmissionMode'}
         title: {$ref: '#/components/schemas/TripTitle'}
         description: {$ref: '#/components/schemas/TripText'}
         start_date: {$ref: '#/components/schemas/TripCalendarDate'}
@@ -2023,12 +2250,13 @@ components:
     TripDraftSummary:
       type: object
       additionalProperties: false
-      required: [trip_id, trip_revision_id, publication_id, visibility, title, start_date, end_date]
+      required: [admission_mode, trip_id, trip_revision_id, publication_id, visibility, title, start_date, end_date]
       properties:
         trip_id: {$ref: '#/components/schemas/Uuid'}
         trip_revision_id: {$ref: '#/components/schemas/Uuid'}
         publication_id: {$ref: '#/components/schemas/NullableUuid'}
         visibility: {type: string, enum: [public, private]}
+        admission_mode: {$ref: '#/components/schemas/TripAdmissionMode'}
         title: {$ref: '#/components/schemas/TripTitle'}
         start_date: {$ref: '#/components/schemas/TripCalendarDate'}
         end_date: {$ref: '#/components/schemas/TripCalendarDate'}
@@ -2042,11 +2270,23 @@ components:
     TripDraft:
       type: object
       additionalProperties: false
-      required: [trip_id, trip_revision_id, publication_id, visibility, title, description, start_date, end_date, timezone, free_capacity, difficulty, participation_rules, equipment, days]
+      required: [admission_mode, trip_id, trip_revision_id, publication_id, visibility, title, description, start_date, end_date, timezone, free_capacity, difficulty, participation_rules, equipment, days]
       properties:
+        published_manifest:
+          description: Состав активной публикации для сравнения черновика владельца. trip_revision_id соответствует моменту переключения на этот снимок.
+          type: object
+          additionalProperties: false
+          required: [trip_revision_id, routes, poi_count]
+          properties:
+            trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+            routes:
+              type: array
+              items: {$ref: '#/components/schemas/PublishRoute'}
+            poi_count: {type: integer, minimum: 0, maximum: 500}
         trip_id: {$ref: '#/components/schemas/Uuid'}
         trip_revision_id: {$ref: '#/components/schemas/Uuid'}
         publication_id: {$ref: '#/components/schemas/NullableUuid'}
+        admission_mode: {$ref: '#/components/schemas/TripAdmissionMode'}
         visibility: {type: string, enum: [public, private]}
         title: {$ref: '#/components/schemas/TripTitle'}
         description: {$ref: '#/components/schemas/TripText'}
@@ -2422,6 +2662,12 @@ components:
         - $ref: '#/components/schemas/PublicationPending'
         - $ref: '#/components/schemas/PublicationSucceeded'
         - $ref: '#/components/schemas/PublicationFailed'
+    ArchiveTripCommand:
+      type: object
+      additionalProperties: false
+      required: [trip_revision_id]
+      properties:
+        trip_revision_id: {$ref: '#/components/schemas/Uuid'}
     UnpublishCommand:
       type: object
       additionalProperties: false
@@ -2438,26 +2684,68 @@ components:
       properties:
         publication_id: {type: 'null'}
         trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+    PublicOrganizer:
+      type: object
+      additionalProperties: false
+      required: [id, display_name, avatar]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        display_name: {type: string}
+        avatar:
+          anyOf:
+            - $ref: '#/components/schemas/SystemAvatar'
+            - type: 'null'
     PublicTripSummary:
       type: object
       additionalProperties: false
-      required: [trip_id, publication_id, title, start]
+      required: [admission_mode, confirmed_participants, trip_id, publication_id, organizer, title, description, start_date, end_date, difficulty, free_capacity, trip_type, day_count, applications_open, lifecycle, start]
       properties:
+        organizer:
+          anyOf:
+            - $ref: '#/components/schemas/PublicOrganizer'
+            - type: 'null'
+        distance_m: {type: integer, minimum: 0, description: Расстояние до публичного старта при запросе с near.}
         trip_id: {$ref: '#/components/schemas/Uuid'}
         publication_id: {$ref: '#/components/schemas/Uuid'}
+        admission_mode: {$ref: '#/components/schemas/TripAdmissionMode'}
         title: {type: string}
+        start_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        end_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        difficulty: {$ref: '#/components/schemas/TripDifficulty'}
+        free_capacity: {$ref: '#/components/schemas/TripCapacity'}
+        trip_type: {enum: [foot, bicycle, car, combined, null]}
+        day_count: {type: integer, minimum: 1, maximum: 100}
+        confirmed_participants: {type: integer, minimum: 0}
+        applications_open: {type: boolean, description: Сервер принимает новые запросы на участие в этой поездке.}
+        lifecycle: {enum: [planned, in_progress, completed, cancelled]}
+        description: {type: string}
         start:
           $ref: '#/components/schemas/LonLat'
           description: Первая точка разрешённой закреплённой Geo-ревизии первого дня.
     PublicTrip:
       type: object
       additionalProperties: false
-      required: [trip_id, publication_id, title, description, days, pois]
+      required: [admission_mode, confirmed_participants, trip_id, publication_id, organizer, title, description, start_date, end_date, difficulty, free_capacity, trip_type, day_count, applications_open, lifecycle, start, days, pois]
       properties:
+        organizer:
+          anyOf:
+            - $ref: '#/components/schemas/PublicOrganizer'
+            - type: 'null'
         trip_id: {$ref: '#/components/schemas/Uuid'}
         publication_id: {$ref: '#/components/schemas/Uuid'}
+        admission_mode: {$ref: '#/components/schemas/TripAdmissionMode'}
         title: {type: string}
+        start_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        end_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        difficulty: {$ref: '#/components/schemas/TripDifficulty'}
+        free_capacity: {$ref: '#/components/schemas/TripCapacity'}
+        trip_type: {enum: [foot, bicycle, car, combined, null]}
+        day_count: {type: integer, minimum: 1, maximum: 100}
+        confirmed_participants: {type: integer, minimum: 0}
+        applications_open: {type: boolean, description: Сервер принимает новые запросы на участие в этой поездке.}
+        lifecycle: {enum: [planned, in_progress, completed, cancelled]}
         description: {type: string}
+        start: {$ref: '#/components/schemas/LonLat'}
         days:
           type: array
           items:
@@ -2469,14 +2757,48 @@ components:
     PublicDay:
       type: object
       additionalProperties: false
-      required: [position, lines]
+      required: [position, local_date, description, lines, legs]
       properties:
+        legs:
+          description: Участки закреплённого маршрута в том же порядке, что и их линии.
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, start_name, end_name, distance_m, transport_mode]
+            properties:
+              name: {type: [string, 'null']}
+              start_name: {type: [string, 'null']}
+              end_name: {type: [string, 'null']}
+              distance_m: {type: number, minimum: 0}
+              transport_mode: {$ref: '#/components/schemas/GeoTransportMode'}
+        local_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        description: {$ref: '#/components/schemas/TripText'}
         position: {type: integer, minimum: 1}
         lines:
           type: array
           minItems: 1
           items:
             $ref: '#/components/schemas/LineString'
+    CatalogFilterOption:
+      type: object
+      additionalProperties: false
+      required: [value, label]
+      properties:
+        value: {type: string}
+        label: {type: string}
+    CatalogFilterOptions:
+      type: object
+      additionalProperties: false
+      required: [regions, difficulties]
+      properties:
+        regions:
+          type: array
+          items: {$ref: '#/components/schemas/CatalogFilterOption'}
+        difficulties:
+          type: array
+          items: {$ref: '#/components/schemas/CatalogFilterOption'}
     PublicTripPage:
       type: object
       additionalProperties: false
