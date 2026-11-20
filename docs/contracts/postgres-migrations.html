@@ -10,7 +10,7 @@
   <main>
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Архитектура и эксплуатация</nav>
     <h1>Миграции PostgreSQL и PostGIS</h1>
-    <p>Локальный запуск Tropio применяет версионированные миграции PostgreSQL перед запуском приложений. GIS-01 заложил SQL-хранилища Identity, Travel и Geo и права доступа к ним. GIS-02 добавляет заявки на регистрацию, окна ограничения частоты и операции аккаунта. <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a> · <a href="../identity/account.html">Аккаунт и сессия</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#6-что-уточнить-в-er-перед-миграциями">Проект POC-04</a></p>
+    <p>Локальный запуск Tropio применяет версионированные миграции PostgreSQL перед запуском приложений. GIS-01 заложил SQL-хранилища Identity, Travel и Geo и права доступа к ним. GIS-02 добавляет заявки на регистрацию, окна ограничения частоты и операции аккаунта, GIS-03 хранение результатов команд черновика. <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a> · <a href="../identity/account.html">Аккаунт и сессия</a> · <a href="../travel/drafts.html">Черновики Travel</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#6-что-уточнить-в-er-перед-миграциями">Проект POC-04</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
@@ -25,10 +25,11 @@
       <h2 id="commands">Команды запуска</h2>
       <p>Выполняй команды из корня репозитория при работающем Docker и заполненном локальном <code>.env</code>. <a href="../../package.json">Команды workspace</a> · <a href="../../compose.yaml">Конфигурация Compose</a></p>
       <ul>
-        <li><code>pnpm dev:all</code> поднимает локальные сервисы через Compose, ждёт готовности до 180 секунд, запускает <code>pnpm db:migrate</code>, настраивает подключение Identity и запускает NestJS и Nuxt. При отсутствии <code>TROPIO_IDENTITY_DATABASE_URL</code> скрипт создаёт временную учётную запись PostgreSQL с правами <code>tropio_identity_runtime</code> и удаляет её после завершения. При ошибке миграций запуск приложений прерывается. <a href="../../backend/migrations/run-identity.mjs">Скрипт запуска Identity</a></li>
+        <li><code>pnpm dev:all</code> поднимает локальные сервисы через Compose, ждёт готовности до 180 секунд, запускает <code>pnpm db:migrate</code>, настраивает подключения Identity и Travel и запускает NestJS и Nuxt. Для каждого подключения без заданного <code>TROPIO_IDENTITY_DATABASE_URL</code> или <code>TROPIO_TRAVEL_DATABASE_URL</code> скрипт создаёт свою временную учётную запись PostgreSQL с ролью соответствующего сервиса. Такие записи удаляются при завершении скрипта. При ошибке миграций запуск приложений прерывается. <a href="../../backend/migrations/run-identity.mjs">Скрипт локального запуска</a></li>
         <li><code>pnpm db:migrate</code> применяет миграции к локальной базе через <code>psql</code> в уже запущенном сервисе <code>postgres</code>. Подключение использует административную учётную запись контейнера.</li>
         <li><code>pnpm db:test:migrations</code> использует тот же запущенный контейнер и отдельные временные базы для проверки миграций.</li>
         <li><code>pnpm db:test:identity</code> создаёт временную базу, применяет миграции и запускает HTTP-тесты Identity с временной учётной записью. Команда входит в <code>pnpm check</code>. Если PostgreSQL ещё не запущен, выполни <code>docker compose up -d --wait postgres</code>. <a href="../identity/account.html#acceptance">Приёмка Identity</a></li>
+        <li><code>pnpm db:test:travel</code> создаёт отдельную временную базу, применяет миграции и запускает HTTP-тесты Travel с прикладными подключениями Identity и Travel. Команда входит в <code>pnpm check</code> и требует работающего сервиса <code>postgres</code>. <a href="../travel/drafts.html#acceptance">Приёмка Travel</a></li>
       </ul>
     </section>
 
@@ -47,6 +48,7 @@
         </table>
       </div>
       <p>Миграция Identity <code>0002</code> добавляет временные заявки на регистрацию и окна ограничения частоты с индексами по срокам действия. <a href="../../backend/migrations/identity/0002_account_access.sql">SQL миграции</a></p>
+      <p>Миграция Travel <code>0002</code> добавляет таблицу <code>draft_commands</code>. В ней сохраняются отпечаток запроса и подтверждённый ответ. Повтор определяется по инициатору, типу команды, ресурсу и ключу. Связь результата с поездкой защищена локальным внешним ключом. <a href="../../backend/migrations/travel/0002_draft_commands.sql">SQL миграции</a> · <a href="../travel/drafts.html#errors">Правила повтора</a></p>
       <p>У каждого домена есть владелец <code>tropio_&lt;service&gt;_owner</code> и прикладная роль <code>tropio_&lt;service&gt;_runtime</code>. Обе роли имеют <code>NOLOGIN</code>. Исполнитель выполняет доменный SQL от роли владельца. Прикладной роли выдаются права на данные своей схемы без права создавать в ней объекты. Между схемами остаются ссылки по UUID, а внешние ключи действуют внутри схемы владельца. <a href="../../.agents/docs/er-diagram.md#9-межсервисные-ссылки-по-id">Границы владения</a> · <a href="../../backend/migrations/platform/0001_initial.sql">Настройка ролей</a></p>
       <p>Travel фиксирует состав операции до запроса удержания Geo. Geo фиксирует ревизию маршрута до установки её как текущей или выдачи удержания. SQL защищает закреплённый состав, геометрию и версии положения POI от изменения прикладной ролью. <a href="../travel/publication.html">Публикация Travel/Geo</a> · <a href="../route-editor/poi-privacy.html">Приватность POI</a></p>
     </section>

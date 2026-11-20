@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Черновики путешествий и привязка маршрута — справочник Tropio</title>
+  <link rel="stylesheet" href="../handbook.css">
+</head>
+<body>
+  <main>
+    <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Путешествия и каталог</nav>
+    <h1>Черновики путешествий и привязка маршрута</h1>
+    <p>Владелец создаёт личный черновик, меняет сведения о поездке и днях и получает идентификатор маршрута выбранного дня. В GIS MVP Travel хранит до одной привязки маршрута на день. <a href="../../.agents/docs/tropio_tz_v1.1.md#11-fr-05-путешествия-дни-и-статусы">ТЗ, § 11</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#8-утверждённые-решения">Решения POC-04</a></p>
+    <p class="document-note"><strong>Статус.</strong> GIS-03 охватывает серверные операции с черновиком. Геометрия и её ревизии относятся к GIS-04, подключение редактора Nuxt к GIS-05, публикация и каталог к GIS-06. Ниже состояния интерфейса относятся к согласованным макетам UX-01. <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Очередь реализации</a> · <a href="../contracts/openapi.yaml">OpenAPI 0.3.0</a></p>
+
+    <nav class="document-links" aria-label="На этой странице">
+      <ul>
+        <li><a href="#editing">Сценарий владельца</a></li>
+        <li><a href="#interface">Интерфейс и макеты</a></li>
+        <li><a href="#api">Операции API</a></li>
+        <li><a href="#examples">Примеры сообщений</a></li>
+        <li><a href="#errors">Ошибки и повтор запроса</a></li>
+        <li><a href="#acceptance">Приёмка</a></li>
+      </ul>
+    </nav>
+
+    <section aria-labelledby="editing">
+      <h2 id="editing">Сценарий владельца</h2>
+      <ol>
+        <li>Войди в аккаунт. Чтобы создать черновик, укажи название. Travel создаёт поездку с видимостью <code>private</code> и первым днём. Его дата совпадает с датой начала поездки, если она задана. Привязка <code>route_id</code> изначально равна <code>null</code>.</li>
+        <li>Открой запись из списка своих поездок. Заполни данные черновика, добавь день в конец программы либо измени дату, описание и заметки конкретного дня. Сервер возвращает дни в порядке <code>position</code>. Даты можно оставить пустыми. Если для поездки задана только начальная дата, это однодневный диапазон. Даты дней при заданных границах поездки входят в её диапазон.</li>
+        <li>Для выбранного дня без привязки вызови создание маршрута. Travel выделяет UUID и сохраняет привязку к этому дню. При уже существующей привязке и актуальной ревизии команда возвращает тот же маршрут без новой ревизии поездки. Линии, точки, треки и их ревизии относятся к Geo и GIS-04.</li>
+      </ol>
+      <p>Identity проверяет, что сессия действительна. Travel на каждом обращении проверяет владельца поездки, в том числе при работе по UUID дня и при повторе команды. При обращении по UUID чужая, архивная и отсутствующая запись дают общий <code>404</code>. Публичный снимок имеет собственный указатель <code>publication_id</code> и переключается отдельной операцией. <a href="../identity/account.html#api">Сессия Identity</a> · <a href="../../.agents/docs/microservices.md#21-travel--программа-публикация-и-участие">Владение Travel</a> · <a href="publication.html">Публикация Travel/Geo</a></p>
+    </section>
+
+    <section aria-labelledby="interface">
+      <h2 id="interface">Интерфейс и макеты</h2>
+      <p>В UX-01 организатор может начать с названия, переключать дни и сохранять правки выбранного дня. После перехода в редактор и возврата интерфейс восстанавливает выбранный день. При подключении API на десктопе и смартфоне нужно различать загрузку списка, пустой список своих поездок и временную ошибку чтения. Правка с потерянным ответом остаётся неподтверждённой до проверки результата. <a href="program.html#interface">Состояния программы</a> · <a href="../../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">AT-20</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Макеты черновика и дней">
+        <table>
+          <thead><tr><th scope="col">Состояние UX-01</th><th scope="col">Десктоп</th><th scope="col">Смартфон</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Новое путешествие</th><td><a href="../../.agents/images/layouts/desktop/create-trip-basics.png">Форма</a></td><td><a href="../../.agents/images/layouts/mobile/create-trip-basics.png">Форма</a></td></tr>
+            <tr><th scope="row">Свои путешествия</th><td><a href="../../.agents/images/layouts/desktop/my-trips-created.png">Созданные</a></td><td><a href="../../.agents/images/layouts/mobile/my-trips-created.png">Созданные</a></td></tr>
+            <tr><th scope="row">День без маршрута</th><td><a href="../../.agents/images/layouts/desktop/trip-program-unbuilt.png">К построению</a></td><td><a href="../../.agents/images/layouts/mobile/trip-program-unbuilt.png">К построению</a></td></tr>
+            <tr><th scope="row">День с готовым маршрутом</th><td><a href="../../.agents/images/layouts/desktop/trip-program-ready.png">Открыть маршрут</a></td><td><a href="../../.agents/images/layouts/mobile/trip-program-ready.png">Открыть маршрут</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="api">
+      <h2 id="api">Операции API</h2>
+      <p>OpenAPI <code>0.3.0</code>, базовый путь <code>/api/v1</code>. Все операции требуют cookie <code>tropio_session</code>. Команды записи также требуют допустимый <code>Origin</code>, заголовок <code>X-CSRF-Token</code> из текущей сессии, <code>Idempotency-Key</code> формата UUID и тело <code>application/json</code>. Создание поездки получает новую ревизию. Все остальные команды записи передают UUID ожидаемой ревизии как <code>trip_revision_id</code>. <a href="../contracts/openapi.yaml">Точный контракт</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Операции Travel для редактора">
+        <table>
+          <thead><tr><th scope="col">Метод и путь</th><th scope="col"><code>operationId</code></th><th scope="col">Параметры и успешный ответ</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>POST /trips</code></th><td><code>createTripDraft</code></td><td><code>title</code> и необязательные поля поездки. <code>201</code> с черновиком и первым днём.</td></tr>
+            <tr><th scope="row"><code>GET /trips</code></th><td><code>listMyTripDrafts</code></td><td><code>limit</code> от 1 до 100, по умолчанию 50. Необязательный <code>cursor</code> берётся из <code>next_cursor</code> предыдущей страницы. <code>200</code>, <code>items</code> и <code>next_cursor</code>. Пустая выдача содержит <code>[]</code> и <code>null</code>.</td></tr>
+            <tr><th scope="row"><code>GET /trips/{tripId}/draft</code></th><td><code>getTripDraft</code></td><td><code>tripId</code> — UUID своей поездки. <code>200</code> с текущим черновиком и днями.</td></tr>
+            <tr><th scope="row"><code>PATCH /trips/{tripId}</code></th><td><code>updateTripDraft</code></td><td><code>tripId</code>, ожидаемая ревизия и хотя бы одно изменяемое поле поездки. <code>200</code> с сохранённым черновиком.</td></tr>
+            <tr><th scope="row"><code>POST /trips/{tripId}/days</code></th><td><code>addTripDay</code></td><td><code>tripId</code>, ожидаемая ревизия, необязательные <code>local_date</code>, <code>description</code>, <code>notes</code>. <code>201</code> с черновиком и новым днём.</td></tr>
+            <tr><th scope="row"><code>PATCH /days/{dayId}</code></th><td><code>updateTripDay</code></td><td><code>dayId</code> — UUID дня своей поездки. Ожидаемая ревизия и хотя бы одно из полей <code>local_date</code>, <code>description</code>, <code>notes</code>. <code>200</code> с сохранённым черновиком.</td></tr>
+            <tr><th scope="row"><code>PUT /days/{dayId}/route</code></th><td><code>ensureTripDayRoute</code></td><td><code>dayId</code> и ожидаемая ревизия. <code>200</code> с черновиком, где для дня указан единственный <code>route_id</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>У поездки доступны описание, даты, часовой пояс, количество мест, сложность, условия участия и список снаряжения. Границы полей и формат элементов заданы схемами OpenAPI. Даты ждут календарную строку <code>YYYY-MM-DD</code>. Поле <code>route_id</code> доступно в ответе дня, UUID назначает Travel. <a href="../contracts/openapi.yaml">Схемы запроса и ответа</a></p>
+    </section>
+
+    <section aria-labelledby="examples">
+      <h2 id="examples">Примеры сообщений</h2>
+      <p>Тело <code>POST /api/v1/trips</code> с обязательным названием.</p>
+      <pre><code>{
+  "title": "Выходные на Томи"
+}</code></pre>
+      <p>Ответ <code>201</code> с первым днём и UUID ревизии, которую передают при следующей правке.</p>
+      <pre><code>{
+  "trip_id": "ca60d481-935f-4201-b9d8-0adff4e9c132",
+  "trip_revision_id": "2a045bf4-86b9-4656-aaff-5658a02d8dc3",
+  "publication_id": null,
+  "visibility": "private",
+  "title": "Выходные на Томи",
+  "description": null,
+  "start_date": null,
+  "end_date": null,
+  "timezone": null,
+  "free_capacity": null,
+  "difficulty": null,
+  "participation_rules": null,
+  "equipment": [],
+  "days": [{
+    "day_id": "d9ea36f2-7ea3-4ce9-b45a-dd88374c30b6",
+    "position": 1,
+    "route_id": null,
+    "local_date": null,
+    "description": null,
+    "notes": null
+  }]
+}</code></pre>
+      <p>Тело <code>PUT /api/v1/days/d9ea36f2-7ea3-4ce9-b45a-dd88374c30b6/route</code>. При первой записи <code>200</code> содержит новый UUID ревизии и присвоенный <code>route_id</code> в первом дне.</p>
+      <pre><code>{
+  "trip_revision_id": "2a045bf4-86b9-4656-aaff-5658a02d8dc3"
+}</code></pre>
+      <p>Сохранение черновика пишет изменение, ревизию, аудит и результат команды под ключом в одной транзакции Travel. События публикации относятся к отдельному процессу. <a href="../contracts/events-deduplication.html">События Travel/Geo</a></p>
+    </section>
+
+    <section aria-labelledby="errors">
+      <h2 id="errors">Ошибки и повтор запроса</h2>
+      <p>BFF передаёт <code>application/problem+json</code>, машинный <code>code</code>, <code>Cache-Control: no-store</code> и <code>X-Request-Id</code>, совпадающий с <code>request_id</code>. Допустимые пары для каждой операции перечислены в OpenAPI. <a href="../contracts/bff-errors.html#travel-drafts">Пары ошибок и действия клиента</a></p>
+      <ol>
+        <li>При потере ответа повтори ту же команду с теми же ресурсом, телом, ожидаемой ревизией и ключом. После проверки текущих прав Travel сверяет сохранённый ключ до сравнения ревизии, поэтому точный повтор может вернуть прежний подтверждённый результат.</li>
+        <li>Если ответ повтора относится к более ранней редакции, перечитай текущий черновик перед следующей правкой. UUID ревизии сравнивается по равенству.</li>
+        <li>При <code>409 TRIP_REVISION_CONFLICT</code> перечитай черновик, сохрани ввод для сверки и предложи подтвердить правку на текущей версии с новым ключом. Актуальный <code>current_trip_revision_id</code> выдаётся только владельцу.</li>
+        <li>При <code>409 IDEMPOTENCY_KEY_REUSED</code> проверь содержание команды. Для нового действия используй новый ключ. При <code>422 INVALID_TRIP_DATES</code> согласуй даты поездки и дней перед следующим сохранением.</li>
+      </ol>
+    </section>
+
+    <section aria-labelledby="acceptance">
+      <h2 id="acceptance">Приёмка</h2>
+      <p><code>pnpm db:test:travel</code> входит в <code>pnpm check</code> и проверяет реальные ответы NestJS на временной базе PostgreSQL. Проверки черновика опираются на § 11 ТЗ и согласованные правила прав и повтора из POC-04. AT-18 связан с правами на поездку, AT-20 с отображением неподтверждённых изменений при подключении редактора. <a href="../../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">Сценарии ТЗ</a> · <a href="../contracts/postgres-migrations.html#commands">Проверочная база</a></p>
+      <ul>
+        <li>Создать черновик по названию, получить первый день, добавить ещё один день, изменить выбранный день и проверить порядок программы.</li>
+        <li>Создать пустую привязку на один день. Повторить точную команду и проверить, что маршрут единственный. Отдельно проверить сохранение других дней и конфликт двух команд с одной ожидаемой ревизией.</li>
+        <li>Попытаться прочитать и изменить поездку или день из другой учётной записи. Сопоставить отказ с ответом для отсутствующей записи и проверить, что чужая ревизия остаётся скрытой.</li>
+        <li>Проверить недопустимое тело, сессию, CSRF, неверный диапазон, повтор ключа и временный отказ хранилища. Сверить HTTP-статус, код, медиа-тип и идентификатор запроса с контрактом.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

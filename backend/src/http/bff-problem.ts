@@ -9,6 +9,9 @@ const problems = {
   INVALID_CREDENTIALS: [401, 'Invalid credentials'],
   CSRF_REJECTED: [403, 'Request origin or CSRF token rejected'],
   NOT_FOUND: [404, 'Not found'],
+  IDEMPOTENCY_KEY_REUSED: [409, 'Idempotency key reused'],
+  TRIP_REVISION_CONFLICT: [409, 'Trip revision conflict'],
+  INVALID_TRIP_DATES: [422, 'Invalid trip dates'],
   INVALID_AUTH_TOKEN: [422, 'Invalid authentication token'],
   AVATAR_UNAVAILABLE: [422, 'Avatar is unavailable'],
   RATE_LIMITED: [429, 'Too many requests'],
@@ -20,7 +23,7 @@ export type ProblemCode = keyof typeof problems
 export class BffProblem extends Error {
   constructor(
     readonly code: ProblemCode,
-    readonly retryAfter?: number,
+    readonly details?: { retryAfter?: number; currentTripRevisionId?: string },
   ) {
     super(code)
   }
@@ -42,13 +45,13 @@ export class BffProblemFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<NodeResponse>()
     if (response.headersSent) return
 
-    const { code, retryAfter } = normalizeProblem(exception)
+    const { code, details } = normalizeProblem(exception)
     const [status, title] = problems[code]
     const requestId = String(response.getHeader('x-request-id') ?? randomUUID())
     response.setHeader('x-request-id', requestId)
     response.setHeader('content-type', 'application/problem+json')
     response.setHeader('cache-control', 'no-store')
-    if (retryAfter !== undefined) response.setHeader('retry-after', retryAfter)
+    if (details?.retryAfter !== undefined) response.setHeader('retry-after', details.retryAfter)
 
     response.status(status).json({
       type: `urn:tropio:problem:${code.toLowerCase()}`,
@@ -56,6 +59,9 @@ export class BffProblemFilter implements ExceptionFilter {
       status,
       code,
       request_id: requestId,
+      ...(code === 'TRIP_REVISION_CONFLICT' && details?.currentTripRevisionId
+        ? { current_trip_revision_id: details.currentTripRevisionId }
+        : {}),
     })
   }
 }

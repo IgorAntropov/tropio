@@ -11,7 +11,7 @@
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Аккаунт и профиль</nav>
     <h1>Аккаунт, сессия и системный аватар</h1>
     <p>Identity принимает регистрацию по электронной почте, открывает сессию после подтверждения адреса и хранит профиль. При подтверждении новой учётной записи сервис назначает случайный активный системный аватар. Владелец профиля может изменить имя, описание и системный аватар. <a href="../../.agents/docs/tropio_tz_v1.1.md#71-регистрация-и-вход">ТЗ · Регистрация и вход</a> · <a href="../../.agents/docs/tropio_tz_v1.1.md#73-fr-15-гендерно-нейтральные-системные-аватары">ТЗ · Системные аватары</a></p>
-    <p class="document-note"><strong>Объём GIS-02.</strong> Регистрация, подтверждение адреса, вход, сессия, восстановление пароля, описание профиля и выбор системного аватара работают с PostgreSQL через BFF. Для разработки ссылки доступны в локальных JSON-файлах. Шаблоны писем, отправка через Mailpit и production-доставка относятся к GIS-09 и GIS-10. <a href="../contracts/openapi.yaml">OpenAPI 0.2.0</a> · <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
+    <p class="document-note"><strong>Объём GIS-02.</strong> Регистрация, подтверждение адреса, вход, сессия, восстановление пароля, описание профиля и выбор системного аватара работают с PostgreSQL через BFF. Для разработки ссылки доступны в локальных JSON-файлах. Шаблоны писем, отправка через Mailpit и production-доставка относятся к GIS-09 и GIS-10. <a href="../contracts/openapi.yaml">OpenAPI</a> · <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
@@ -69,7 +69,7 @@
 
     <section aria-labelledby="api">
       <h2 id="api">Операции API и права</h2>
-      <p>Внешние операции доступны через BFF под <code>/api/v1</code>. Identity владеет заявками регистрации, учётными записями, сессиями, профилями и коллекциями аватаров. Запросы <code>POST</code> и <code>PATCH</code> требуют точного <code>Origin</code>. Для команд в сессии клиент присылает <code>X-CSRF-Token</code> из <code>csrf_token</code> собственного профиля. Cookie имеют <code>HttpOnly</code> и <code>SameSite=Lax</code>, в production также <code>Secure</code>. <a href="../contracts/openapi.yaml">OpenAPI 0.2.0</a> · <a href="../../.agents/docs/microservices.md#31-внешние-api">Границы сервисов</a></p>
+      <p>Внешние операции доступны через BFF под <code>/api/v1</code>. Identity владеет заявками регистрации, учётными записями, сессиями, профилями и коллекциями аватаров. Запросы <code>POST</code> и <code>PATCH</code> требуют точного <code>Origin</code>. Для команд в сессии клиент присылает <code>X-CSRF-Token</code> из <code>csrf_token</code> собственного профиля. Cookie имеют <code>HttpOnly</code> и <code>SameSite=Lax</code>, в production также <code>Secure</code>. <a href="../contracts/openapi.yaml">OpenAPI</a> · <a href="../../.agents/docs/microservices.md#31-внешние-api">Границы сервисов</a></p>
       <p>Для ограничения попыток Nuxt передаёт адрес соединения с серверным секретом. <code>pnpm dev:all</code> передаёт общий секрет обоим приложениям. Для раздельного запуска задай одно значение в <code>TROPIO_BFF_PROXY_SECRET</code> у BFF и <code>NUXT_BFF_PROXY_SECRET</code> у Nuxt.</p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Операции API Identity">
         <table>

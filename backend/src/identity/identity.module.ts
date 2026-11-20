@@ -12,6 +12,7 @@ export class IdentityModule {
     return {
       module: IdentityModule,
       controllers: [IdentityController],
+      exports: [IDENTITY_SETTINGS, IdentityService],
       providers: [
         { provide: IDENTITY_SETTINGS, useValue: identitySettings(options) },
         IdentityDatabase,

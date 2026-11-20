@@ -1,9 +1,9 @@
 openapi: 3.1.1
 info:
   title: Tropio GIS MVP
-  version: 0.2.0
+  version: 0.3.0
   description: |
-    Внешний API BFF. Identity описывает GIS-02. URL и UUID-ревизии Travel и Geo относятся к проекту POC-04.
+    Внешний API BFF. Identity реализован в GIS-02, черновики Travel в GIS-03. Публикация и геометрия описаны в проекте POC-04.
     Каждый ответ этого контракта получает Cache-Control: no-store и X-Request-Id.
     Недоступные или неизвестные объекты дают одинаковый 404. Публичные операции
     используют гостевой контекст, даже если браузер отправил сессию.
@@ -369,27 +369,248 @@ paths:
           $ref: '#/components/responses/IdentityNotFound'
         '503':
           $ref: '#/components/responses/IdentityUnavailable'
-  /trips/{tripId}/draft:
-    parameters:
-      - $ref: '#/components/parameters/TripId'
+  /trips:
     get:
-      operationId: getTripDraft
-      summary: Получить черновик поездки для редактора
+      operationId: listMyTripDrafts
+      tags: [Travel drafts]
+      summary: Открыть список своих поездок
+      description: Сортировка по UUID поездки. Курсор применяется в контексте действующей сессии.
+      parameters:
+        - $ref: '#/components/parameters/MyTripsCursor'
+        - $ref: '#/components/parameters/MyTripsLimit'
       responses:
         '200':
-          description: Текущие поля Travel и привязки маршрутов дня
+          description: Текущее состояние.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyTripDraftList'
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '401':
+          $ref: '#/components/responses/TravelSessionRequired'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
+    post:
+      operationId: createTripDraft
+      tags: [Travel drafts]
+      summary: Создать черновик поездки
+      description: Достаточно названия. Travel создаёт первый день без привязки маршрута.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTripDraftRequest'
+      responses:
+        '201':
+          description: Сохранённый результат.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TripDraft'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/TravelInvalidRequest'
         '401':
-          $ref: '#/components/responses/Unauthenticated'
-        '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/TravelSessionRequired'
+        '403':
+          $ref: '#/components/responses/TravelCsrfRejected'
+        '409':
+          $ref: '#/components/responses/TravelKeyReused'
+        '422':
+          $ref: '#/components/responses/TravelInvalidDates'
         '503':
-          $ref: '#/components/responses/Unavailable'
+          $ref: '#/components/responses/TravelUnavailable'
+  /trips/{tripId}:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+    patch:
+      operationId: updateTripDraft
+      tags: [Travel drafts]
+      summary: Сохранить поля черновика поездки
+      description: Изменения сохраняются в текущий черновик.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTripDraftRequest'
+      responses:
+        '200':
+          description: Сохранённый результат.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripDraft'
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '401':
+          $ref: '#/components/responses/TravelSessionRequired'
+        '403':
+          $ref: '#/components/responses/TravelCsrfRejected'
+        '404':
+          $ref: '#/components/responses/TravelDraftNotFound'
+        '409':
+          $ref: '#/components/responses/TravelWriteConflict'
+        '422':
+          $ref: '#/components/responses/TravelInvalidDates'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
+  /trips/{tripId}/draft:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+    get:
+      operationId: getTripDraft
+      tags: [Travel drafts]
+      summary: Получить черновик поездки для редактора
+      description: Возвращает поля Travel, активные дни и привязки маршрутов.
+      responses:
+        '200':
+          description: Текущее состояние.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripDraft'
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '401':
+          $ref: '#/components/responses/TravelSessionRequired'
+        '404':
+          $ref: '#/components/responses/TravelDraftNotFound'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
+  /trips/{tripId}/days:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+    post:
+      operationId: addTripDay
+      tags: [Travel drafts]
+      summary: Добавить день в поездку
+      description: День получает следующую позицию в программе.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTripDayRequest'
+      responses:
+        '201':
+          description: Сохранённый результат.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripDraft'
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '401':
+          $ref: '#/components/responses/TravelSessionRequired'
+        '403':
+          $ref: '#/components/responses/TravelCsrfRejected'
+        '404':
+          $ref: '#/components/responses/TravelDraftNotFound'
+        '409':
+          $ref: '#/components/responses/TravelWriteConflict'
+        '422':
+          $ref: '#/components/responses/TravelInvalidDates'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
+  /days/{dayId}:
+    parameters:
+      - $ref: '#/components/parameters/TravelDayId'
+    patch:
+      operationId: updateTripDay
+      tags: [Travel drafts]
+      summary: Сохранить дату, описание и заметки дня
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTripDayRequest'
+      responses:
+        '200':
+          description: Сохранённый результат.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripDraft'
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '401':
+          $ref: '#/components/responses/TravelSessionRequired'
+        '403':
+          $ref: '#/components/responses/TravelCsrfRejected'
+        '404':
+          $ref: '#/components/responses/TravelDraftNotFound'
+        '409':
+          $ref: '#/components/responses/TravelWriteConflict'
+        '422':
+          $ref: '#/components/responses/TravelInvalidDates'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
+  /days/{dayId}/route:
+    parameters:
+      - $ref: '#/components/parameters/TravelDayId'
+    put:
+      operationId: ensureTripDayRoute
+      tags: [Travel drafts]
+      summary: Получить или создать привязку маршрута к дню
+      description: Travel назначает UUID при первой привязке. Существующая привязка возвращается без новой ревизии. Геометрия относится к Geo.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnsureTripDayRouteRequest'
+      responses:
+        '200':
+          description: Сохранённый результат.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripDraft'
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '401':
+          $ref: '#/components/responses/TravelSessionRequired'
+        '403':
+          $ref: '#/components/responses/TravelCsrfRejected'
+        '404':
+          $ref: '#/components/responses/TravelDraftNotFound'
+        '409':
+          $ref: '#/components/responses/TravelWriteConflict'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
   /routes/{routeId}:
     parameters:
       - $ref: '#/components/parameters/RouteId'
@@ -790,6 +1011,22 @@ components:
       required: true
       schema: {type: string, format: uri}
       description: Должен совпадать с настроенным origin приложения.
+    TravelDayId:
+      name: dayId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    MyTripsCursor:
+      name: cursor
+      in: query
+      description: UUID последней поездки из предыдущей страницы.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    MyTripsLimit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 50}
     TripId:
       name: tripId
       in: path
@@ -852,6 +1089,102 @@ components:
         maximum: 100
         default: 30
   responses:
+    TravelInvalidRequest:
+      description: Путь, параметры, заголовки или тело запроса недопустимы.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 400}
+                  code: {const: INVALID_REQUEST}
+    TravelSessionRequired:
+      description: Требуется действующая сессия.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 401}
+                  code: {const: SESSION_REQUIRED}
+    TravelCsrfRejected:
+      description: Origin или токен защиты запроса отклонён.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 403}
+                  code: {const: CSRF_REJECTED}
+    TravelDraftNotFound:
+      description: Запрошенный ресурс отсутствует или недоступен владельцу сессии.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 404}
+                  code: {const: NOT_FOUND}
+    TravelKeyReused:
+      description: Ключ уже занят другой командой или её результат недоступен.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 409}
+                  code: {const: IDEMPOTENCY_KEY_REUSED}
+    TravelWriteConflict:
+      description: Текущая ревизия поездки изменилась либо ключ повтора занят.
+      content:
+        application/problem+json:
+          schema:
+            oneOf:
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 409}
+                      code: {const: TRIP_REVISION_CONFLICT}
+                    required: [current_trip_revision_id]
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 409}
+                      code: {const: IDEMPOTENCY_KEY_REUSED}
+    TravelInvalidDates:
+      description: Диапазон поездки или дата дня не согласованы с программой.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 422}
+                  code: {const: INVALID_TRIP_DATES}
+    TravelUnavailable:
+      description: Обязательная зависимость Travel или Identity недоступна.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 503}
+                  code: {const: DEPENDENCY_UNAVAILABLE}
     IdentityInvalidRequest:
       description: Поля или формат запроса недопустимы.
       content:
@@ -1118,28 +1451,144 @@ components:
           minItems: 2
           items:
             $ref: '#/components/schemas/Position'
-    TripDraft:
+    TripTitle:
+      type: string
+      minLength: 1
+      maxLength: 120
+    TripText:
+      type: [string, 'null']
+      maxLength: 4000
+    TripDifficulty:
+      type: [string, 'null']
+      maxLength: 80
+    TripCalendarDate:
+      type: [string, 'null']
+      format: date
+    TripTimezone:
+      type: [string, 'null']
+      minLength: 1
+      maxLength: 100
+      description: Идентификатор часового пояса IANA.
+    TripCapacity:
+      type: [integer, 'null']
+      minimum: 1
+      maximum: 2147483647
+    TripEquipment:
+      type: array
+      maxItems: 50
+      items:
+        $ref: '#/components/schemas/TripEquipmentItem'
+    TripEquipmentItem:
       type: object
       additionalProperties: false
-      required: [trip_id, trip_revision_id, publication_id, visibility, title, days]
+      required: [label, required]
+      properties:
+        label: {type: string, minLength: 1, maxLength: 120}
+        required: {type: boolean}
+    CreateTripDraftRequest:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: {$ref: '#/components/schemas/TripTitle'}
+        description: {$ref: '#/components/schemas/TripText'}
+        start_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        end_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        timezone: {$ref: '#/components/schemas/TripTimezone'}
+        free_capacity: {$ref: '#/components/schemas/TripCapacity'}
+        difficulty: {$ref: '#/components/schemas/TripDifficulty'}
+        participation_rules: {$ref: '#/components/schemas/TripText'}
+        equipment: {$ref: '#/components/schemas/TripEquipment'}
+    UpdateTripDraftRequest:
+      type: object
+      additionalProperties: false
+      required: [trip_revision_id]
+      minProperties: 2
+      properties:
+        trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+        title: {$ref: '#/components/schemas/TripTitle'}
+        description: {$ref: '#/components/schemas/TripText'}
+        start_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        end_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        timezone: {$ref: '#/components/schemas/TripTimezone'}
+        free_capacity: {$ref: '#/components/schemas/TripCapacity'}
+        difficulty: {$ref: '#/components/schemas/TripDifficulty'}
+        participation_rules: {$ref: '#/components/schemas/TripText'}
+        equipment: {$ref: '#/components/schemas/TripEquipment'}
+    AddTripDayRequest:
+      type: object
+      additionalProperties: false
+      required: [trip_revision_id]
+      properties:
+        trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+        local_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        description: {$ref: '#/components/schemas/TripText'}
+        notes: {$ref: '#/components/schemas/TripText'}
+    UpdateTripDayRequest:
+      type: object
+      additionalProperties: false
+      required: [trip_revision_id]
+      minProperties: 2
+      properties:
+        trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+        local_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        description: {$ref: '#/components/schemas/TripText'}
+        notes: {$ref: '#/components/schemas/TripText'}
+    EnsureTripDayRouteRequest:
+      type: object
+      additionalProperties: false
+      required: [trip_revision_id]
+      properties:
+        trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+    TripDraftSummary:
+      type: object
+      additionalProperties: false
+      required: [trip_id, trip_revision_id, publication_id, visibility, title, start_date, end_date]
       properties:
         trip_id: {$ref: '#/components/schemas/Uuid'}
         trip_revision_id: {$ref: '#/components/schemas/Uuid'}
         publication_id: {$ref: '#/components/schemas/NullableUuid'}
         visibility: {type: string, enum: [public, private]}
-        title: {type: string}
-        days:
-          type: array
-          items:
-            $ref: '#/components/schemas/DraftDay'
+        title: {$ref: '#/components/schemas/TripTitle'}
+        start_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        end_date: {$ref: '#/components/schemas/TripCalendarDate'}
+    MyTripDraftList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/TripDraftSummary'}}
+        next_cursor: {$ref: '#/components/schemas/NullableUuid'}
+    TripDraft:
+      type: object
+      additionalProperties: false
+      required: [trip_id, trip_revision_id, publication_id, visibility, title, description, start_date, end_date, timezone, free_capacity, difficulty, participation_rules, equipment, days]
+      properties:
+        trip_id: {$ref: '#/components/schemas/Uuid'}
+        trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+        publication_id: {$ref: '#/components/schemas/NullableUuid'}
+        visibility: {type: string, enum: [public, private]}
+        title: {$ref: '#/components/schemas/TripTitle'}
+        description: {$ref: '#/components/schemas/TripText'}
+        start_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        end_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        timezone: {$ref: '#/components/schemas/TripTimezone'}
+        free_capacity: {$ref: '#/components/schemas/TripCapacity'}
+        difficulty: {$ref: '#/components/schemas/TripDifficulty'}
+        participation_rules: {$ref: '#/components/schemas/TripText'}
+        equipment: {$ref: '#/components/schemas/TripEquipment'}
+        days: {type: array, items: {$ref: '#/components/schemas/DraftDay'}}
     DraftDay:
       type: object
       additionalProperties: false
-      required: [day_id, position, route_id]
+      required: [day_id, position, route_id, local_date, description, notes]
       properties:
         day_id: {$ref: '#/components/schemas/Uuid'}
         position: {type: integer, minimum: 1}
         route_id: {$ref: '#/components/schemas/NullableUuid'}
+        local_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        description: {$ref: '#/components/schemas/TripText'}
+        notes: {$ref: '#/components/schemas/TripText'}
     RouteDraft:
       oneOf:
         - $ref: '#/components/schemas/ReadableRouteDraft'

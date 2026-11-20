@@ -114,7 +114,7 @@ export class IdentityService {
       return retryAfter
     })
 
-    if (retryAfter > 0) throw new BffProblem('RATE_LIMITED', retryAfter)
+    if (retryAfter > 0) throw new BffProblem('RATE_LIMITED', { retryAfter })
   }
 
   private get mailer() {
@@ -242,6 +242,10 @@ export class IdentityService {
       const session = await loadSession(client, token)
       return { token, expiresAt: session.expires_at, profile: privateProfile(session, token) }
     })
+  }
+
+  async authenticate(token: string): Promise<string> {
+    return this.database.transaction(async (client) => (await loadSession(client, token)).id)
   }
 
   async getMe(token: string) {
