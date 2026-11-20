@@ -8,7 +8,9 @@
   },
   "scripts": {
     "dev": "pnpm -r --parallel dev",
-    "dev:all": "docker compose up -d --wait --wait-timeout 180 && pnpm run dev",
+    "dev:all": "docker compose up -d --wait --wait-timeout 180 && pnpm db:migrate && pnpm run dev",
+    "db:migrate": "node backend/migrations/migrate.mjs",
+    "db:test:migrations": "node backend/migrations/verify.mjs",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",

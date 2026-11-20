@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Миграции PostgreSQL и PostGIS — справочник Tropio</title>
+  <link rel="stylesheet" href="../handbook.css">
+</head>
+<body>
+  <main>
+    <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Архитектура и эксплуатация</nav>
+    <h1>Миграции PostgreSQL и PostGIS</h1>
+    <p>Локальный запуск Tropio применяет версионированные миграции PostgreSQL перед запуском приложений. GIS-01 закладывает SQL-хранилища Identity, Travel и Geo и права доступа к ним. Операции аккаунта, путешествия, маршрута и публикации реализуются в следующих задачах GIS-02 и далее. <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#6-что-уточнить-в-er-перед-миграциями">Проект POC-04</a></p>
+
+    <nav class="document-links" aria-label="На этой странице">
+      <ul>
+        <li><a href="#commands">Команды запуска</a></li>
+        <li><a href="#owners">Миграции и роли по владельцам</a></li>
+        <li><a href="#history">История, транзакция и сбои</a></li>
+        <li><a href="#checks">Проверочные базы</a></li>
+      </ul>
+    </nav>
+
+    <section aria-labelledby="commands">
+      <h2 id="commands">Команды запуска</h2>
+      <p>Выполняй команды из корня репозитория при работающем Docker и заполненном локальном <code>.env</code>. <a href="../../package.json">Команды workspace</a> · <a href="../../compose.yaml">Конфигурация Compose</a></p>
+      <ul>
+        <li><code>pnpm dev:all</code> поднимает локальные сервисы через Compose, ждёт готовности до 180 секунд, запускает <code>pnpm db:migrate</code> и после успеха запускает NestJS и Nuxt. При ошибке миграций запуск приложений прерывается.</li>
+        <li><code>pnpm db:migrate</code> применяет миграции к локальной базе через <code>psql</code> в уже запущенном сервисе <code>postgres</code>. Подключение использует административную учётную запись контейнера.</li>
+        <li><code>pnpm db:test:migrations</code> использует тот же запущенный контейнер и отдельные временные базы для проверки миграций.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="owners">
+      <h2 id="owners">Миграции и роли по владельцам</h2>
+      <p>Файлы лежат в <code>backend/migrations/</code>. В каждом каталоге владельца нумерация начинается с <code>0001</code> и продолжается без пропусков. Скрипт применяет каталоги в порядке таблицы. <a href="../../backend/migrations/migrate.mjs">Исполнитель миграций</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Каталоги миграций и их содержимое">
+        <table>
+          <thead><tr><th scope="col">Каталог</th><th scope="col">Первая версия</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>platform</code></th><td>Готовит PostGIS в <code>public</code>, доменные схемы и роли. <a href="../../backend/migrations/platform/0001_initial.sql">SQL</a></td></tr>
+            <tr><th scope="row"><code>identity</code></th><td>Пользователи, способы входа, сессии, служебные записи подтверждения и каталог системных аватаров. <a href="../../backend/migrations/identity/0001_initial.sql">SQL</a></td></tr>
+            <tr><th scope="row"><code>travel</code></th><td>Путешествия, дни, привязки маршрутов, журналы операций, снимки публикации, проекция каталога и outbox. <a href="../../backend/migrations/travel/0001_initial.sql">SQL</a></td></tr>
+            <tr><th scope="row"><code>geo</code></th><td>Геометрия и её ревизии, точки, треки, POI и версии положения, зависимости маршрута, удержания ревизий и outbox. <a href="../../backend/migrations/geo/0001_initial.sql">SQL</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>У каждого домена есть владелец <code>tropio_&lt;service&gt;_owner</code> и прикладная роль <code>tropio_&lt;service&gt;_runtime</code>. Обе роли имеют <code>NOLOGIN</code>. Исполнитель выполняет доменный SQL от роли владельца. Прикладной роли выдаются права на данные своей схемы без права создавать в ней объекты. Между схемами остаются ссылки по UUID, а внешние ключи действуют внутри схемы владельца. <a href="../../.agents/docs/er-diagram.md#9-межсервисные-ссылки-по-id">Границы владения</a> · <a href="../../backend/migrations/platform/0001_initial.sql">Настройка ролей</a></p>
+      <p>Travel фиксирует состав операции до запроса удержания Geo. Geo фиксирует ревизию маршрута до установки её как текущей или выдачи удержания. SQL защищает закреплённый состав, геометрию и версии положения POI от изменения прикладной ролью. <a href="../travel/publication.html">Публикация Travel/Geo</a> · <a href="../route-editor/poi-privacy.html">Приватность POI</a></p>
+    </section>
+
+    <section aria-labelledby="history">
+      <h2 id="history">История, транзакция и сбои</h2>
+      <p>Служебная таблица <code>tropio_migrations.applied</code> доступна администратору и хранит владельца, номер версии, имя файла, SHA-256 его содержимого и время применения. Прикладные роли доступа к схеме журнала не получают. Перед изменением доменных схем исполнитель проверяет непрерывность истории и соответствие имён и контрольных сумм файлам. <a href="../../backend/migrations/migrate.mjs">Журнал и проверка истории</a></p>
+      <p>Исполнитель применяет ожидающие миграции и записывает их в журнал в одной транзакции под блокировкой PostgreSQL. Повторный запуск пропускает уже применённые версии. При ошибке SQL изменения текущего запуска и его записи журнала откатываются вместе. Если имя или содержимое файла применённой версии изменилось, исполнитель останавливается. Восстанови исходный файл и добавь следующую версию в каталоге владельца. <a href="../../backend/migrations/compose-sql.mjs">Вызов psql</a> · <a href="../../AGENTS.md#миграции-и-идентификаторы">Правила миграций Tropio</a></p>
+    </section>
+
+    <section aria-labelledby="checks">
+      <h2 id="checks">Проверочные базы</h2>
+      <ol>
+        <li>Скрипт создаёт чистую временную базу из <code>template0</code>, устанавливает PostGIS через миграцию, проверяет схему, права и ограничения, затем повторяет запуск без новых записей журнала.</li>
+        <li>Во второй временной базе скрипт заранее устанавливает PostGIS и применяет текущие миграции. После добавления проверочной записи он создаёт искусственную следующую миграцию во временной копии файлов.</li>
+        <li>Искусственная ошибка проверяет откат схемы и журнала. Исправленный тестовый файл проверяет обновление с сохранением данных и безопасный повтор. Изменение применённого тестового файла проверяет отказ при несовпадении SHA-256.</li>
+      </ol>
+      <p>Проверочные базы удаляются после прогона. Искусственное обновление проверяет переход от текущего набора файлов к следующей версии в тесте. <a href="../../backend/migrations/verify.mjs">Сценарии проверки</a> · <a href="../../backend/migrations/verify.sql">Контрактные проверки SQL</a> · <a href="../../.agents/docs/tropio_tz_v1.1.md#23-логическая-модель-данных">Модель в ТЗ</a></p>
+    </section>
+  </main>
+</body>
+</html>
