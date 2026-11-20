@@ -80,7 +80,7 @@
 
     <section aria-labelledby="api">
       <h2 id="api">Операции API</h2>
-      <p>Проект BFF <code>0.1.0</code> использует UUID и префикс <code>/api/v1</code>. Для записи требуются действующая сессия, <code>X-CSRF-Token</code> и ключ <code>Idempotency-Key</code> в формате UUID. Если результат записи не подтверждён, повтор отправляет тот же ключ и те же параметры. <a href="../../.agents/docs/poc-04/openapi.yaml">OpenAPI GIS MVP</a></p>
+      <p>Проект BFF <code>0.1.0</code> использует UUID и префикс <code>/api/v1</code>. Для записи требуются действующая сессия, <code>X-CSRF-Token</code> и ключ <code>Idempotency-Key</code> в формате UUID. Если результат записи не подтверждён, повтор отправляет тот же ключ и те же параметры. <a href="../contracts/openapi.yaml">OpenAPI GIS MVP</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Операции API приватности POI">
         <table>
           <thead><tr><th scope="col">Ручка</th><th scope="col">Право и результат</th></tr></thead>
@@ -175,7 +175,7 @@
         <li><strong>Поля карточки владельца.</strong> <code>PoiVisibilityResult</code> возвращает видимость и статус модерации после записи. Для открытия существующей карточки форма тоже требует эти поля и контекст поездки. Проект <code>Poi</code> перечисляет содержимое места, фото и доступный редактору UUID ревизии.</li>
         <li><strong>Копирование и роли.</strong> Копирование чужих маршрутов, лицензии, делегирование и права участника остаются открытыми частями OD-05/06.</li>
       </ul>
-      <p><a href="../../.agents/docs/tropio_tz_v1.1.md#od-06-приватность-poi-в-gis-mvp">Реестр решений</a> · <a href="../../.agents/docs/poc-04/openapi.yaml">Текущий срез OpenAPI</a></p>
+      <p><a href="../../.agents/docs/tropio_tz_v1.1.md#od-06-приватность-poi-в-gis-mvp">Реестр решений</a> · <a href="../contracts/openapi.yaml">Текущий срез OpenAPI</a></p>
     </section>
   </main>
 </body>

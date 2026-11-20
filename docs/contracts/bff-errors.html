@@ -11,7 +11,7 @@
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Контракты, дизайн и приёмка</nav>
     <h1>Ошибки BFF и восстановление</h1>
     <p>HTTP-статус сообщает исход запроса, а машинный <code>code</code> помогает выбрать действие в интерфейсе. После потери ответа команда могла уже сохраниться. В таком случае клиент проверяет известную операцию или повторяет исходный запрос с тем же ключом. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#5-общие-соглашения-api">Соглашения POC-04</a></p>
-    <p class="document-note"><strong>Статус.</strong> Статья описывает проект внешнего API GIS MVP <code>0.1.0</code>. Реакции клиента сведены из сценариев ТЗ и POC-04. Варианты интерфейса и параметры повторов уточняются при реализации. Текущий health-маршрут Nuxt при недоступности BFF возвращает <code>502</code>. <a href="../../.agents/docs/poc-04/openapi.yaml">OpenAPI</a> · <a href="../../.agents/docs/MEMORY.md#что-уже-работает">Что уже работает</a></p>
+    <p class="document-note"><strong>Статус.</strong> Статья описывает проект внешнего API GIS MVP <code>0.1.0</code>. Реакции клиента сведены из сценариев ТЗ и POC-04. Варианты интерфейса и параметры повторов уточняются при реализации. Текущий health-маршрут Nuxt при недоступности BFF возвращает <code>502</code>. <a href="openapi.yaml">OpenAPI</a> · <a href="../../.agents/docs/MEMORY.md#что-уже-работает">Что уже работает</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
@@ -26,7 +26,7 @@
 
     <section aria-labelledby="response">
       <h2 id="response">Формат ответа</h2>
-      <p>Отказы POC-04 описаны как <code>application/problem+json</code> со схемой <code>Problem</code>. Проект добавляет к ответам <code>X-Request-Id</code> и <code>Cache-Control: no-store</code>. Identity удостоверяет сессию, Travel и Geo проверяют объектные права. Клиент выбирает реакцию по HTTP-статусу и <code>code</code>. <a href="../../.agents/docs/poc-04/openapi.yaml">Схема Problem</a> · <a href="../../.agents/docs/microservices.md#31-внешние-api">Границы BFF</a></p>
+      <p>Отказы POC-04 описаны как <code>application/problem+json</code> со схемой <code>Problem</code>. Проект добавляет к ответам <code>X-Request-Id</code> и <code>Cache-Control: no-store</code>. Identity удостоверяет сессию, Travel и Geo проверяют объектные права. Клиент выбирает реакцию по HTTP-статусу и <code>code</code>. <a href="openapi.yaml">Схема Problem</a> · <a href="../../.agents/docs/microservices.md#31-внешние-api">Границы BFF</a></p>
       <ul>
         <li><code>type</code> — ссылка на тип ошибки, <code>title</code> — краткий заголовок, <code>status</code> — статус HTTP, <code>code</code> — машинный код, <code>request_id</code> — UUID запроса для диагностики.</li>
         <li>В конфликте могут прийти <code>current_trip_revision_id</code>, <code>current_route_revision_id</code> или <code>current_poi_revision_id</code>. Сервер раскрывает актуальную ревизию только после проверки прав. Клиент перечитывает объект перед новым изменением.</li>
@@ -104,6 +104,7 @@
 
     <section aria-labelledby="acceptance">
       <h2 id="acceptance">Приёмка</h2>
+      <p>С первой продуктовой операции допустимые пары HTTP-статуса и машинного <code>code</code> фиксируются в OpenAPI. Интеграционные тесты в CI проверяют статус, код и формат <code>application/problem+json</code> в реальных HTTP-ответах BFF. При подключении операции клиентские тесты проверяют реакцию интерфейса на эти ответы и на сетевой сбой, если он влияет на сценарий. При изменении контракта ошибок тесты и затронутые статьи справочника обновляют в том же шаге. <a href="openapi.yaml">OpenAPI</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Кейсы проверки ошибок и восстановления">
         <table>
           <thead><tr><th scope="col">Кейс</th><th scope="col">Что проверить</th><th scope="col">Ожидаемый результат</th></tr></thead>

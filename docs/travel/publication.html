@@ -59,7 +59,7 @@
 
     <section aria-labelledby="api">
       <h2 id="api">Операции API</h2>
-      <p>Проект BFF <code>0.1.0</code>. Пути используют UUID и префикс <code>/api/v1</code>. Для команд нужны сессия, <code>X-CSRF-Token</code>, <code>Idempotency-Key</code> в формате UUID и JSON-тело. Публичные операции используют гостевой контекст даже при наличии сессии. Ответы проекта содержат <code>Cache-Control: no-store</code> и <code>X-Request-Id</code>. <a href="../../.agents/docs/poc-04/openapi.yaml">OpenAPI GIS MVP</a></p>
+      <p>Проект BFF <code>0.1.0</code>. Пути используют UUID и префикс <code>/api/v1</code>. Для команд нужны сессия, <code>X-CSRF-Token</code>, <code>Idempotency-Key</code> в формате UUID и JSON-тело. Публичные операции используют гостевой контекст даже при наличии сессии. Ответы проекта содержат <code>Cache-Control: no-store</code> и <code>X-Request-Id</code>. <a href="../contracts/openapi.yaml">OpenAPI GIS MVP</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Операции API публикации">
         <table>
           <thead><tr><th scope="col">Ручка</th><th scope="col">Назначение и ответ</th></tr></thead>
@@ -137,7 +137,7 @@
         </table>
       </div>
       <h3>Бизнес-отказы операции</h3>
-      <p>Опрос и повтор завершённого запроса могут вернуть HTTP <code>200</code> с <code>status: failed</code>. Клиент выбирает реакцию по <code>code</code> из <code>PublicationFailed</code>. <a href="../../.agents/docs/poc-04/openapi.yaml">Схема OpenAPI</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#2-запись-и-публикация">Условия завершения</a></p>
+      <p>Опрос и повтор завершённого запроса могут вернуть HTTP <code>200</code> с <code>status: failed</code>. Клиент выбирает реакцию по <code>code</code> из <code>PublicationFailed</code>. <a href="../contracts/openapi.yaml">Схема OpenAPI</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#2-запись-и-публикация">Условия завершения</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Бизнес-отказы публикации">
         <table>
           <thead><tr><th scope="col">Код</th><th scope="col">Причина и восстановление</th></tr></thead>

@@ -41,12 +41,11 @@ const excluded = new Set(['generated', 'node_modules']);
 const markdown = filesIn(handbook, '.md', excluded);
 const htmlPages = filesIn(handbook, '.html', excluded)
   .filter((path) => path !== join(handbook, 'index.html'));
-const files = [...markdown, ...htmlPages];
+const files = [...markdown, ...htmlPages, join(handbook, 'contracts', 'openapi.yaml')];
 if (includeLocal) {
   files.push(...filesIn(localDocs, '.md', excluded));
   files.push(...[
     join(project, 'AGENTS.md'),
-    join(localDocs, 'poc-04', 'openapi.yaml'),
     join(localDocs, 'poc-04', 'events.schema.json'),
     join(localDocs, 'poc-04', 'events.examples.json'),
   ].filter((path) => existsSync(path)));

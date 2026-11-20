@@ -1,0 +1,862 @@
+openapi: 3.1.1
+info:
+  title: Tropio GIS MVP
+  version: 0.1.0
+  description: |
+    Проект POC-04 для внешнего API BFF. URL и UUID-ревизии относятся к предложению.
+    Каждый ответ этого контракта получает Cache-Control: no-store и X-Request-Id.
+    Недоступные или неизвестные объекты дают одинаковый 404. Публичные операции
+    используют гостевой контекст, даже если браузер отправил сессию.
+servers:
+  - url: /api/v1
+security:
+  - session: []
+paths:
+  /trips/{tripId}/draft:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+    get:
+      operationId: getTripDraft
+      summary: Получить черновик поездки для редактора
+      responses:
+        '200':
+          description: Текущие поля Travel и привязки маршрутов дня
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /routes/{routeId}:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+    get:
+      operationId: getRouteDraft
+      summary: Получить текущую ревизию Geo для редактора
+      responses:
+        '200':
+          description: Черновик маршрута либо безопасный результат с UUID ревизии для пересборки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteDraft'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /tracks/{trackId}/split:
+    parameters:
+      - name: trackId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+    post:
+      operationId: splitTrack
+      summary: Разделить трек в ожидаемой ревизии Geo
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SplitCommand'
+      responses:
+        '200':
+          description: Операция зафиксирована в Geo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /trips/{tripId}/publish:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+    post:
+      operationId: publishTrip
+      summary: Запустить явную публикацию набора точных ревизий
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishCommand'
+      responses:
+        '202':
+          description: Операция записана, результат ожидается
+          headers:
+            Location:
+              description: Относительный URL состояния этой операции
+              required: true
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationPending'
+        '200':
+          description: Результат существующей завершённой операции с тем же ключом
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationTerminal'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /trips/{tripId}/publication-operations/{operationId}:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+      - name: operationId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+    get:
+      operationId: getPublicationOperation
+      summary: Получить состояние операции публикации
+      responses:
+        '200':
+          description: Состояние, видимое текущему уполномоченному инициатору
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationOperation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /trips/{tripId}/unpublish:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+    post:
+      operationId: unpublishTrip
+      summary: Снять текущую публикацию и остановить конкурентные публикации
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnpublishCommand'
+      responses:
+        '200':
+          description: Travel вернул пустой указатель после снятия, отмены подготовки или подтверждения уже пустого состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnpublishResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /catalog/trips:
+    get:
+      operationId: listPublicTrips
+      summary: Получить общий набор результатов для списка и карты
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Bbox'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Публичные строки после актуальной серверной фильтрации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicTripPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /catalog/trips/{tripId}:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+    get:
+      operationId: getPublicTrip
+      summary: Получить актуальный опубликованный снимок с картой и днями
+      security: []
+      responses:
+        '200':
+          description: Один опубликованный снимок с проверенными Geo-данными
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicTrip'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /pois:
+    get:
+      operationId: listPois
+      summary: Получить доступные POI в одном из трёх режимов
+      security:
+        - session: []
+        - {}
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          description: trip требует trip_id и действующих полномочий. mine требует сессии. global всегда имеет гостевой контекст.
+          schema:
+            type: string
+            enum: [global, mine, trip]
+        - name: trip_id
+          in: query
+          description: Обязателен ровно для scope=trip. UUID поездки слоя, а не источник полномочий.
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - name: q
+          in: query
+          description: Поиск по имени среди доступных POI в выбранном слое.
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 100
+        - $ref: '#/components/parameters/Bbox'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: POI после ACL и модерации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoiPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /pois/{poiId}:
+    parameters:
+      - $ref: '#/components/parameters/PoiId'
+    get:
+      operationId: getPoi
+      summary: Получить POI после проверки его действующей видимости
+      security:
+        - session: []
+        - {}
+      responses:
+        '200':
+          description: Разрешённые поля POI
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poi'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /pois/{poiId}/visibility:
+    parameters:
+      - $ref: '#/components/parameters/PoiId'
+    patch:
+      operationId: changePoiVisibility
+      summary: Изменить область видимости POI
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePoiVisibility'
+      responses:
+        '200':
+          description: Новая ревизия и фактическое состояние после записи Geo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoiVisibilityResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /trips/{tripId}/pois/{poiId}:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+      - $ref: '#/components/parameters/PoiId'
+    put:
+      operationId: attachExistingPoi
+      summary: Привязать существующую POI к черновику поездки
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Geo подтвердил наличие разрешённой связи с тем же UUID POI
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /pois/{poiId}/media/{mediaId}:
+    parameters:
+      - $ref: '#/components/parameters/PoiId'
+      - name: mediaId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+    get:
+      operationId: getPoiMedia
+      summary: Получить изображение после проверки POI и самого медиа
+      security:
+        - session: []
+        - {}
+      responses:
+        '200':
+          description: Проверенные байты. GIS MVP отдаёт целый объект в пределах лимита загрузки.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: tropio_session
+      description: Рабочее имя сессионной cookie. Identity и защита CSRF уточняются в GIS-02.
+  parameters:
+    TripId:
+      name: tripId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    RouteId:
+      name: routeId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    PoiId:
+      name: poiId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Новый UUID на новую команду. Повтор использует тот же ключ и те же входные параметры.
+      schema:
+        $ref: '#/components/schemas/Uuid'
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 1024
+    Bbox:
+      name: bbox
+      in: query
+      style: form
+      explode: false
+      description: west,south,east,north в WGS 84. Пересечение антимеридиана в этом контракте не поддерживается.
+      schema:
+        type: array
+        minItems: 4
+        maxItems: 4
+        items:
+          type: number
+    Cursor:
+      name: cursor
+      in: query
+      description: Непрозрачный токен BFF для тех же фильтров и контекста доступа.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 1024
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 30
+  responses:
+    BadRequest:
+      description: Некорректный запрос, UUID, фильтр или обязательный заголовок
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthenticated:
+      description: Для операции нужна действующая сессия
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ForbiddenRequest:
+      description: Запрос отклонён защитой CSRF
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Объект отсутствует или недоступен в этом контексте
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Изменилась ожидаемая ревизия или уже использован ключ команды
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: Запрос формально корректен, но нарушает доменный инвариант
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unavailable:
+      description: Обязательный владелец состояния или прав временно недоступен
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    NullableUuid:
+      anyOf:
+        - $ref: '#/components/schemas/Uuid'
+        - type: 'null'
+    LonLat:
+      type: object
+      additionalProperties: false
+      required: [lon, lat]
+      properties:
+        lon: {type: number, minimum: -180, maximum: 180}
+        lat: {type: number, minimum: -90, maximum: 90}
+    Position:
+      type: array
+      description: Пара WGS 84 в порядке longitude, latitude.
+      prefixItems:
+        - {type: number, minimum: -180, maximum: 180}
+        - {type: number, minimum: -90, maximum: 90}
+      minItems: 2
+      items: false
+    LineString:
+      type: object
+      additionalProperties: false
+      required: [type, coordinates]
+      properties:
+        type: {type: string, const: LineString}
+        coordinates:
+          type: array
+          minItems: 2
+          items:
+            $ref: '#/components/schemas/Position'
+    TripDraft:
+      type: object
+      additionalProperties: false
+      required: [trip_id, trip_revision_id, publication_id, visibility, title, days]
+      properties:
+        trip_id: {$ref: '#/components/schemas/Uuid'}
+        trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+        publication_id: {$ref: '#/components/schemas/NullableUuid'}
+        visibility: {type: string, enum: [public, private]}
+        title: {type: string}
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/DraftDay'
+    DraftDay:
+      type: object
+      additionalProperties: false
+      required: [day_id, position, route_id]
+      properties:
+        day_id: {$ref: '#/components/schemas/Uuid'}
+        position: {type: integer, minimum: 1}
+        route_id: {$ref: '#/components/schemas/NullableUuid'}
+    RouteDraft:
+      oneOf:
+        - $ref: '#/components/schemas/ReadableRouteDraft'
+        - $ref: '#/components/schemas/RestrictedRouteDraft'
+    ReadableRouteDraft:
+      type: object
+      additionalProperties: false
+      required: [availability, route_id, route_revision_id, points, tracks]
+      properties:
+        availability: {type: string, const: available}
+        route_id: {$ref: '#/components/schemas/Uuid'}
+        route_revision_id: {$ref: '#/components/schemas/Uuid'}
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoutePoint'
+        tracks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Track'
+    RestrictedRouteDraft:
+      type: object
+      additionalProperties: false
+      required: [availability, route_id, route_revision_id]
+      properties:
+        availability: {type: string, const: geometry_restricted}
+        route_id: {$ref: '#/components/schemas/Uuid'}
+        route_revision_id: {$ref: '#/components/schemas/Uuid'}
+    RoutePoint:
+      type: object
+      additionalProperties: false
+      required: [point_id, position]
+      properties:
+        point_id: {$ref: '#/components/schemas/Uuid'}
+        position: {$ref: '#/components/schemas/LonLat'}
+        poi_id: {$ref: '#/components/schemas/Uuid'}
+    Track:
+      type: object
+      additionalProperties: false
+      required: [track_id, start_point_id, end_point_id, geometry, status]
+      properties:
+        track_id: {$ref: '#/components/schemas/Uuid'}
+        start_point_id: {$ref: '#/components/schemas/Uuid'}
+        end_point_id: {$ref: '#/components/schemas/Uuid'}
+        geometry: {$ref: '#/components/schemas/LineString'}
+        status: {type: string, enum: [ready, needs_rebuild]}
+    SplitCommand:
+      type: object
+      additionalProperties: false
+      required: [route_id, route_revision_id, split_position]
+      properties:
+        route_id: {$ref: '#/components/schemas/Uuid'}
+        route_revision_id: {$ref: '#/components/schemas/Uuid'}
+        split_position: {$ref: '#/components/schemas/LonLat'}
+    SplitResult:
+      type: object
+      additionalProperties: false
+      required: [route_id, route_revision_id, point_id, track_ids]
+      properties:
+        route_id: {$ref: '#/components/schemas/Uuid'}
+        route_revision_id: {$ref: '#/components/schemas/Uuid'}
+        point_id: {$ref: '#/components/schemas/Uuid'}
+        track_ids:
+          type: array
+          minItems: 2
+          maxItems: 2
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Uuid'
+    PublishCommand:
+      type: object
+      additionalProperties: false
+      required: [trip_revision_id, routes, poi_ids]
+      properties:
+        trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+        routes:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: Один элемент на день черновика в порядке дней. Принадлежность, полноту и уникальность проверяет Travel.
+          items:
+            $ref: '#/components/schemas/PublishRoute'
+        poi_ids:
+          type: array
+          maxItems: 500
+          uniqueItems: true
+          description: Явно выбранные глобальные POI для отдельного слоя. Пустой массив отключает слой.
+          items:
+            $ref: '#/components/schemas/Uuid'
+    PublishRoute:
+      type: object
+      additionalProperties: false
+      required: [day_id, route_id, route_revision_id]
+      properties:
+        day_id: {$ref: '#/components/schemas/Uuid'}
+        route_id: {$ref: '#/components/schemas/Uuid'}
+        route_revision_id: {$ref: '#/components/schemas/Uuid'}
+    PublicationPending:
+      type: object
+      additionalProperties: false
+      required: [operation_id, status]
+      properties:
+        operation_id: {$ref: '#/components/schemas/Uuid'}
+        status: {type: string, const: pending}
+    PublicationSucceeded:
+      type: object
+      additionalProperties: false
+      required: [operation_id, status, publication_id, trip_revision_id]
+      properties:
+        operation_id: {$ref: '#/components/schemas/Uuid'}
+        status: {type: string, const: succeeded}
+        publication_id:
+          $ref: '#/components/schemas/Uuid'
+          description: ID снимка, записанного этой операцией. Актуальная публичная доступность проверяется отдельно.
+        trip_revision_id:
+          $ref: '#/components/schemas/Uuid'
+          description: Ревизия поездки сразу после операции. Запрос черновика возвращает текущее значение.
+    PublicationFailed:
+      type: object
+      additionalProperties: false
+      required: [operation_id, status, code]
+      properties:
+        operation_id: {$ref: '#/components/schemas/Uuid'}
+        status: {type: string, const: failed}
+        code:
+          type: string
+          enum: [TRIP_REVISION_CONFLICT, ROUTE_REVISION_CONFLICT, ROUTE_NOT_READY, POI_PUBLICATION_RESTRICTED, PUBLICATION_PRECONDITION_FAILED, PUBLICATION_CANCELLED, PUBLICATION_TIMED_OUT]
+    PublicationTerminal:
+      oneOf:
+        - $ref: '#/components/schemas/PublicationSucceeded'
+        - $ref: '#/components/schemas/PublicationFailed'
+    PublicationOperation:
+      oneOf:
+        - $ref: '#/components/schemas/PublicationPending'
+        - $ref: '#/components/schemas/PublicationSucceeded'
+        - $ref: '#/components/schemas/PublicationFailed'
+    UnpublishCommand:
+      type: object
+      additionalProperties: false
+      required: [trip_revision_id, publication_id]
+      properties:
+        trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+        publication_id:
+          $ref: '#/components/schemas/NullableUuid'
+          description: Текущий указатель. null позволяет остановить ещё не завершённую первую публикацию.
+    UnpublishResult:
+      type: object
+      additionalProperties: false
+      required: [publication_id, trip_revision_id]
+      properties:
+        publication_id: {type: 'null'}
+        trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+    PublicTripSummary:
+      type: object
+      additionalProperties: false
+      required: [trip_id, publication_id, title, start]
+      properties:
+        trip_id: {$ref: '#/components/schemas/Uuid'}
+        publication_id: {$ref: '#/components/schemas/Uuid'}
+        title: {type: string}
+        start:
+          $ref: '#/components/schemas/LonLat'
+          description: Первая точка разрешённой закреплённой Geo-ревизии первого дня.
+    PublicTrip:
+      type: object
+      additionalProperties: false
+      required: [trip_id, publication_id, title, description, days, pois]
+      properties:
+        trip_id: {$ref: '#/components/schemas/Uuid'}
+        publication_id: {$ref: '#/components/schemas/Uuid'}
+        title: {type: string}
+        description: {type: string}
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicDay'
+        pois:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicPoi'
+    PublicDay:
+      type: object
+      additionalProperties: false
+      required: [position, lines]
+      properties:
+        position: {type: integer, minimum: 1}
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/LineString'
+    PublicTripPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicTripSummary'
+        next_cursor: {type: [string, 'null']}
+    PublicPoi:
+      type: object
+      additionalProperties: false
+      required: [poi_id, name, position]
+      properties:
+        poi_id: {$ref: '#/components/schemas/Uuid'}
+        name: {type: string}
+        position: {$ref: '#/components/schemas/LonLat'}
+    Poi:
+      type: object
+      additionalProperties: false
+      required: [poi_id, name, position, media]
+      properties:
+        poi_id: {$ref: '#/components/schemas/Uuid'}
+        name: {type: string}
+        description: {type: string}
+        position: {$ref: '#/components/schemas/LonLat'}
+        poi_revision_id:
+          $ref: '#/components/schemas/Uuid'
+          description: Присутствует только при праве изменять видимость в авторизованном контексте.
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/PoiMedia'
+    PoiMedia:
+      type: object
+      additionalProperties: false
+      required: [media_id, href]
+      properties:
+        media_id: {$ref: '#/components/schemas/Uuid'}
+        href:
+          type: string
+          format: uri-reference
+          description: Относительная ссылка BFF, доступ проверяется заново при её открытии.
+    PoiPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Poi'
+        next_cursor: {type: [string, 'null']}
+    ChangePoiVisibility:
+      type: object
+      additionalProperties: false
+      required: [poi_revision_id, visibility]
+      properties:
+        poi_revision_id: {$ref: '#/components/schemas/Uuid'}
+        visibility: {type: string, enum: [global, private, trip]}
+        scope_trip_id: {$ref: '#/components/schemas/Uuid'}
+      if:
+        properties:
+          visibility: {const: trip}
+      then:
+        required: [scope_trip_id]
+      else:
+        not:
+          required: [scope_trip_id]
+    PoiVisibilityResult:
+      type: object
+      additionalProperties: false
+      required: [poi_id, poi_revision_id, visibility, moderation_status]
+      properties:
+        poi_id: {$ref: '#/components/schemas/Uuid'}
+        poi_revision_id: {$ref: '#/components/schemas/Uuid'}
+        visibility: {type: string, enum: [global, private, trip]}
+        moderation_status: {type: string, enum: [pending, approved, rejected]}
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, request_id]
+      properties:
+        type: {type: string, format: uri-reference}
+        title: {type: string}
+        status: {type: integer, minimum: 400, maximum: 599}
+        code: {type: string}
+        request_id: {$ref: '#/components/schemas/Uuid'}
+        current_trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+        current_route_revision_id: {$ref: '#/components/schemas/Uuid'}
+        current_poi_revision_id: {$ref: '#/components/schemas/Uuid'}

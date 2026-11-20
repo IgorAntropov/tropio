@@ -90,7 +90,7 @@
 
     <section aria-labelledby="api">
       <h2 id="api">Операции API</h2>
-      <p>В POC-04 нет команд переноса и отмены. В § 24 ТЗ указан общий проектный путь <code>PATCH /api/v1/trips/{id}</code>. У него пока нет схемы для этих действий. Существующий <code>POST /api/v1/trips/{tripId}/unpublish</code> изменяет указатель публикации. Отмене требуется отдельный бизнес-переход жизненного цикла и закрытие набора. <a href="../../.agents/docs/tropio_tz_v1.1.md#24-api-контракты-проект-интерфейсов">Проект путей в ТЗ</a> · <a href="../../.agents/docs/poc-04/openapi.yaml">Срез OpenAPI</a> · <a href="publication.html#api">Операции публикации</a></p>
+      <p>В POC-04 нет команд переноса и отмены. В § 24 ТЗ указан общий проектный путь <code>PATCH /api/v1/trips/{id}</code>. У него пока нет схемы для этих действий. Существующий <code>POST /api/v1/trips/{tripId}/unpublish</code> изменяет указатель публикации. Отмене требуется отдельный бизнес-переход жизненного цикла и закрытие набора. <a href="../../.agents/docs/tropio_tz_v1.1.md#24-api-контракты-проект-интерфейсов">Проект путей в ТЗ</a> · <a href="../contracts/openapi.yaml">Срез OpenAPI</a> · <a href="publication.html#api">Операции публикации</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Операции для будущего контракта выездов">
         <table>
           <thead><tr><th scope="col">Операция для согласования</th><th scope="col">Что нужно клиенту и серверу</th></tr></thead>
