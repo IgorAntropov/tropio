@@ -15,6 +15,7 @@
     <nav class="document-links" aria-label="На этой странице">
       <ul>
         <li><a href="#commands">Команды запуска</a></li>
+        <li><a href="#demo-data">Данные демостенда и их обновление</a></li>
         <li><a href="#owners">Миграции и роли по владельцам</a></li>
         <li><a href="#catalog">Справочники каталога и участие</a></li>
         <li><a href="#history">История, транзакция и сбои</a></li>
@@ -26,7 +27,8 @@
       <h2 id="commands">Команды запуска</h2>
       <p>Выполняй команды из корня репозитория при работающем Docker и заполненном локальном <code>.env</code>. <a href="../../package.json">Команды workspace</a> · <a href="../../compose.yaml">Конфигурация Compose</a></p>
       <ul>
-        <li><code>pnpm dev:all</code> поднимает сервисы Compose, ждёт готовности до 180 секунд, запускает <code>pnpm db:migrate</code>, настраивает подключения Identity, Travel и Geo и запускает NestJS и Nuxt. Для незаданного <code>TROPIO_IDENTITY_DATABASE_URL</code>, <code>TROPIO_TRAVEL_DATABASE_URL</code> или <code>TROPIO_GEO_DATABASE_URL</code> скрипт создаёт временную учётную запись PostgreSQL с ролью соответствующего сервиса и удаляет её при завершении. При ошибке миграций приложения не запускаются. <a href="../../backend/migrations/run-identity.mjs">Скрипт локального запуска</a> · <a href="../route-editor/geo-routing.html#providers">Отдельный запуск провайдеров Geo</a></li>
+        <li><code>pnpm dev:all</code> поднимает сервисы Compose, ждёт готовности до 180 секунд, запускает <code>pnpm db:migrate</code>, загружает новые версии демоданных и запускает NestJS и Nuxt. Для незаданного <code>TROPIO_IDENTITY_DATABASE_URL</code>, <code>TROPIO_TRAVEL_DATABASE_URL</code> или <code>TROPIO_GEO_DATABASE_URL</code> скрипт создаёт временную учётную запись PostgreSQL с ролью соответствующего сервиса и удаляет её при завершении. При ошибке миграций приложения не запускаются. <a href="../../backend/migrations/run-identity.mjs">Скрипт локального запуска</a> · <a href="../route-editor/geo-routing.html#providers">Отдельный запуск провайдеров Geo</a></li>
+        <li>Для запуска собранного приложения локально выполни <code>pnpm build</code>, затем <code>pnpm start:all</code>. Этот запуск также поднимает Compose, применяет миграции и загружает демоданные. Чтобы обновить уже работающий стенд, выполни <code>pnpm db:migrate</code>, затем <code>pnpm db:demo</code>. <a href="../identity/account.html#demo-login">Вход под тестовым пользователем</a></li>
         <li><code>pnpm db:migrate</code> применяет миграции к локальной базе через <code>psql</code> в уже запущенном сервисе <code>postgres</code>. Подключение использует административную учётную запись контейнера.</li>
         <li><code>pnpm db:test:migrations</code> использует тот же запущенный контейнер и отдельные временные базы для проверки миграций.</li>
         <li><code>pnpm db:test:identity</code> создаёт временную базу, применяет миграции и запускает HTTP-тесты Identity с временной учётной записью. Команда входит в <code>pnpm check</code>. Если PostgreSQL ещё не запущен, выполни <code>docker compose up -d --wait postgres</code>. <a href="../identity/account.html#acceptance">Приёмка Identity</a></li>
@@ -34,6 +36,14 @@
         <li><code>pnpm db:test:publication</code> проверяет публикацию, конкурентные команды и отзыв доступа к каталогу на временной базе с подключениями Identity, Travel и Geo. Команда входит в <code>pnpm check</code>. <a href="../travel/publication.html#acceptance">Сценарии GIS-06</a></li>
         <li><code>pnpm db:test:geo</code> создаёт отдельную временную базу, применяет миграции и запускает HTTP-тесты Geo с отдельными прикладными подключениями Identity, Travel и Geo. Команда входит в <code>pnpm check</code> и требует работающего <code>postgres</code>. <a href="../route-editor/geo-routing.html#acceptance">Приёмка Geo</a></li>
       </ul>
+    </section>
+
+    <section aria-labelledby="demo-data">
+      <h2 id="demo-data">Данные демостенда и их обновление</h2>
+      <p>На чистой базе загрузчик подготавливает тестового путешественника, профиль турфирмы, поездки и маршруты дней. Он выполняет операции Identity, Travel и Geo, затем публикует выбранные версии поездок и их маршрутов. Локальное приложение и статический каталог GitHub Pages используют общие UUID поездок. <a href="../travel/catalog.html#demo">Состав первой версии</a> · <a href="../../backend/local/travel-demo.ts">Загрузка поездок и публикация</a></p>
+      <p>После перезапуска Docker с тем же томом завершённые версии пропускаются. Поездки, созданные вручную, и правки пользователя сохраняются. Миграция Travel <code>0008</code> создаёт журнал <code>travel.local_demo_versions</code> с номером версии, именем файла, контрольной суммой SHA-256 и временем начала и завершения загрузки. Параллельные запуски применяют версии по очереди. Если загрузка прервалась, устрани причину и повтори <code>pnpm db:demo</code>. Загрузчик продолжит незавершённую версию по её исходному файлу. <a href="../../backend/migrations/travel/0008_local_demo_versions.sql">Схема журнала</a> · <a href="../../backend/local/demo-data.mts">Проверка истории и повтор загрузки</a></p>
+      <p>Когда меняются сценарии или модель данных демостенда, добавь в <code>fixtures/demo/</code> следующий файл, например <code>0002-add-trip.json</code> с полем <code>version: 2</code>. Используй последовательные номера. Для каждой новой поездки укажи уникальные UUID и slug. Сборка GitHub Pages автоматически читает все версии из этой папки. Сохраняй имена и содержимое выпущенных файлов, включая пробелы. Изменение применённого файла останавливает локальную загрузку из-за расхождения контрольной суммы. <a href="../../fixtures/demo/0001-travel.json">Формат первой версии</a> · <a href="../../frontend/src/pages/demo-trips/model/trips.ts">Сборка каталога GitHub Pages</a></p>
+      <p>Для нового сценария проверь установку на чистой базе, обновление заполненного стенда и повтор после ручного редактирования поездки. Сверь организаторов, публичные поездки и личные черновики локально и в сборке <code>pnpm --filter @tropio/frontend run generate:pages</code>. Команда <code>pnpm db:test:demo</code> входит в <code>pnpm check</code> и проверяет на временной базе гостевой каталог и маршруты, приватность черновика, ручные правки, конкурентный запуск и продолжение прерванной версии. <a href="../../backend/test/demo-http.test.ts">Проверки демоданных через BFF</a></p>
     </section>
 
     <section aria-labelledby="owners">

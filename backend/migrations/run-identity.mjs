@@ -2,6 +2,7 @@ import {
   spawn,
   spawnSync,
 } from 'node:child_process';
+import { warn } from 'node:console';
 import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import { resolve } from 'node:path';
@@ -10,6 +11,8 @@ import {
   fileURLToPath,
   URL,
 } from 'node:url';
+import { allowLocalDemoData } from '../local/demo-account.mts';
+import { applyLocalDemoData } from '../local/demo-data.mts';
 import { composeSql } from './compose-sql.mjs';
 import { applyMigrations } from './migrate.mjs';
 
@@ -86,7 +89,8 @@ async function testService(service) {
   try {
     applyMigrations({ database });
     const args = ['--filter', '@tropio/backend', 'exec', 'vitest', 'run', `test/${service}-http.test.ts`];
-    return await withDatabaseRoles(database, service === 'publication' ? services : services.slice(0, services.indexOf(service) + 1), true,
+    const required = services.includes(service) ? services.slice(0, services.indexOf(service) + 1) : services;
+    return await withDatabaseRoles(database, required, true,
       env => runPnpm(args, env));
   }
   finally {
@@ -94,16 +98,41 @@ async function testService(service) {
   }
 }
 
-async function startDevelopment() {
-  const proxySecret = process.env.TROPIO_BFF_PROXY_SECRET || randomBytes(32).toString('hex');
-  const run = env => runPnpm(['run', 'dev'], {
-    ...env,
-    TROPIO_AUTH_OUTBOX_DIR: process.env.TROPIO_AUTH_OUTBOX_DIR || resolve(root, '.local/identity-mail'),
-    TROPIO_BFF_PROXY_SECRET: proxySecret,
-    NUXT_BFF_PROXY_SECRET: proxySecret,
+async function runLocal(command) {
+  const seedOnly = command === 'demo-data';
+  const configured = services.map(service => process.env[`TROPIO_${service.toUpperCase()}_DATABASE_URL`]).filter(Boolean);
+  const skipped = 'Демонстрационные данные пропущены: базы Identity, Travel, Geo, BFF и адрес сайта должны быть локальными.';
+  if (seedOnly && !allowLocalDemoData(configured)) {
+    warn(skipped);
+    return 1;
+  }
+  const database = configured.length === services.length
+    ? undefined
+    : composeSql('COPY (SELECT current_database()) TO STDOUT;');
+  return withDatabaseRoles(database, services, false, async (env) => {
+    const seeded = await applyLocalDemoData({
+      identityUrl: env.TROPIO_IDENTITY_DATABASE_URL,
+      travelUrl: env.TROPIO_TRAVEL_DATABASE_URL,
+      geoUrl: env.TROPIO_GEO_DATABASE_URL,
+    });
+    if (!seeded) {
+      warn(skipped);
+    }
+    if (seedOnly) {
+      return seeded ? 0 : 1;
+    }
+
+    const proxySecret = process.env.TROPIO_BFF_PROXY_SECRET || randomBytes(32).toString('hex');
+    const args = command === 'dev' ? ['run', 'dev'] : ['-r', '--parallel', 'start'];
+    return runPnpm(args, {
+      ...env,
+      NITRO_HOST: '127.0.0.1',
+      NUXT_LOCAL_DEMO_LOGIN: seeded ? '1' : '0',
+      TROPIO_AUTH_OUTBOX_DIR: process.env.TROPIO_AUTH_OUTBOX_DIR || resolve(root, '.local/identity-mail'),
+      TROPIO_BFF_PROXY_SECRET: proxySecret,
+      NUXT_BFF_PROXY_SECRET: proxySecret,
+    });
   });
-  const database = composeSql('COPY (SELECT current_database()) TO STDOUT;');
-  return withDatabaseRoles(database, services, false, run);
 }
 
 const command = process.argv[2];
@@ -112,8 +141,14 @@ const testCommands = {
   'test-travel': 'travel',
   'test-geo': 'geo',
   'test-publication': 'publication',
+  'test-demo': 'demo',
 };
-if (command !== 'dev' && !Object.hasOwn(testCommands, command)) {
-  throw new Error('Укажи dev, test, test-travel, test-geo или test-publication');
+if (['dev', 'start', 'demo-data'].includes(command)) {
+  process.exitCode = await runLocal(command);
 }
-process.exitCode = await (command === 'dev' ? startDevelopment() : testService(testCommands[command]));
+else if (Object.hasOwn(testCommands, command)) {
+  process.exitCode = await testService(testCommands[command]);
+}
+else {
+  throw new Error('Неизвестная команда локального запуска');
+}

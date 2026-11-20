@@ -9,19 +9,22 @@
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "dev:all": "docker compose up -d --wait --wait-timeout 180 && pnpm db:migrate && node --env-file-if-exists=.env backend/migrations/run-identity.mjs dev",
+    "start:all": "docker compose up -d --wait --wait-timeout 180 && pnpm db:migrate && node --env-file-if-exists=.env backend/migrations/run-identity.mjs start",
+    "db:demo": "node --env-file-if-exists=.env backend/migrations/run-identity.mjs demo-data",
     "db:migrate": "node backend/migrations/migrate.mjs",
     "db:test:migrations": "node backend/migrations/verify.mjs",
     "db:test:identity": "node backend/migrations/run-identity.mjs test",
     "db:test:travel": "node backend/migrations/run-identity.mjs test-travel",
     "db:test:geo": "node backend/migrations/run-identity.mjs test-geo",
     "db:test:publication": "node backend/migrations/run-identity.mjs test-publication",
+    "db:test:demo": "node backend/migrations/run-identity.mjs test-demo",
     "build": "pnpm -r build",
     "lint": "pnpm lint:tools && pnpm -r lint",
     "lint:fix": "pnpm lint:tools --fix && pnpm -r lint:fix",
     "lint:tools": "eslint --config eslint.config.mjs . --max-warnings 0",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "check": "pnpm --filter @tropio/frontend api:types:check && pnpm lint && pnpm typecheck && pnpm test && pnpm db:test:identity && pnpm db:test:travel && pnpm db:test:geo && pnpm db:test:publication && pnpm build"
+    "check": "pnpm --filter @tropio/frontend api:types:check && pnpm lint && pnpm typecheck && pnpm test && pnpm db:test:identity && pnpm db:test:travel && pnpm db:test:geo && pnpm db:test:publication && pnpm db:test:demo && pnpm build"
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "5.10.0",

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isLoopbackHost } from '#shared/utils/loopback-host';
 import {
   identityApi,
   useIdentityAction,
@@ -16,7 +17,11 @@ import {
   passwordIssue,
 } from '../validation';
 
-const props = defineProps<{ mode: 'login' | 'register' | 'recovery' | 'verify' | 'reset' }>();
+type Credentials = { email: string; password: string };
+const props = defineProps<{
+  mode: 'login' | 'register' | 'recovery' | 'verify' | 'reset';
+  demoLogin?: { credentials: Credentials; signIn: (credentials: Credentials) => void; destination: string };
+}>();
 const { t } = useI18n();
 const route = useRoute();
 const resetFlow = props.mode === 'recovery' || props.mode === 'reset';
@@ -45,8 +50,8 @@ function rememberReturn() {
 }
 
 const prefilledEmail = useState('identity-recovery-email', () => '');
-const email = ref(props.mode === 'recovery' ? prefilledEmail.value : '');
-const password = ref('');
+const email = ref(props.demoLogin?.credentials.email ?? (props.mode === 'recovery' ? prefilledEmail.value : ''));
+const password = ref(props.demoLogin?.credentials.password ?? '');
 const showPassword = ref(false);
 const acceptedTerms = ref(false);
 const view = ref<'form' | 'sent' | 'done'>('form');
@@ -59,22 +64,25 @@ const needsPassword = computed(() => ['login', 'register', 'reset'].includes(pro
 const backToLogin = computed(() => props.mode === 'register' || props.mode === 'recovery');
 const loginForm = useTemplateRef<HTMLFormElement>('loginForm');
 let loginEdited = false;
-let developmentEmail: string | undefined;
+let testAccountEmail: string | undefined;
 
 function trackLoginInput(event: Event) {
-  if (import.meta.dev && props.mode === 'login') {
+  if (props.mode === 'login') {
     loginEdited = true;
     if (event.target instanceof HTMLInputElement && event.target.name === 'email') {
-      developmentEmail = undefined;
+      testAccountEmail = undefined;
     }
   }
 }
 
-if (import.meta.dev && props.mode === 'login') {
+if (props.mode === 'login' && !props.demoLogin) {
   const request = new AbortController();
   onBeforeUnmount(() => request.abort());
   onMounted(async () => {
-    const prefill = await $fetch<{ email: string; password: string } | undefined>('/api/dev/login-prefill', {
+    if (!isLoopbackHost(window.location.host)) {
+      return;
+    }
+    const prefill = await $fetch<Credentials>('/api/dev/login-prefill', {
       signal: request.signal,
     }).catch(() => undefined);
     if (!prefill || request.signal.aborted || loginEdited || email.value || password.value) {
@@ -88,8 +96,8 @@ if (import.meta.dev && props.mode === 'login') {
       return;
     }
 
-    developmentEmail = prefill.email;
-    email.value = developmentEmail;
+    testAccountEmail = prefill.email;
+    email.value = prefill.email;
     password.value = prefill.password;
   });
 }
@@ -145,6 +153,15 @@ onMounted(() => {
   findingToken.value = false;
 });
 
+async function signIn(credentials: Credentials, signal: AbortSignal) {
+  if (props.demoLogin) {
+    props.demoLogin.signIn(credentials);
+  }
+  else {
+    await identityApi.login(credentials, signal);
+  }
+}
+
 async function submit() {
   if (pending.value || invalidToken.value || !valid.value) {
     return;
@@ -155,10 +172,10 @@ async function submit() {
 
   switch (props.mode) {
     case 'login':
-      if (await run(signal => identityApi.login(credentials, signal), () => {
+      if (await run(signal => signIn(credentials, signal), () => {
         password.value = '';
       })) {
-        await navigateTo(returnTo.value ?? workspaceHome, { replace: true });
+        await navigateTo(props.demoLogin?.destination ?? returnTo.value ?? workspaceHome, { replace: true });
       }
       break;
     case 'register':
@@ -214,7 +231,7 @@ function editEmail() {
 
 function rememberEmail() {
   const address = email.value.trim();
-  prefilledEmail.value = import.meta.dev && address === developmentEmail ? '' : address;
+  prefilledEmail.value = address === testAccountEmail ? '' : address;
 }
 </script>
 
@@ -222,6 +239,7 @@ function rememberEmail() {
   <AccountPanel
     auth
     :back-to-login="backToLogin"
+    :catalog-link="demoLogin ? '/' : undefined"
     :class="{ 'account-surface-login': mode === 'login' }"
     :login-link="authLink('/login')"
     :title="title"
@@ -341,7 +359,7 @@ function rememberEmail() {
     </form>
     <p v-if="view === 'sent' && message" class="account-notice account-notice-error" role="alert">{{ t(message) }}</p>
     <nav
-      v-if="mode !== 'recovery'"
+      v-if="!demoLogin && mode !== 'recovery'"
       :aria-label="t('identity.navigation')"
       class="account-links"
       :class="{ 'account-login-prompt': mode === 'register' }"

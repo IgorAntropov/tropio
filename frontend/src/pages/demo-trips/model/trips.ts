@@ -1,39 +1,65 @@
-export interface DemoTrip {
-  slug: string;
-  title: string;
-  region: string;
-  distanceKm: number;
-  durationDays: number;
-  summary: string;
-  stops: readonly string[];
+import account from '../../../../../fixtures/demo-account.json';
+import type firstVersion from '../../../../../fixtures/demo/0001-travel.json';
+
+type DemoVersion = typeof firstVersion;
+
+function presentTrip(trip: DemoVersion['trips'][number], organizer: DemoVersion['organizer']) {
+  const mode = trip.transportMode;
+  if (mode !== 'car' && mode !== 'bicycle' && mode !== 'foot') {
+    throw new Error('Неизвестный тип маршрута');
+  }
+  if (!['company', 'traveler'].includes(trip.owner) || !['published', 'draft'].includes(trip.status)) {
+    throw new Error('Неизвестный организатор или статус поездки ' + trip.id);
+  }
+  const end = new Date(trip.startDate + 'T00:00:00Z');
+  end.setUTCDate(end.getUTCDate() + trip.days.length - 1);
+  const owner = trip.owner === 'company' ? organizer : account;
+  return {
+    ...trip,
+    organizerId: owner.id,
+    organizerName: owner.displayName,
+    facts: {
+      start_date: trip.startDate,
+      end_date: end.toISOString().slice(0, 10),
+      trip_type: mode,
+      free_capacity: trip.freeCapacity,
+      confirmed_participants: 0,
+      day_count: trip.days.length,
+    } as const,
+  };
 }
 
-export const demoTrips: readonly DemoTrip[] = [
-  {
-    slug: 'katun-terraces',
-    title: 'Террасы над Катунью',
-    region: 'Алтай',
-    distanceKm: 18,
-    durationDays: 2,
-    summary: 'Двухдневная прогулка от речной долины к обзорной поляне.',
-    stops: ['Сосновый берег', 'Верхняя терраса', 'Обзорная поляна'],
-  },
-  {
-    slug: 'quiet-bays',
-    title: 'По тихим бухтам',
-    region: 'Карелия',
-    distanceKm: 12,
-    durationDays: 1,
-    summary: 'Короткий маршрут вдоль воды с остановкой у гранитного мыса.',
-    stops: ['Лесная пристань', 'Гранитный мыс', 'Тихая бухта'],
-  },
-  {
-    slug: 'steppe-ridge',
-    title: 'Вдоль степного хребта',
-    region: 'Хакасия',
-    distanceKm: 24,
-    durationDays: 2,
-    summary: 'Маршрут по открытым склонам с видом на долину и выходом к озеру.',
-    stops: ['Степная тропа', 'Восточный гребень', 'Озёрный берег'],
-  },
-];
+export type DemoTrip = ReturnType<typeof presentTrip>;
+
+export function buildDemoCatalog(files: Record<string, DemoVersion>) {
+  const paths = Object.keys(files).sort();
+  if (!paths.length) {
+    throw new Error('Нет версий демонстрационных данных.');
+  }
+  const ids = new Set<string>();
+  const slugs = new Set<string>();
+  const trips = paths.flatMap((path, index) => {
+    const data = files[path]!;
+    const filename = path.split('/').at(-1)!;
+    if (!/^\d{4}-[a-z][a-z0-9-]*\.json$/.test(filename) || Number(filename.slice(0, 4)) !== index + 1
+      || data.version !== index + 1) {
+      throw new Error('Некорректная версия демонстрационных данных: ' + filename);
+    }
+    return data.trips.map((trip) => {
+      const id = trip.id.toLowerCase();
+      if (ids.has(id) || slugs.has(trip.slug)) {
+        throw new Error('Повтор UUID или slug демонстрационной поездки: ' + trip.slug);
+      }
+      ids.add(id);
+      slugs.add(trip.slug);
+      return presentTrip(trip, data.organizer);
+    });
+  });
+  return {
+    demoTrips: trips.filter(trip => trip.status === 'published'),
+    myDemoTrips: trips.filter(trip => trip.owner === 'traveler'),
+  };
+}
+
+const versions = import.meta.glob<DemoVersion>('../../../../../fixtures/demo/*.json', { eager: true, import: 'default' });
+export const { demoTrips, myDemoTrips } = buildDemoCatalog(versions);

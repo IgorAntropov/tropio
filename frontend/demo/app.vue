@@ -1,5 +1,18 @@
 <script setup lang="ts">
+import { useDemoAccount } from './composables/useDemoAccount';
+
 const { t, locale } = useI18n();
+const route = useRoute();
+const { displayName, signedIn, signOut } = useDemoAccount();
+const mounted = ref(false);
+onMounted(() => {
+  mounted.value = true;
+});
+
+async function logout() {
+  signOut();
+  await navigateTo('/');
+}
 
 useSeoMeta({ robots: 'noindex' });
 useHead(() => ({
@@ -9,9 +22,14 @@ useHead(() => ({
 
 <template>
   <div class="demo-shell font-sans">
-    <header class="demo-header demo-width flex items-center justify-between">
+    <header v-if="route.meta.layout !== false" class="demo-header demo-width flex items-center justify-between">
       <NuxtLink class="demo-wordmark" to="/">{{ t('productName') }}</NuxtLink>
-      <span>{{ t('demo.label') }}</span>
+      <nav :aria-label="t('identity.navigation')" class="demo-account">
+        <span>{{ mounted && signedIn ? displayName : t('demo.label') }}</span>
+        <NuxtLink v-if="mounted && signedIn" to="/trips/">{{ t('workspace.trips') }}</NuxtLink>
+        <button v-if="mounted && signedIn" type="button" @click="logout">{{ t('identity.logout') }}</button>
+        <NuxtLink v-else to="/login/">{{ t('identity.login.submit') }}</NuxtLink>
+      </nav>
     </header>
     <NuxtPage />
   </div>
@@ -57,6 +75,50 @@ body {
   color: var(--muted);
 }
 
+.demo-account {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  margin-inline-start: 1rem;
+  text-align: end;
+  line-height: 1.25;
+}
+
+.demo-account a,
+.demo-account button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: .22em;
+  cursor: pointer;
+}
+
+.demo-account button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+
+@media (max-width: 40rem) {
+  .demo-header:has(.demo-account button) {
+    display: grid;
+    gap: .25rem;
+    padding-block: .75rem;
+  }
+
+  .demo-account:has(button) {
+    flex-wrap: wrap;
+    gap: 0 1rem;
+    margin: 0;
+    text-align: start;
+  }
+}
+
 .demo-header .demo-wordmark {
   color: var(--ink);
   font-family: Georgia, serif;
@@ -78,6 +140,7 @@ body {
   font-weight: 400;
   line-height: 1.03;
   letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
 }
 
 .demo-summary {

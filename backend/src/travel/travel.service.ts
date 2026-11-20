@@ -297,7 +297,9 @@ export class TravelService {
     return this.database.transaction(client => getDraft(client, ownerId, tripId));
   }
 
-  async createTrip(editor: TravelEditor, key: string, input: Partial<TripFields> & Pick<TripFields, 'title'>): Promise<TripDraft> {
+  async createTrip(
+    editor: TravelEditor, key: string, input: Partial<TripFields> & Pick<TripFields, 'title'>, tripId?: string,
+  ): Promise<TripDraft> {
     const { title, description = null, start_date = null, end_date = null, timezone = null, free_capacity = null,
       difficulty = null, participation_rules = null, equipment = [], admission_mode = 'request' } = input;
     const command = makeCommand(editor.userId, 'trip.create', editor.userId, key, {
@@ -311,6 +313,7 @@ export class TravelService {
       participation_rules,
       equipment,
       ...(admission_mode === 'open' ? { admission_mode } : {}),
+      ...(tripId ? { trip_id: tripId } : {}),
     });
 
     return this.database.transaction(async (client) => {
@@ -333,10 +336,10 @@ export class TravelService {
 
       assertTripDates({ start_date, end_date });
       const { rows: [trip] } = await client.query<{ id: string }>(
-        `INSERT INTO travel.trips (owner_user_id, created_by_user_id, title, description, start_date, end_date, timezone,
+        `INSERT INTO travel.trips (id, owner_user_id, created_by_user_id, title, description, start_date, end_date, timezone,
            free_capacity, difficulty, participation_rules, admission_mode)
-         VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-        [editor.userId, title, description, start_date, end_date, timezone, free_capacity, difficulty, participation_rules, admission_mode],
+         VALUES (COALESCE($11::uuid, gen_random_uuid()), $1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+        [editor.userId, title, description, start_date, end_date, timezone, free_capacity, difficulty, participation_rules, admission_mode, tripId],
       );
       if (!trip) {
         throw new BffProblem('DEPENDENCY_UNAVAILABLE');

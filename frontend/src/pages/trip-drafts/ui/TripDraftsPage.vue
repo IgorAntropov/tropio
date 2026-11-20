@@ -214,12 +214,14 @@ onBeforeUnmount(() => request.abort());
         @denied="denied"
         @refresh="draft = $event"
       />
-      <section v-else-if="!tripId && result" aria-label="Черновики">
-        <h2>Черновики</h2>
+      <section v-else-if="!tripId && result" :aria-label="t('workspace.trips')">
         <p v-if="!result.items.length">Здесь будут твои путешествия.</p>
         <ul v-else class="trip-workspace__list">
           <li v-for="item in result.items" :key="item.trip_id">
-            <strong>{{ item.title }}</strong>
+            <div>
+              <strong>{{ item.title }}</strong>
+              <p>{{ t(item.publication_id ? 'tripDrafts.status.published' : 'tripDrafts.status.draft') }}</p>
+            </div>
             <NuxtLink class="tk-button" :to="tripDraftPath(item.trip_id)">Открыть</NuxtLink>
           </li>
         </ul>

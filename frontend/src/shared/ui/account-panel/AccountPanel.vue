@@ -7,9 +7,11 @@ defineProps<{
   auth?: boolean;
   backToLogin?: boolean;
   loginLink?: string;
+  catalogLink?: string;
 }>();
 
 const { t } = useI18n();
+const { baseURL } = useRuntimeConfig().app;
 </script>
 
 <template>
@@ -36,11 +38,11 @@ const { t } = useI18n();
             <path d="m13 5-7 7 7 7M6 12h13" />
           </svg>
         </NuxtLink>
-        <NuxtLink :aria-label="auth ? t('identity.catalogBrand', { product: t('productName') }) : undefined" class="account-brand" :to="auth ? '/catalog' : '/'">
+        <NuxtLink :aria-label="auth ? t('identity.catalogBrand', { product: t('productName') }) : undefined" class="account-brand" :to="auth ? catalogLink ?? '/catalog' : '/'">
           <img
             alt=""
             :height="auth ? 52 : 34"
-            src="/logo.png"
+            :src="`${baseURL}logo.png`"
             :width="auth ? 52 : 34"
           >
           <span>{{ t('productName') }}</span>

@@ -10,6 +10,7 @@ import {
   expect,
   it,
 } from 'vitest';
+import demoAccount from '../../fixtures/demo-account.json';
 import type {
   PublicTrip,
   PublicTripSummary,
@@ -214,7 +215,20 @@ await setup({
   env: {
     NUXT_BFF_BASE_URL: `http://127.0.0.1:${address.port}`,
     NUXT_BFF_PROXY_SECRET: 'identity-proxy-test-only',
+    NUXT_LOCAL_DEMO_LOGIN: '1',
   },
+});
+
+it('prefills the fixed test account on the locally built login page', async () => {
+  const response = await fetch('/api/dev/login-prefill');
+  expect(response.status).toBe(200);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(await response.json()).toEqual({ email: demoAccount.email, password: demoAccount.password });
+});
+
+it('keeps the local prefill endpoint same-origin', async () => {
+  const response = await fetch('/api/dev/login-prefill', { headers: { origin: 'https://other.example' } });
+  expect(response.status).toBe(404);
 });
 
 it('returns the BFF health response through the Nuxt origin', async () => {

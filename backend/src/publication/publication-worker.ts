@@ -59,7 +59,7 @@ export class PublicationWorker implements OnApplicationBootstrap, OnModuleDestro
     await this.running;
   }
 
-  private async prepare(job: Job) {
+  async prepare(job: Job) {
     try {
       const manifest = await this.travel.manifest(job);
       if (!manifest) {

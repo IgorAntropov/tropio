@@ -22,6 +22,7 @@
         <li><a href="#workspace">Главная страница и навигация</a></li>
         <li><a href="#profile">Профиль и аватар</a></li>
         <li><a href="#local">Локальный запуск и ссылки</a></li>
+        <li><a href="#demo-login">Тестовый аккаунт</a></li>
         <li><a href="#api">Операции API и права</a></li>
         <li><a href="#acceptance">Приёмка</a></li>
       </ul>
@@ -86,9 +87,17 @@
         <li>Открой приложение по адресу <code>http://127.0.0.1:3000</code> или по адресу из <code>TROPIO_BROWSER_ORIGIN</code>. После запроса регистрации или восстановления найди свежий JSON-файл в <code>.local/identity-mail</code>. Каталог можно задать переменной <code>TROPIO_AUTH_OUTBOX_DIR</code>.</li>
         <li>Открой значение <code>url</code> из файла. Ссылка содержит фрагмент <code>#token=…</code>. Для подтверждения почты используй исходный браузер и тот же origin. Сохраняй каталог закрытым. Файлы создаются с правами <code>0600</code>.</li>
       </ol>
-      <p>Файловый транспорт доступен в режиме разработки. Production-доставку и версию условий использования настраивают отдельно. Тестовые учётные данные и одноразовые ссылки храни локально. <a href="../contracts/postgres-migrations.html#commands">Миграции и команды запуска</a> · <a href="../../backend/migrations/run-identity.mjs">Локальный запуск Identity</a> · <a href="../../backend/src/identity/identity.config.ts">Настройки Identity</a></p>
-      <h3>Предзаполнение формы входа</h3>
-      <p>Для локального запуска Nuxt в режиме разработки на loopback можно задать <code>NUXT_DEV_LOGIN_EMAIL</code> и <code>NUXT_DEV_LOGIN_PASSWORD</code> в игнорируемом Git файле <code>frontend/.env</code>. Механизм заполняет пустые поля на <code>/login</code>. Регистрация и восстановление не читают эти настройки. Для входа нажми «Войти». <a href="../../frontend/src/pages/account-auth/ui/AccountAuthPage.vue">Локальное предзаполнение</a></p>
+      <p>Файловый транспорт доступен в режиме разработки. Production-доставку и версию условий использования настраивают отдельно. Одноразовые ссылки храни локально. <a href="../contracts/postgres-migrations.html#commands">Миграции и команды запуска</a> · <a href="../../backend/migrations/run-identity.mjs">Локальный запуск Identity</a> · <a href="../../backend/src/identity/identity.config.ts">Настройки Identity</a></p>
+    </section>
+
+    <section aria-labelledby="demo-login">
+      <h2 id="demo-login">Тестовый аккаунт</h2>
+      <p>На локальной странице <code>/login</code> и в демонстрации GitHub Pages поля уже заполнены почтой <code>demo@tropio.test</code> и паролем <code>TropioDemo2026!</code>. Нажми «Войти». После выхода форма снова предложит те же данные. <a href="../../fixtures/demo-account.json">Данные тестового пользователя</a></p>
+      <ul>
+        <li><strong>Локальное приложение.</strong> При первом запуске с чистой базой <code>pnpm dev:all</code> или <code>pnpm start:all</code> создаёт подтверждённого пользователя. Identity открывает обычную сессию и сохраняет профиль в PostgreSQL. Перезапуск Docker с тем же томом сохраняет аккаунт и его данные. Чтобы войти в другую учётную запись, замени почту и пароль в форме. <a href="../contracts/postgres-migrations.html#commands">Команды локального запуска</a> · <a href="http://127.0.0.1:3000/login">Открыть локальный вход</a></li>
+        <li><strong>GitHub Pages.</strong> После входа на <code>/tropio/login/</code> откроется каталог. В шапке появятся имя «Тестовый путешественник» и ссылка «Мои путешествия». Если гость открыл личный список или одну из своих поездок по прямой ссылке, форма входа вернёт его на эту страницу. Браузер сохраняет состояние входа при обновлении. Действие «Выйти» открывает гостевой каталог. <a href="../travel/catalog.html#demo">Поездки демостенда</a> · <a href="../../frontend/demo/pages/trips/index.vue">Личный раздел демонстрации</a></li>
+      </ul>
+      <p>В локальном приложении загрузка демоданных и заполнение формы включаются, только если базы Identity, Travel и Geo, BFF и адрес сайта используют loopback. При внешнем адресе приложение запускается с обычной формой входа, а отдельная команда <code>pnpm db:demo</code> завершает работу с ошибкой. <a href="../../backend/local/demo-account.mts">Проверка адресов тестового окружения</a></p>
     </section>
 
     <section aria-labelledby="api">

@@ -43,11 +43,11 @@ export default defineNuxtConfig({
         return;
       }
 
-      const { developmentLoginPath, prefillDevelopmentLogin } = await import('./server/dev/login-prefill.ts');
+      const { localLoginPath, prefillLocalLogin } = await import('./server/utils/local-login-prefill.ts');
       config.devHandlers ??= [];
       config.devHandlers.push({
-        route: developmentLoginPath,
-        handler: event => prefillDevelopmentLogin(event.node.req, event.node.res),
+        route: localLoginPath,
+        handler: event => prefillLocalLogin(event.node.req, event.node.res),
       });
     },
   },
@@ -73,6 +73,7 @@ export default defineNuxtConfig({
         },
       },
       nitro: {
+        prerender: { routes: ['/trips/'] },
         output: {
           dir: '.output-pages',
         },

@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 import codeStyle from '../eslint/style.mjs';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'coverage/**'] },
+  { ignores: ['dist/**', 'local/dist/**', 'coverage/**'] },
   eslint.configs.recommended,
   tseslint.configs.recommended,
   codeStyle,

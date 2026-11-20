@@ -13,7 +13,10 @@ import {
   it,
 } from 'vitest';
 import { parse } from 'yaml';
+import demoAccount from '../../fixtures/demo-account.json' with { type: 'json' };
+import { ensureLocalDemoAccount } from '../local/demo-account.mjs';
 import { createApplication } from '../src/create-application.js';
+import { ServiceDatabase } from '../src/database/service-database.js';
 
 type Method = 'GET' | 'POST' | 'PATCH';
 type RequestData = {
@@ -296,6 +299,84 @@ function examplePath(operation: Operation, userId: string) {
 }
 
 describe('BFF Identity HTTP contract', () => {
+  it('opens the next transaction after PostgreSQL disconnects an active client', async () => {
+    const database = new ServiceDatabase(databaseUrl, 'tropio_identity_runtime');
+    try {
+      let connectionClosed = false;
+      const interrupted = database.transaction(async (client) => {
+        const { rows: [connection] } = await client.query('SELECT pg_backend_pid() AS pid');
+        const disconnected = new Promise<void>(resolve => client.once('end', resolve));
+        await database.transaction(async (other) => {
+          await other.query('RESET ROLE');
+          await other.query('SELECT pg_terminate_backend($1)', [connection.pid]);
+        });
+        await disconnected;
+        connectionClosed = true;
+      });
+      await expect(interrupted).rejects.toThrow();
+      expect(connectionClosed).toBe(true);
+      const resumed = await database.transaction(client => client.query('SELECT 1 AS value'));
+      expect(resumed.rows).toEqual([{ value: 1 }]);
+    }
+    finally {
+      await database.onModuleDestroy();
+    }
+  });
+
+  it('keeps the same local demo login and profile after repeated provisioning', async () => {
+    const provision = () => ensureLocalDemoAccount(databaseUrl, demoAccount);
+    await Promise.all([provision(), provision()]);
+    const { cookie, profile } = await login(demoAccount.email, demoAccount.password);
+    expect(profile).toMatchObject({ id: demoAccount.id, display_name: demoAccount.displayName });
+    expect(profile.avatar).toBeTruthy();
+    const patch = await send('/me', {
+      method: 'PATCH',
+      cookie,
+      csrf: profile.csrf_token,
+      body: { display_name: 'После перезапуска' },
+    });
+    expect(patch.status).toBe(200);
+    await provision();
+    const again = await login(demoAccount.email, demoAccount.password);
+    expect(again.profile).toMatchObject({ id: profile.id, display_name: 'После перезапуска' });
+    expect((await send('/me', { cookie })).status).toBe(200);
+  }, 20_000);
+
+  it('preserves an existing account that already owns the requested demo email', async () => {
+    const account = await accountSession();
+    const fixture = { ...demoAccount, id: randomUUID(), email: account.email };
+    await expect(ensureLocalDemoAccount(databaseUrl, fixture)).rejects.toThrow();
+    expect((await login(account.email)).profile.id).toBe(account.profile.id);
+    await problem('/auth/login', {
+      method: 'POST',
+      body: { email: account.email, password: fixture.password },
+    }, 401, 'INVALID_CREDENTIALS');
+  }, 20_000);
+
+  it('supports local site names and limits database access to a loopback host', async () => {
+    const remote = new URL(databaseUrl);
+    remote.searchParams.set('host', 'identity.example.invalid');
+    await expect(ensureLocalDemoAccount(remote.href, demoAccount)).resolves.toBe(false);
+    remote.searchParams.set('host', 'identity.localhost');
+    await expect(ensureLocalDemoAccount(remote.href, demoAccount)).resolves.toBe(false);
+    await expect(ensureLocalDemoAccount(databaseUrl, demoAccount, {
+      browserOrigin: 'http://tropio.localhost:3000',
+      bffHost: 'bff.localhost',
+      bffBaseUrl: 'http://bff.localhost:3001',
+    })).resolves.toBe(true);
+    await expect(ensureLocalDemoAccount(databaseUrl, demoAccount, {
+      browserOrigin: 'https://tropio.example',
+      bffHost: '127.0.0.1',
+    })).resolves.toBe(false);
+    await expect(ensureLocalDemoAccount(databaseUrl, demoAccount, {
+      browserOrigin: origin,
+      bffHost: '0.0.0.0',
+    })).resolves.toBe(false);
+    await expect(ensureLocalDemoAccount(databaseUrl, demoAccount, {
+      bffBaseUrl: 'https://bff.example',
+    })).resolves.toBe(false);
+  });
+
   it('returns the BFF Problem for a missing session', async () => {
     await problem('/me', {}, 401, 'SESSION_REQUIRED');
   });

@@ -26,7 +26,11 @@ export class ServiceDatabase implements OnModuleDestroy {
       throw new BffProblem('DEPENDENCY_UNAVAILABLE');
     }
     const client = await this.pool.connect();
-    let rollbackFailed = false;
+    let discardClient = false;
+    const disconnected = () => {
+      discardClient = true;
+    };
+    client.on('error', disconnected);
 
     try {
       await client.query('BEGIN');
@@ -41,12 +45,13 @@ export class ServiceDatabase implements OnModuleDestroy {
         await client.query('ROLLBACK');
       }
       catch {
-        rollbackFailed = true;
+        discardClient = true;
       }
       throw error;
     }
     finally {
-      client.release(rollbackFailed);
+      client.off('error', disconnected);
+      client.release(discardClient);
     }
   }
 

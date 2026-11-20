@@ -1,27 +1,43 @@
 <script setup lang="ts">
-import { demoTrips } from '../model/trips';
+import { TripFacts } from '@fsd/entities/public-trip';
+import {
+  demoTrips,
+  myDemoTrips,
+} from '../model/trips';
 
+defineProps<{ personal?: boolean }>();
 const { t, n } = useI18n();
+const { baseURL } = useRuntimeConfig().app;
 </script>
 
 <template>
   <main class="demo-width demo-main">
-    <h1>{{ t('demo.catalog.title') }}</h1>
-    <p class="demo-summary">{{ t('demo.catalog.summary') }}</p>
+    <h1>{{ t(personal ? 'workspace.trips' : 'demo.catalog.title') }}</h1>
+    <p v-if="!personal" class="demo-summary">{{ t('demo.catalog.summary') }}</p>
     <ul class="trip-list">
-      <li v-for="trip in demoTrips" :key="trip.slug">
-        <NuxtLink class="trip-link" :to="`/trips/${trip.slug}/`">
-          <span>
-            <span class="trip-region">{{ trip.region }}</span>
-            <strong>{{ trip.title }}</strong>
-          </span>
-          <span class="trip-distance">
-            {{ t('demo.catalog.tripFacts', {
-              distance: n(trip.distanceKm, 'distance'),
-              duration: n(trip.durationDays, 'duration'),
-            }) }}
-          </span>
-          <span aria-hidden="true">↗</span>
+      <li v-for="trip in personal ? myDemoTrips : demoTrips" :key="trip.id">
+        <NuxtLink
+          class="trip-link"
+          :to="personal ? { path: '/trips/', query: { trip: trip.id } } : `/trips/${trip.slug}/`"
+        >
+          <img
+            alt=""
+            class="trip-cover"
+            height="112"
+            loading="lazy"
+            :src="baseURL + 'default-trip-cover.webp'"
+            width="112"
+          >
+          <div class="trip-copy">
+            <span>{{ trip.region }}</span>
+            <strong class="trip-title" :title="trip.title">{{ trip.title }}</strong>
+            <span class="trip-organizer" :title="trip.organizerName">{{ trip.organizerName }}</span>
+            <span class="trip-summary">{{ trip.summary }}</span>
+            <span>{{ n(trip.distanceKm, 'distance') }}</span>
+          </div>
+          <TripFacts :trip="{ ...trip.facts, difficulty: t('demo.difficulty.' + trip.difficulty) }">
+            <template #dateNote><span>{{ t('tripDrafts.status.' + trip.status) }}</span></template>
+          </TripFacts>
         </NuxtLink>
       </li>
     </ul>
@@ -38,54 +54,83 @@ const { t, n } = useI18n();
 
 .trip-link {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 1.1rem;
+  grid-template-columns: auto minmax(0, 1fr) minmax(12rem, .6fr);
   align-items: center;
-  gap: 0.9rem;
-  padding: 1.15rem 0.25rem;
+  gap: 1.25rem;
+  padding: 1rem .25rem;
   border-bottom: 1px solid var(--line);
   text-decoration: none;
-  transition: background-color 150ms ease-out;
 }
 
 .trip-link:hover {
   background: #e7f0e7;
 }
 
-.trip-link strong {
-  display: block;
-  font-size: clamp(1.15rem, 2.5vw, 1.5rem);
-  line-height: 1.15;
+.trip-cover {
+  width: clamp(4.5rem, 9vw, 7rem);
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: .5rem;
 }
 
-.trip-region,
-.trip-distance {
+.trip-copy,
+.trip-link :deep(.trip-facts-date-column),
+.trip-link :deep(.trip-facts-values) {
+  display: grid;
+  gap: .2rem;
+}
+
+.trip-copy,
+.trip-link :deep(.trip-facts) {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: .875rem;
+  line-height: 1.4;
 }
 
-.trip-link > :last-child {
-  color: var(--signal);
+.trip-copy strong {
+  color: var(--ink);
+  font-size: clamp(1.15rem, 2.5vw, 1.5rem);
+  line-height: 1.2;
 }
 
-@media (max-width: 34rem) {
+.trip-title,
+.trip-organizer {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trip-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.trip-link :deep(.trip-facts) {
+  display: grid;
+  gap: .35rem;
+}
+
+.trip-link :deep(.trip-facts-values) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .2rem .75rem;
+}
+
+.trip-link :deep(.material-symbols-rounded) {
+  vertical-align: -.1em;
+}
+
+@media (max-width: 40rem) {
   .trip-link {
-    grid-template-columns: minmax(0, 1fr) 1.1rem;
-    row-gap: 0.25rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: .65rem 1rem;
   }
 
-  .trip-distance {
-    grid-row: 2;
-  }
-
-  .trip-link > :last-child {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .trip-link {
-    transition: none;
+  .trip-link :deep(.trip-facts) {
+    grid-column: 1 / -1;
   }
 }
 </style>

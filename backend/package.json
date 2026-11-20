@@ -9,7 +9,7 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --max-warnings 0 --fix",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --exclude test/identity-http.test.ts --exclude test/travel-http.test.ts --exclude test/geo-http.test.ts --exclude test/publication-http.test.ts"
+    "test": "vitest run --exclude test/identity-http.test.ts --exclude test/travel-http.test.ts --exclude test/geo-http.test.ts --exclude test/publication-http.test.ts --exclude test/demo-http.test.ts"
   },
   "dependencies": {
     "@nestjs/common": "12.5.1",
