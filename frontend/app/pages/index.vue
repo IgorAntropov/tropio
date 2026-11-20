@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { SessionCheck } from '@fsd/shared/ui/session-check'
+import { SessionCheck } from '@fsd/shared/ui/session-check';
 
-definePageMeta({ middleware: 'session-entry' })
-useSeoMeta({ robots: 'noindex' })
+definePageMeta({ middleware: 'session-entry' });
+useSeoMeta({ robots: 'noindex' });
 </script>
 
 <template>

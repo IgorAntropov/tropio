@@ -1,20 +1,42 @@
 <script setup lang="ts">
-import '@fsd/shared/ui/kit/kit.css'
+import '@fsd/shared/ui/kit/kit.css';
 
-const { t } = useI18n()
+const { t } = useI18n();
 </script>
 
 <template>
-  <main class="feed-page" aria-labelledby="feed-title">
+  <main aria-labelledby="feed-title" class="feed-page">
     <h1 id="feed-title">{{ t('workspace.feed.title') }}</h1>
     <div class="feed-empty">
-      <div class="feed-emblem" aria-hidden="true">
-        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <div aria-hidden="true" class="feed-emblem">
+        <svg
+          fill="none"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-width="2"
+          viewBox="0 0 48 48"
+        >
           <path d="M9 32c5 0 7-12 13-12s7 9 13 9h4M10 37h28" />
-          <circle cx="10" cy="32" r="3" fill="var(--tk-surface)" />
-          <circle cx="38" cy="29" r="3" fill="var(--tk-surface)" />
+          <circle
+            cx="10"
+            cy="32"
+            fill="var(--tk-surface)"
+            r="3"
+          />
+          <circle
+            cx="38"
+            cy="29"
+            fill="var(--tk-surface)"
+            r="3"
+          />
           <path d="M23 19s-5-5-5-9a5 5 0 1 1 10 0c0 4-5 9-5 9Z" />
-          <circle cx="23" cy="10" r="1.4" fill="currentColor" stroke="none" />
+          <circle
+            cx="23"
+            cy="10"
+            fill="currentColor"
+            r="1.4"
+            stroke="none"
+          />
         </svg>
       </div>
       <p>{{ t('workspace.feed.empty') }}</p>

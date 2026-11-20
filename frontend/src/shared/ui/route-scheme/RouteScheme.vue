@@ -1,70 +1,107 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { MaterialSymbol } from '@fsd/shared/ui/material-symbol'
-import { coordinateLabel, distanceLabel, transportIcons } from './route-scheme'
-import type { SchemePoint, SchemeSelection, SchemeTrack } from './route-scheme'
+import {
+  computed,
+  ref,
+} from 'vue';
+import { MaterialSymbol } from '@fsd/shared/ui/material-symbol';
+import {
+  coordinateLabel,
+  distanceLabel,
+  transportIcons,
+} from './route-scheme';
+import type {
+  SchemePoint,
+  SchemeSelection,
+  SchemeTrack,
+} from './route-scheme';
 
 const props = defineProps<{
-  label: string
-  points: readonly SchemePoint[]
-  tracks: readonly SchemeTrack[]
-  selection?: SchemeSelection | null
-  interactive?: boolean
-  editLabel?: (name: string) => string
-}>()
+  label: string;
+  points: readonly SchemePoint[];
+  tracks: readonly SchemeTrack[];
+  selection?: SchemeSelection | null;
+  interactive?: boolean;
+  editLabel?: (name: string) => string;
+}>();
 const emit = defineEmits<{
-  select: [selection: SchemeSelection, invoker: EventTarget | null]
-  edit: [selection: SchemeSelection, invoker: EventTarget | null]
-}>()
-const list = ref<HTMLOListElement>()
+  select: [selection: SchemeSelection, invoker: EventTarget | null];
+  edit: [selection: SchemeSelection, invoker: EventTarget | null];
+}>();
+const list = ref<HTMLOListElement>();
 type Row = {
-  target: SchemeSelection
-  label: string
-  number?: number
-  icon?: 'route' | (typeof transportIcons)[keyof typeof transportIcons]
-  detail?: string
-  distance?: string
-  warning?: boolean
-}
+  target: SchemeSelection;
+  label: string;
+  number?: number;
+  icon?: 'route' | (typeof transportIcons)[keyof typeof transportIcons];
+  detail?: string;
+  distance?: string;
+  warning?: boolean;
+};
 const rows = computed(() => {
-  const entries: Row[] = []
+  const entries: Row[] = [];
   props.points.forEach((point, index) => {
     entries.push({
-      target: { type: 'point', id: point.id }, label: point.label,
-      number: index + 1, detail: coordinateLabel(point.position),
-    })
-    const track = props.tracks[index]
-    if (track) entries.push({
-      target: { type: 'track', id: track.id }, label: track.label,
-      icon: track.transportMode ? transportIcons[track.transportMode] : 'route',
-      detail: track.detail, warning: track.warning,
-      distance: track.distance === undefined ? undefined : distanceLabel(track.distance),
-    })
-  })
-  return entries
-})
+      target: { type: 'point', id: point.id },
+      label: point.label,
+      number: index + 1,
+      detail: coordinateLabel(point.position),
+    });
+    const track = props.tracks[index];
+    if (track) {
+      entries.push({
+        target: { type: 'track', id: track.id },
+        label: track.label,
+        icon: track.transportMode ? transportIcons[track.transportMode] : 'route',
+        detail: track.detail,
+        warning: track.warning,
+        distance: track.distance === undefined ? undefined : distanceLabel(track.distance),
+      });
+    }
+  });
+  return entries;
+});
 function selected(target: SchemeSelection) {
-  return props.selection?.type === target.type && props.selection.id === target.id
+  return props.selection?.type === target.type && props.selection.id === target.id;
 }
 function activate(target: SchemeSelection, event: MouseEvent) {
-  if (!props.interactive) return
-  if (props.editLabel && event.detail === 0) emit('edit', target, event.currentTarget)
-  else emit('select', target, event.currentTarget)
+  if (!props.interactive) {
+    return;
+  }
+  if (props.editLabel && event.detail === 0) {
+    emit('edit', target, event.currentTarget);
+  }
+  else {
+    emit('select', target, event.currentTarget);
+  }
 }
 function scrollToSelection() {
-  list.value?.querySelector('[data-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  list.value?.querySelector('[data-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
-defineExpose({ scrollToSelection })
+defineExpose({ scrollToSelection });
 </script>
 
 <template>
-  <ol ref="list" class="route-scheme" :class="{ 'route-scheme-static': !interactive }" :aria-label="label">
-    <li v-for="row in rows" :key="row.target.type + ':' + row.target.id" :data-kind="row.target.type" :data-selected="selected(row.target)">
+  <ol
+    ref="list"
+    :aria-label="label"
+    class="route-scheme"
+    :class="{ 'route-scheme-static': !interactive }"
+  >
+    <li
+      v-for="row in rows"
+      :key="row.target.type + ':' + row.target.id"
+      :data-kind="row.target.type"
+      :data-selected="selected(row.target)"
+    >
       <component
-        :is="interactive ? 'button' : 'div'" class="route-scheme-row"
-        :type="interactive ? 'button' : undefined" :aria-pressed="interactive ? selected(row.target) : undefined"
-        @click="activate(row.target, $event)" @dblclick="interactive && editLabel && emit('edit', row.target, $event.currentTarget)">
-        <span class="route-scheme-icon" :class="{ 'route-scheme-number': row.number }" aria-hidden="true">
+        :is="interactive ? 'button' : 'div'"
+        :aria-pressed="interactive ? selected(row.target) : undefined"
+        class="route-scheme-row"
+        :type="interactive ? 'button' : undefined"
+        @click="activate(row.target, $event)"
+        @dblclick="interactive && editLabel && emit('edit', row.target, $event.currentTarget)"
+      >
+        <span aria-hidden="true" class="route-scheme-icon" :class="{ 'route-scheme-number': row.number }">
           <MaterialSymbol v-if="row.icon" :name="row.icon" />
           <template v-else>{{ row.number }}</template>
         </span>
@@ -76,8 +113,12 @@ defineExpose({ scrollToSelection })
         </span>
       </component>
       <button
-        v-if="interactive && editLabel" class="tk-button tk-button-text tk-icon-button route-scheme-edit"
-        type="button" :aria-label="editLabel(row.label)" @click="emit('edit', row.target, $event.currentTarget)">
+        v-if="interactive && editLabel"
+        :aria-label="editLabel(row.label)"
+        class="tk-button tk-button-text tk-icon-button route-scheme-edit"
+        type="button"
+        @click="emit('edit', row.target, $event.currentTarget)"
+      >
         <MaterialSymbol name="edit" />
       </button>
     </li>

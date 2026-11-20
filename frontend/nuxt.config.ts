@@ -1,8 +1,8 @@
-import tailwindcss from '@tailwindcss/vite'
-import { fileURLToPath } from 'node:url'
+import tailwindcss from '@tailwindcss/vite';
+import { fileURLToPath } from 'node:url';
 
-const defaultLocale = 'ru'
-const pagesBaseURL = '/tropio/'
+const defaultLocale = 'ru';
+const pagesBaseURL = '/tropio/';
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-18',
@@ -39,14 +39,16 @@ export default defineNuxtConfig({
   },
   hooks: {
     async 'nitro:config'(config) {
-      if (!config.dev) return
+      if (!config.dev) {
+        return;
+      }
 
-      const { developmentLoginPath, prefillDevelopmentLogin } = await import('./server/dev/login-prefill.ts')
-      config.devHandlers ??= []
+      const { developmentLoginPath, prefillDevelopmentLogin } = await import('./server/dev/login-prefill.ts');
+      config.devHandlers ??= [];
       config.devHandlers.push({
         route: developmentLoginPath,
         handler: event => prefillDevelopmentLogin(event.node.req, event.node.res),
-      })
+      });
     },
   },
   runtimeConfig: {
@@ -77,4 +79,4 @@ export default defineNuxtConfig({
       },
     },
   },
-})
+});

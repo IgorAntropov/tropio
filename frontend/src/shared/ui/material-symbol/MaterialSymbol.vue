@@ -13,15 +13,26 @@ const glyphByName = {
   redo: '\uE15A',
   route: '\uEACD',
   undo: '\uE166',
-} as const
+} as const;
 
-defineProps<{ name: keyof typeof glyphByName }>()
+defineProps<{ name: keyof typeof glyphByName }>();
 </script>
 
 <template>
-  <span class="material-symbols-rounded" aria-hidden="true">
-    <svg width="1em" height="1em" viewBox="0 0 24 24" display="block" focusable="false">
-      <text x="0" y="24" font-size="24" fill="currentColor">{{ glyphByName[name] }}</text>
+  <span aria-hidden="true" class="material-symbols-rounded">
+    <svg
+      display="block"
+      focusable="false"
+      height="1em"
+      viewBox="0 0 24 24"
+      width="1em"
+    >
+      <text
+        fill="currentColor"
+        font-size="24"
+        x="0"
+        y="24"
+      >{{ glyphByName[name] }}</text>
     </svg>
   </span>
 </template>

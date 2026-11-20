@@ -1,1 +1,1 @@
-export { default as RouteEditorPage } from './ui/RouteEditorPage.vue'
+export { default as RouteEditorPage } from './ui/RouteEditorPage.vue';

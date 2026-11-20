@@ -1,88 +1,101 @@
-import { createHash } from 'node:crypto'
-import { Inject, Injectable } from '@nestjs/common'
-import type { PoolClient } from 'pg'
-import { BffProblem } from '../http/bff-problem.js'
-import { manifestColumns, revokePublication } from './publication-state.js'
-import { TravelDatabase } from './travel-database.js'
-import type { DayFields, EquipmentItem, TripFields } from './travel-input.js'
+import { createHash } from 'node:crypto';
+import {
+  Inject,
+  Injectable,
+} from '@nestjs/common';
+import type { PoolClient } from 'pg';
+import { BffProblem } from '../http/bff-problem.js';
+import {
+  manifestColumns,
+  revokePublication,
+} from './publication-state.js';
+import { TravelDatabase } from './travel-database.js';
+import type {
+  DayFields,
+  EquipmentItem,
+  TripFields,
+} from './travel-input.js';
 
 export interface TravelEditor {
-  userId: string
-  confirmSession(): Promise<void>
+  userId: string;
+  confirmSession(): Promise<void>;
 }
 
-type Action = 'trip.create' | 'trip.update' | 'day.create' | 'day.update' | 'route.bind'
-type EditAction = Exclude<Action, 'trip.create'>
-type Target = { kind: 'day' | 'trip'; id: string }
-type DraftEdit<Fields> = { trip_revision_id: string; patch: Partial<Fields> }
-type Dates = Pick<TripFields, 'start_date' | 'end_date'>
-type TripWriteFields = Omit<TripFields, 'equipment'>
+type Action = 'trip.create' | 'trip.update' | 'day.create' | 'day.update' | 'route.bind';
+type EditAction = Exclude<Action, 'trip.create'>;
+type Target = { kind: 'day' | 'trip'; id: string };
+type DraftEdit<Fields> = { trip_revision_id: string; patch: Partial<Fields> };
+type Dates = Pick<TripFields, 'start_date' | 'end_date'>;
+type TripWriteFields = Omit<TripFields, 'equipment'>;
 
 interface TripSummary extends Dates {
-  admission_mode: TripFields['admission_mode']
-  trip_id: string
-  trip_revision_id: string
-  publication_id: string | null
-  visibility: 'public' | 'private'
-  title: string
+  admission_mode: TripFields['admission_mode'];
+  trip_id: string;
+  trip_revision_id: string;
+  publication_id: string | null;
+  visibility: 'public' | 'private';
+  title: string;
 }
 
 interface TripRow extends TripSummary, TripWriteFields {}
 
 interface DraftDay extends DayFields {
-  day_id: string
-  position: number
-  route_id: string | null
+  day_id: string;
+  position: number;
+  route_id: string | null;
 }
 
 interface PublishedManifest {
-  trip_revision_id: string
-  routes: { day_id: string; route_id: string; route_revision_id: string }[]
-  poi_count: number
+  trip_revision_id: string;
+  routes: { day_id: string; route_id: string; route_revision_id: string }[];
+  poi_count: number;
 }
 
 interface TripDraft extends TripRow {
-  published_manifest?: PublishedManifest
-  equipment: EquipmentItem[]
-  days: DraftDay[]
+  published_manifest?: PublishedManifest;
+  equipment: EquipmentItem[];
+  days: DraftDay[];
 }
 
 interface Receipt {
-  trip_id: string
-  request_fingerprint: string
-  response: TripDraft
+  trip_id: string;
+  request_fingerprint: string;
+  response: TripDraft;
 }
 
 interface Command {
-  actorId: string
-  action: Action
-  targetId: string
-  key: string
-  fingerprint: string
+  actorId: string;
+  action: Action;
+  targetId: string;
+  key: string;
+  fingerprint: string;
 }
 
 const summaryColumns = `
   t.id AS trip_id, t.trip_revision_id, t.publication_id, t.visibility, t.title, t.admission_mode,
   to_char(t.start_date, 'YYYY-MM-DD') AS start_date, to_char(t.end_date, 'YYYY-MM-DD') AS end_date
-`
+`;
 
 const draftColumns = `
   ${summaryColumns}, t.description, t.timezone, t.free_capacity, t.difficulty, t.participation_rules
-`
+`;
 
 const dayColumns = `
   d.id AS day_id, d.position, to_char(d.local_date, 'YYYY-MM-DD') AS local_date, d.description, d.notes
-`
+`;
 
 function makeCommand(actorId: string, action: Action, targetId: string, key: string, input: object): Command {
   return {
-    actorId, action, targetId, key,
+    actorId,
+    action,
+    targetId,
+    key,
     fingerprint: createHash('sha256').update(JSON.stringify(input)).digest('hex'),
-  }
+  };
 }
 
 function uniqueCommandKey({ actorId, action, targetId, key }: Command) {
-  return [actorId, action, targetId, key]
+  return [actorId, action, targetId, key];
 }
 
 async function getPrior(client: PoolClient, command: Command): Promise<Receipt | undefined> {
@@ -90,11 +103,11 @@ async function getPrior(client: PoolClient, command: Command): Promise<Receipt |
     `SELECT trip_id, request_fingerprint, response FROM travel.draft_commands
      WHERE actor_user_id = $1 AND action = $2 AND target_id = $3 AND idempotency_key = $4`,
     uniqueCommandKey(command),
-  )
+  );
   if (receipt && receipt.request_fingerprint !== command.fingerprint) {
-    throw new BffProblem('IDEMPOTENCY_KEY_REUSED')
+    throw new BffProblem('IDEMPOTENCY_KEY_REUSED');
   }
-  return receipt
+  return receipt;
 }
 
 async function storeReceipt(client: PoolClient, command: Command, draft: TripDraft): Promise<void> {
@@ -103,7 +116,7 @@ async function storeReceipt(client: PoolClient, command: Command, draft: TripDra
        (actor_user_id, action, target_id, idempotency_key, request_fingerprint, trip_id, response)
      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
     [...uniqueCommandKey(command), command.fingerprint, draft.trip_id, JSON.stringify(draft)],
-  )
+  );
 }
 
 export async function getDraft(client: PoolClient, ownerId: string, id: string): Promise<TripDraft> {
@@ -130,10 +143,12 @@ export async function getDraft(client: PoolClient, ownerId: string, id: string):
      FROM travel.trips t
      WHERE t.id = $1 AND t.owner_user_id = $2 AND t.archived_at IS NULL`,
     [id, ownerId],
-  )
-  if (!row) throw new BffProblem('NOT_FOUND')
-  const { published_manifest, ...draft } = row
-  return published_manifest ? { ...draft, published_manifest } : draft
+  );
+  if (!row) {
+    throw new BffProblem('NOT_FOUND');
+  }
+  const { published_manifest, ...draft } = row;
+  return published_manifest ? { ...draft, published_manifest } : draft;
 }
 
 async function lockTrip(client: PoolClient, ownerId: string, target: Target): Promise<TripRow> {
@@ -145,9 +160,11 @@ async function lockTrip(client: PoolClient, ownerId: string, target: Target): Pr
        AND t.owner_user_id = $2 AND t.archived_at IS NULL
      FOR UPDATE OF t`,
     [target.id, ownerId],
-  )
-  if (!trip) throw new BffProblem('NOT_FOUND')
-  return trip
+  );
+  if (!trip) {
+    throw new BffProblem('NOT_FOUND');
+  }
+  return trip;
 }
 
 async function getDay(client: PoolClient, tripId: string, dayId: string): Promise<Omit<DraftDay, 'route_id'>> {
@@ -155,49 +172,59 @@ async function getDay(client: PoolClient, tripId: string, dayId: string): Promis
     `SELECT ${dayColumns} FROM travel.trip_days d
      WHERE d.trip_id = $1 AND d.id = $2 AND d.archived_at IS NULL`,
     [tripId, dayId],
-  )
-  if (!day) throw new BffProblem('NOT_FOUND')
-  return day
+  );
+  if (!day) {
+    throw new BffProblem('NOT_FOUND');
+  }
+  return day;
 }
 
 async function insertEquipment(client: PoolClient, tripId: string, equipment: EquipmentItem[]): Promise<void> {
-  if (!equipment.length) return
+  if (!equipment.length) {
+    return;
+  }
 
   await client.query(
     `INSERT INTO travel.trip_equipment (trip_id, position, label, required)
      SELECT $1, entry.position, entry.item->>'label', (entry.item->>'required')::boolean
      FROM jsonb_array_elements($2::jsonb) WITH ORDINALITY AS entry(item, position)`,
     [tripId, JSON.stringify(equipment)],
-  )
+  );
 }
 
 function assertTripDates({ start_date: start, end_date: end }: Dates): void {
-  if (end && (!start || end < start)) throw new BffProblem('INVALID_TRIP_DATES')
+  if (end && (!start || end < start)) {
+    throw new BffProblem('INVALID_TRIP_DATES');
+  }
 }
 
 function assertDayDate({ start_date: start, end_date: end }: Dates, localDate: string | null): void {
   if (start && localDate && (localDate < start || localDate > (end ?? start))) {
-    throw new BffProblem('INVALID_TRIP_DATES')
+    throw new BffProblem('INVALID_TRIP_DATES');
   }
 }
 
 async function assertExistingDayDates(client: PoolClient, tripId: string, dates: Dates): Promise<void> {
-  if (!dates.start_date) return
+  if (!dates.start_date) {
+    return;
+  }
 
   const { rowCount } = await client.query(
     `SELECT 1 FROM travel.trip_days
      WHERE trip_id = $1 AND archived_at IS NULL AND (local_date < $2::date OR local_date > $3::date)
      LIMIT 1`,
     [tripId, dates.start_date, dates.end_date ?? dates.start_date],
-  )
-  if (rowCount) throw new BffProblem('INVALID_TRIP_DATES')
+  );
+  if (rowCount) {
+    throw new BffProblem('INVALID_TRIP_DATES');
+  }
 }
 
 async function audit(client: PoolClient, tripId: string, command: Command, objectId: string): Promise<void> {
   await client.query(
     `INSERT INTO travel.trip_audit_events (trip_id, actor_user_id, action, object_id) VALUES ($1, $2, $3, $4)`,
     [tripId, command.actorId, command.action, objectId],
-  )
+  );
 }
 
 @Injectable()
@@ -209,9 +236,9 @@ export class TravelService {
       const { rowCount } = await client.query(
         'SELECT 1 FROM travel.trips WHERE id = $1 AND owner_user_id = $2 AND archived_at IS NULL',
         [tripId, ownerId],
-      )
-      return rowCount === 1
-    })
+      );
+      return rowCount === 1;
+    });
   }
 
   async routeTrip(ownerId: string, routeId: string): Promise<string> {
@@ -223,10 +250,12 @@ export class TravelService {
          WHERE r.id = $1 AND t.owner_user_id = $2
            AND r.archived_at IS NULL AND d.archived_at IS NULL AND t.archived_at IS NULL`,
         [routeId, ownerId],
-      )
-      if (!route) throw new BffProblem('NOT_FOUND')
-      return route.trip_id
-    })
+      );
+      if (!route) {
+        throw new BffProblem('NOT_FOUND');
+      }
+      return route.trip_id;
+    });
   }
 
   async tripRouteIds(ownerId: string, tripId: string): Promise<string[]> {
@@ -240,10 +269,12 @@ export class TravelService {
          ) AS route_ids
          FROM travel.trips t WHERE t.id = $1 AND t.owner_user_id = $2 AND t.archived_at IS NULL`,
         [tripId, ownerId],
-      )
-      if (!trip) throw new BffProblem('NOT_FOUND')
-      return trip.route_ids
-    })
+      );
+      if (!trip) {
+        throw new BffProblem('NOT_FOUND');
+      }
+      return trip.route_ids;
+    });
   }
 
   async listTrips(ownerId: string, input: { limit: number; cursor: string | null }) {
@@ -255,56 +286,69 @@ export class TravelService {
          ORDER BY t.id
          LIMIT $3`,
         [ownerId, input.cursor, input.limit + 1],
-      )
-      const items = rows.slice(0, input.limit)
-      const next_cursor = rows.length > input.limit ? items.at(-1)?.trip_id ?? null : null
-      return { items, next_cursor }
-    })
+      );
+      const items = rows.slice(0, input.limit);
+      const next_cursor = rows.length > input.limit ? items.at(-1)?.trip_id ?? null : null;
+      return { items, next_cursor };
+    });
   }
 
   async readDraft(ownerId: string, tripId: string): Promise<TripDraft> {
-    return this.database.transaction((client) => getDraft(client, ownerId, tripId))
+    return this.database.transaction(client => getDraft(client, ownerId, tripId));
   }
 
   async createTrip(editor: TravelEditor, key: string, input: Partial<TripFields> & Pick<TripFields, 'title'>): Promise<TripDraft> {
     const { title, description = null, start_date = null, end_date = null, timezone = null, free_capacity = null,
-      difficulty = null, participation_rules = null, equipment = [], admission_mode = 'request' } = input
+      difficulty = null, participation_rules = null, equipment = [], admission_mode = 'request' } = input;
     const command = makeCommand(editor.userId, 'trip.create', editor.userId, key, {
-      title, description, start_date, end_date, timezone, free_capacity, difficulty, participation_rules, equipment,
+      title,
+      description,
+      start_date,
+      end_date,
+      timezone,
+      free_capacity,
+      difficulty,
+      participation_rules,
+      equipment,
       ...(admission_mode === 'open' ? { admission_mode } : {}),
-    })
+    });
 
     return this.database.transaction(async (client) => {
-      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [JSON.stringify(uniqueCommandKey(command))])
-      await editor.confirmSession()
-      const prior = await getPrior(client, command)
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [JSON.stringify(uniqueCommandKey(command))]);
+      await editor.confirmSession();
+      const prior = await getPrior(client, command);
       if (prior) {
         try {
-          await lockTrip(client, editor.userId, { kind: 'trip', id: prior.trip_id })
-        } catch (error) {
-          if (error instanceof BffProblem && error.code === 'NOT_FOUND') throw new BffProblem('IDEMPOTENCY_KEY_REUSED')
-          throw error
+          await lockTrip(client, editor.userId, { kind: 'trip', id: prior.trip_id });
         }
-        await editor.confirmSession()
-        return prior.response
+        catch (error) {
+          if (error instanceof BffProblem && error.code === 'NOT_FOUND') {
+            throw new BffProblem('IDEMPOTENCY_KEY_REUSED');
+          }
+          throw error;
+        }
+        await editor.confirmSession();
+        return prior.response;
       }
 
-      assertTripDates({ start_date, end_date })
+      assertTripDates({ start_date, end_date });
       const { rows: [trip] } = await client.query<{ id: string }>(
         `INSERT INTO travel.trips (owner_user_id, created_by_user_id, title, description, start_date, end_date, timezone,
            free_capacity, difficulty, participation_rules, admission_mode)
          VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
         [editor.userId, title, description, start_date, end_date, timezone, free_capacity, difficulty, participation_rules, admission_mode],
-      )
-      if (!trip) throw new BffProblem('DEPENDENCY_UNAVAILABLE')
+      );
+      if (!trip) {
+        throw new BffProblem('DEPENDENCY_UNAVAILABLE');
+      }
 
-      await client.query('INSERT INTO travel.trip_days (trip_id, position, local_date) VALUES ($1, 1, $2)', [trip.id, start_date])
-      await insertEquipment(client, trip.id, equipment)
-      await audit(client, trip.id, command, trip.id)
-      const draft = await getDraft(client, editor.userId, trip.id)
-      await storeReceipt(client, command, draft)
-      return draft
-    })
+      await client.query('INSERT INTO travel.trip_days (trip_id, position, local_date) VALUES ($1, 1, $2)', [trip.id, start_date]);
+      await insertEquipment(client, trip.id, equipment);
+      await audit(client, trip.id, command, trip.id);
+      const draft = await getDraft(client, editor.userId, trip.id);
+      await storeReceipt(client, command, draft);
+      return draft;
+    });
   }
 
   private async editDraft(
@@ -315,91 +359,99 @@ export class TravelService {
     input: { trip_revision_id: string },
     change: (client: PoolClient, trip: TripRow) => Promise<string | null>,
   ): Promise<TripDraft> {
-    const command = makeCommand(editor.userId, action, target.id, key, input)
+    const command = makeCommand(editor.userId, action, target.id, key, input);
 
     return this.database.transaction(async (client) => {
-      const trip = await lockTrip(client, editor.userId, target)
-      await editor.confirmSession()
-      if (target.kind === 'day') await getDay(client, trip.trip_id, target.id)
+      const trip = await lockTrip(client, editor.userId, target);
+      await editor.confirmSession();
+      if (target.kind === 'day') {
+        await getDay(client, trip.trip_id, target.id);
+      }
 
-      const prior = await getPrior(client, command)
+      const prior = await getPrior(client, command);
       if (prior) {
-        if (prior.trip_id !== trip.trip_id) throw new BffProblem('IDEMPOTENCY_KEY_REUSED')
-        return prior.response
+        if (prior.trip_id !== trip.trip_id) {
+          throw new BffProblem('IDEMPOTENCY_KEY_REUSED');
+        }
+        return prior.response;
       }
 
       if (trip.trip_revision_id !== input.trip_revision_id) {
-        throw new BffProblem('TRIP_REVISION_CONFLICT', { currentTripRevisionId: trip.trip_revision_id })
+        throw new BffProblem('TRIP_REVISION_CONFLICT', { currentTripRevisionId: trip.trip_revision_id });
       }
 
-      const changedId = await change(client, trip)
+      const changedId = await change(client, trip);
       if (changedId) {
         await client.query(
           `UPDATE travel.trips SET trip_revision_id = gen_random_uuid(), version = version + 1,
              updated_at = greatest(updated_at, clock_timestamp()) WHERE id = $1 AND trip_revision_id = $2`,
           [trip.trip_id, trip.trip_revision_id],
-        )
-        await audit(client, trip.trip_id, command, changedId)
+        );
+        await audit(client, trip.trip_id, command, changedId);
       }
-      const draft = await getDraft(client, editor.userId, trip.trip_id)
-      await storeReceipt(client, command, draft)
-      return draft
-    })
+      const draft = await getDraft(client, editor.userId, trip.trip_id);
+      await storeReceipt(client, command, draft);
+      return draft;
+    });
   }
 
   async updateTrip(editor: TravelEditor, tripId: string, key: string, input: DraftEdit<TripFields & { visibility: 'private' | 'public' }>): Promise<TripDraft> {
     return this.editDraft(editor, { kind: 'trip', id: tripId }, 'trip.update', key, input, async (client, trip) => {
-      const { equipment, ...patch } = input.patch
-      const updated = { ...trip, ...patch }
-      assertTripDates(updated)
+      const { equipment, ...patch } = input.patch;
+      const updated = { ...trip, ...patch };
+      assertTripDates(updated);
       if (patch.start_date !== undefined || patch.end_date !== undefined) {
-        await assertExistingDayDates(client, tripId, updated)
+        await assertExistingDayDates(client, tripId, updated);
       }
       if (updated.visibility === 'private' && trip.visibility === 'public') {
-        await revokePublication(client, trip, editor.userId, key, 'private')
+        await revokePublication(client, trip, editor.userId, key, 'private');
       }
       await client.query(
         `UPDATE travel.trips SET title = $2, description = $3, start_date = $4, end_date = $5, timezone = $6,
            free_capacity = $7, difficulty = $8, participation_rules = $9, visibility = $10, admission_mode = $11 WHERE id = $1`,
         [tripId, updated.title, updated.description, updated.start_date, updated.end_date, updated.timezone,
           updated.free_capacity, updated.difficulty, updated.participation_rules, updated.visibility, updated.admission_mode],
-      )
+      );
       if (equipment !== undefined) {
-        await client.query('DELETE FROM travel.trip_equipment WHERE trip_id = $1', [tripId])
-        await insertEquipment(client, tripId, equipment)
+        await client.query('DELETE FROM travel.trip_equipment WHERE trip_id = $1', [tripId]);
+        await insertEquipment(client, tripId, equipment);
       }
-      return tripId
-    })
+      return tripId;
+    });
   }
 
   async createDay(editor: TravelEditor, tripId: string, key: string, input: DraftEdit<DayFields>): Promise<TripDraft> {
-    const { local_date = null, description = null, notes = null } = input.patch
-    const normalized = { ...input, patch: { local_date, description, notes } }
+    const { local_date = null, description = null, notes = null } = input.patch;
+    const normalized = { ...input, patch: { local_date, description, notes } };
     return this.editDraft(editor, { kind: 'trip', id: tripId }, 'day.create', key, normalized, async (client, trip) => {
-      assertDayDate(trip, local_date)
+      assertDayDate(trip, local_date);
       const { rows: [day] } = await client.query<{ id: string }>(
         `INSERT INTO travel.trip_days (trip_id, position, local_date, description, notes)
          SELECT $1, COALESCE(max(position), 0) + 1, $2, $3, $4
          FROM travel.trip_days WHERE trip_id = $1 AND archived_at IS NULL
          RETURNING id`,
         [tripId, local_date, description, notes],
-      )
-      if (!day) throw new BffProblem('DEPENDENCY_UNAVAILABLE')
-      return day.id
-    })
+      );
+      if (!day) {
+        throw new BffProblem('DEPENDENCY_UNAVAILABLE');
+      }
+      return day.id;
+    });
   }
 
   async updateDay(editor: TravelEditor, dayId: string, key: string, input: DraftEdit<DayFields>): Promise<TripDraft> {
     return this.editDraft(editor, { kind: 'day', id: dayId }, 'day.update', key, input, async (client, trip) => {
-      const day = await getDay(client, trip.trip_id, dayId)
-      const { local_date, description, notes } = { ...day, ...input.patch }
-      if (input.patch.local_date !== undefined) assertDayDate(trip, local_date)
+      const day = await getDay(client, trip.trip_id, dayId);
+      const { local_date, description, notes } = { ...day, ...input.patch };
+      if (input.patch.local_date !== undefined) {
+        assertDayDate(trip, local_date);
+      }
       await client.query(
         'UPDATE travel.trip_days SET local_date = $3, description = $4, notes = $5 WHERE trip_id = $1 AND id = $2',
         [trip.trip_id, dayId, local_date, description, notes],
-      )
-      return dayId
-    })
+      );
+      return dayId;
+    });
   }
 
   async bindRoute(editor: TravelEditor, dayId: string, key: string, input: { trip_revision_id: string }): Promise<TripDraft> {
@@ -407,16 +459,22 @@ export class TravelService {
       const { rows: [existingRoute] } = await client.query<{ archived_at: Date | null }>(
         'SELECT archived_at FROM travel.routes WHERE trip_id = $1 AND trip_day_id = $2',
         [trip.trip_id, dayId],
-      )
-      if (existingRoute?.archived_at) throw new BffProblem('NOT_FOUND')
-      if (existingRoute) return null
+      );
+      if (existingRoute?.archived_at) {
+        throw new BffProblem('NOT_FOUND');
+      }
+      if (existingRoute) {
+        return null;
+      }
 
       const { rows: [route] } = await client.query<{ id: string }>(
         'INSERT INTO travel.routes (trip_id, trip_day_id) VALUES ($1, $2) RETURNING id',
         [trip.trip_id, dayId],
-      )
-      if (!route) throw new BffProblem('DEPENDENCY_UNAVAILABLE')
-      return route.id
-    })
+      );
+      if (!route) {
+        throw new BffProblem('DEPENDENCY_UNAVAILABLE');
+      }
+      return route.id;
+    });
   }
 }

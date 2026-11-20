@@ -1,5 +1,5 @@
-import { useI18n } from 'vue-i18n'
-import type { EditorTrack } from '../types'
+import { useI18n } from 'vue-i18n';
+import type { EditorTrack } from '../types';
 
 const messages = {
   ru: {
@@ -112,14 +112,18 @@ const messages = {
     openDay: 'Вперёд',
     previousDay: 'Назад',
   },
-}
+};
 
 export function useEditorCopy() {
-  return useI18n({ useScope: 'local', messages })
+  return useI18n({ useScope: 'local', messages });
 }
 
-export { coordinateLabel, distanceLabel, transportIcons } from '@fsd/shared/ui/route-scheme'
+export {
+  coordinateLabel,
+  distanceLabel,
+  transportIcons,
+} from '@fsd/shared/ui/route-scheme';
 
 export function routeDistance(tracks: readonly EditorTrack[]) {
-  return tracks.reduce((sum, track) => sum + (track.distance_m ?? 0), 0)
+  return tracks.reduce((sum, track) => sum + (track.distance_m ?? 0), 0);
 }

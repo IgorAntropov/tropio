@@ -1,4 +1,4 @@
-import type { CatalogFilterOptions } from '@fsd/shared/api'
+import type { CatalogFilterOptions } from '@fsd/shared/api';
 
 export function useCatalogDictionaries() {
   const { data, pending, error, refresh } = useFetch<CatalogFilterOptions>('/api/v1/catalog/filter-options', {
@@ -6,12 +6,12 @@ export function useCatalogDictionaries() {
     deep: false,
     credentials: 'omit',
     retry: 0,
-  })
+  });
   return {
     regions: computed(() => data.value?.regions ?? []),
     difficulties: computed(() => data.value?.difficulties ?? []),
     pending,
     error,
     refresh,
-  }
+  };
 }

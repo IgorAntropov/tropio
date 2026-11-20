@@ -1,21 +1,35 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { UiDialog, UiSegmented, UiStatus } from '@fsd/shared/ui/kit'
-import type { EditorConflict, EditorDraft } from '../types'
-import EditorTimeline from './EditorTimeline.vue'
-import { distanceLabel, routeDistance, useEditorCopy } from './presentation'
+import {
+  computed,
+  ref,
+} from 'vue';
+import {
+  UiDialog,
+  UiSegmented,
+  UiStatus,
+} from '@fsd/shared/ui/kit';
+import type {
+  EditorConflict,
+  EditorDraft,
+} from '../types';
+import EditorTimeline from './EditorTimeline.vue';
+import {
+  distanceLabel,
+  routeDistance,
+  useEditorCopy,
+} from './presentation';
 
-defineProps<{ conflict?: EditorConflict | null, draft: EditorDraft }>()
-const emit = defineEmits<{ close: [], reload: [], server: [] }>()
-const { t } = useEditorCopy()
-const view = ref('local')
-const options = computed(() => [{ value: 'local', label: t('local') }, { value: 'server', label: t('server') }])
+defineProps<{ conflict?: EditorConflict | null; draft: EditorDraft }>();
+const emit = defineEmits<{ close: []; reload: []; server: [] }>();
+const { t } = useEditorCopy();
+const view = ref('local');
+const options = computed(() => [{ value: 'local', label: t('local') }, { value: 'server', label: t('server') }]);
 </script>
 
 <template>
   <UiDialog
-    :model-value="true"
     class="editor-dialog editor-compare-dialog"
+    :model-value="true"
     :title="t('compare')"
     @update:model-value="!$event && emit('close')"
   >
@@ -27,7 +41,12 @@ const options = computed(() => [{ value: 'local', label: t('local') }, { value: 
       <button class="tk-button" type="button" @click="emit('reload')">{{ t('retry') }}</button>
     </div>
     <template v-else>
-      <UiSegmented v-model="view" class="editor-compare-tabs" :label="t('compareTabs')" :options="options" />
+      <UiSegmented
+        v-model="view"
+        class="editor-compare-tabs"
+        :label="t('compareTabs')"
+        :options="options"
+      />
       <div class="editor-compare-columns">
         <section class="editor-compare-version" :class="{ 'editor-compare-inactive': view !== 'local' }">
           <h3>{{ t('local') }}</h3>

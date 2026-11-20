@@ -1,38 +1,44 @@
-import { createHash } from 'node:crypto'
-import type { PoolClient } from 'pg'
-import { BffProblem } from '../../http/bff-problem.js'
-import type { GeoLine, LonLat, TransportMode } from '../providers/index.js'
-import { lineGeoJsonSql } from '../routes/route-store.js'
+import { createHash } from 'node:crypto';
+import type { PoolClient } from 'pg';
+import { BffProblem } from '../../http/bff-problem.js';
+import type {
+  GeoLine,
+  LonLat,
+  TransportMode,
+} from '../providers/index.js';
+import { lineGeoJsonSql } from '../routes/route-store.js';
 
 export interface GeoManifest {
-  operationId: string
-  tripId: string
-  routes: { day_id: string; route_id: string; route_revision_id: string }[]
-  poiIds: string[]
+  operationId: string;
+  tripId: string;
+  routes: { day_id: string; route_id: string; route_revision_id: string }[];
+  poiIds: string[];
 }
 
 interface Batch {
-  trip_id: string
-  active: boolean
-  manifest_hash: string | null
+  trip_id: string;
+  active: boolean;
+  manifest_hash: string | null;
 }
 
 export function manifestHash(manifest: GeoManifest) {
-  const orderedRoutes = manifest.routes.map(route => [route.day_id, route.route_id, route.route_revision_id])
-  return createHash('sha256').update(JSON.stringify([manifest.tripId, orderedRoutes, [...manifest.poiIds].sort()])).digest('hex')
+  const orderedRoutes = manifest.routes.map(route => [route.day_id, route.route_id, route.route_revision_id]);
+  return createHash('sha256').update(JSON.stringify([manifest.tripId, orderedRoutes, [...manifest.poiIds].sort()])).digest('hex');
 }
 
 export async function lockBatch(client: PoolClient, operationId: string, tripId: string) {
   const { rows: [batch] } = await client.query<Batch>(
     'SELECT trip_id, active, manifest_hash FROM geo.route_hold_batches WHERE travel_operation_id = $1 FOR UPDATE',
     [operationId],
-  )
-  if (!batch || batch.trip_id !== tripId) throw new BffProblem('PUBLICATION_PRECONDITION_FAILED')
-  return batch
+  );
+  if (!batch || batch.trip_id !== tripId) {
+    throw new BffProblem('PUBLICATION_PRECONDITION_FAILED');
+  }
+  return batch;
 }
 
 const publicRevision = `r.visibility = 'global' AND r.deleted_at IS NULL AND r.moderation_status = 'approved'
-  AND r.approved_position_revision_id = r.position_revision_id`
+  AND r.approved_position_revision_id = r.position_revision_id`;
 
 const dependenciesAllowed = `NOT EXISTS (
   SELECT FROM geo.route_points pt WHERE (pt.route_id, pt.route_version) = (v.route_id, v.version)
@@ -46,11 +52,11 @@ const dependenciesAllowed = `NOT EXISTS (
     SELECT FROM geo.pois p JOIN geo.poi_revisions r ON (r.poi_id, r.id) = (p.id, p.head_revision_id)
     WHERE p.id = d.poi_id AND r.position_revision_id = d.position_revision_id AND ${publicRevision}
   )
-)`
+)`;
 
 export async function retainRoutes(client: PoolClient, manifest: GeoManifest) {
-  const routeIds = manifest.routes.map(route => route.route_id)
-  await client.query('SELECT route_id FROM geo.route_geometries WHERE route_id = ANY($1::uuid[]) ORDER BY route_id FOR SHARE', [routeIds])
+  const routeIds = manifest.routes.map(route => route.route_id);
+  await client.query('SELECT route_id FROM geo.route_geometries WHERE route_id = ANY($1::uuid[]) ORDER BY route_id FOR SHARE', [routeIds]);
   await client.query(
     `SELECT id FROM geo.pois WHERE id IN (
        SELECT unnest($1::uuid[]) UNION
@@ -58,7 +64,7 @@ export async function retainRoutes(client: PoolClient, manifest: GeoManifest) {
          ON (d.route_id, d.route_version) = (g.route_id, g.head_version) WHERE g.route_id = ANY($2::uuid[])
      ) ORDER BY id FOR SHARE`,
     [manifest.poiIds, routeIds],
-  )
+  );
   const { rows } = await client.query<{ route_id: string; revision_id: string; ready: boolean; allowed: boolean }>(
     `SELECT v.route_id, v.revision_id,
        (v.status = 'ready' AND points.count >= 2 AND points.last = points.count - 1
@@ -82,19 +88,25 @@ export async function retainRoutes(client: PoolClient, manifest: GeoManifest) {
      ) tracks
      WHERE g.route_id = ANY($1::uuid[])`,
     [routeIds],
-  )
-  const byId = new Map(rows.map(row => [row.route_id, row]))
+  );
+  const byId = new Map(rows.map(row => [row.route_id, row]));
   for (const route of manifest.routes) {
-    const current = byId.get(route.route_id)
-    if (current?.revision_id !== route.route_revision_id) throw new BffProblem('ROUTE_REVISION_CONFLICT')
-    if (!current.ready) throw new BffProblem('ROUTE_NOT_READY')
-    if (!current.allowed) throw new BffProblem('POI_PUBLICATION_RESTRICTED')
+    const current = byId.get(route.route_id);
+    if (current?.revision_id !== route.route_revision_id) {
+      throw new BffProblem('ROUTE_REVISION_CONFLICT');
+    }
+    if (!current.ready) {
+      throw new BffProblem('ROUTE_NOT_READY');
+    }
+    if (!current.allowed) {
+      throw new BffProblem('POI_PUBLICATION_RESTRICTED');
+    }
   }
   await client.query(
     `INSERT INTO geo.route_geometry_holds (travel_operation_id, route_id, route_version)
      SELECT $1, route_id, head_version FROM geo.route_geometries WHERE route_id = ANY($2::uuid[])`,
     [manifest.operationId, routeIds],
-  )
+  );
 }
 
 export async function selectedPois(client: PoolClient, manifest: GeoManifest, requireAttachment: boolean) {
@@ -106,29 +118,32 @@ export async function selectedPois(client: PoolClient, manifest: GeoManifest, re
        AND (NOT $2::boolean OR EXISTS (SELECT FROM geo.trip_pois tp WHERE (tp.trip_id, tp.poi_id) = ($3, p.id)))
      ORDER BY p.id`,
     [manifest.poiIds, requireAttachment, manifest.tripId],
-  )
-  if (requireAttachment && rows.length !== manifest.poiIds.length) throw new BffProblem('POI_PUBLICATION_RESTRICTED')
-  return rows
+  );
+  if (requireAttachment && rows.length !== manifest.poiIds.length) {
+    throw new BffProblem('POI_PUBLICATION_RESTRICTED');
+  }
+  return rows;
 }
 
 interface HeldRoute {
-  operation_id: string
-  route_id: string
-  revision_id: string
-  start: LonLat | null
-  allowed: boolean
+  operation_id: string;
+  route_id: string;
+  revision_id: string;
+  start: LonLat | null;
+  allowed: boolean;
 }
 
 export async function heldStarts(client: PoolClient, manifests: GeoManifest[], preparing = false) {
   const expected = manifests.map(m => ({
-    operation_id: m.operationId, first_route_id: m.routes[0]?.route_id,
-  }))
+    operation_id: m.operationId,
+    first_route_id: m.routes[0]?.route_id,
+  }));
   const { rows: batches } = await client.query<Batch & { operation_id: string; poi_ids: string[] }>(
     `SELECT b.travel_operation_id AS operation_id, b.trip_id, b.active, b.manifest_hash,
        ARRAY(SELECT poi_id FROM geo.route_hold_batch_pois p WHERE p.travel_operation_id = b.travel_operation_id ORDER BY poi_id) AS poi_ids
      FROM geo.route_hold_batches b WHERE b.travel_operation_id = ANY($1::uuid[])`,
     [manifests.map(m => m.operationId)],
-  )
+  );
   const { rows: routes } = await client.query<HeldRoute>(
     `SELECT e.operation_id, h.route_id, v.revision_id, ${dependenciesAllowed} AS allowed,
        CASE WHEN p.geom IS NOT NULL THEN jsonb_build_object('lon', public.ST_X(p.geom), 'lat', public.ST_Y(p.geom)) END AS start
@@ -138,44 +153,48 @@ export async function heldStarts(client: PoolClient, manifests: GeoManifest[], p
      LEFT JOIN geo.route_points p ON h.route_id = e.first_route_id
        AND (p.route_id, p.route_version, p.position) = (h.route_id, h.route_version, 0)`,
     [JSON.stringify(expected)],
-  )
-  const batchById = new Map(batches.map(batch => [batch.operation_id, batch]))
-  const held = new Map<string, Map<string, HeldRoute>>()
+  );
+  const batchById = new Map(batches.map(batch => [batch.operation_id, batch]));
+  const held = new Map<string, Map<string, HeldRoute>>();
   for (const route of routes) {
-    const entry = held.get(route.operation_id) ?? new Map<string, HeldRoute>()
-    entry.set(route.route_id, route)
-    held.set(route.operation_id, entry)
+    const entry = held.get(route.operation_id) ?? new Map<string, HeldRoute>();
+    entry.set(route.route_id, route);
+    held.set(route.operation_id, entry);
   }
-  return manifests.map(manifest => {
-    const batch = batchById.get(manifest.operationId)
-    if (preparing && batch && !batch.active) throw new BffProblem('PUBLICATION_CANCELLED')
-    const current = held.get(manifest.operationId)
-    const start = current?.get(manifest.routes[0]?.route_id ?? '')?.start
-    const selected = new Set(manifest.poiIds)
+  return manifests.map((manifest) => {
+    const batch = batchById.get(manifest.operationId);
+    if (preparing && batch && !batch.active) {
+      throw new BffProblem('PUBLICATION_CANCELLED');
+    }
+    const current = held.get(manifest.operationId);
+    const start = current?.get(manifest.routes[0]?.route_id ?? '')?.start;
+    const selected = new Set(manifest.poiIds);
     if (!batch?.active || batch.trip_id !== manifest.tripId || !current || !start
       || (batch.manifest_hash && batch.manifest_hash !== manifestHash(manifest))
       || current.size !== manifest.routes.length || batch.poi_ids.length !== selected.size
       || batch.poi_ids.some(id => !selected.has(id))
       || manifest.routes.some(route => current.get(route.route_id)?.revision_id !== route.route_revision_id)) {
-      throw new BffProblem(preparing ? 'PUBLICATION_PRECONDITION_FAILED' : 'DEPENDENCY_UNAVAILABLE')
+      throw new BffProblem(preparing ? 'PUBLICATION_PRECONDITION_FAILED' : 'DEPENDENCY_UNAVAILABLE');
     }
-    return [...current.values()].every(route => route.allowed) ? start : null
-  })
+    return [...current.values()].every(route => route.allowed) ? start : null;
+  });
 }
 
 const heldTracks = `FROM geo.route_geometry_holds h JOIN geo.tracks t
-  ON (t.route_id, t.route_version) = (h.route_id, h.route_version) WHERE h.travel_operation_id = $1`
+  ON (t.route_id, t.route_version) = (h.route_id, h.route_version) WHERE h.travel_operation_id = $1`;
 
 export async function tripType(client: PoolClient, operationId: string) {
-  const { rows } = await client.query<{ transport_mode: TransportMode }>(`SELECT DISTINCT t.transport_mode ${heldTracks}`, [operationId])
-  const first = rows[0]
-  if (!first) throw new BffProblem('ROUTE_NOT_READY')
-  return rows.length === 1 ? first.transport_mode : 'combined'
+  const { rows } = await client.query<{ transport_mode: TransportMode }>(`SELECT DISTINCT t.transport_mode ${heldTracks}`, [operationId]);
+  const first = rows[0];
+  if (!first) {
+    throw new BffProblem('ROUTE_NOT_READY');
+  }
+  return rows.length === 1 ? first.transport_mode : 'combined';
 }
 
 export async function publicDays(client: PoolClient, manifest: GeoManifest) {
-  type Line = { type: 'LineString'; coordinates: GeoLine }
-  type Leg = { name: string | null; start_name: string | null; end_name: string | null; distance_m: number; transport_mode: TransportMode }
+  type Line = { type: 'LineString'; coordinates: GeoLine };
+  type Leg = { name: string | null; start_name: string | null; end_name: string | null; distance_m: number; transport_mode: TransportMode };
   const { rows } = await client.query<{ route_id: string; lines: Line[]; legs: Leg[] }>(
     `SELECT t.route_id, jsonb_agg(${lineGeoJsonSql('t.geom')} ORDER BY t.position) AS lines,
        jsonb_agg(jsonb_build_object('name', t.name, 'start_name', a.name, 'end_name', b.name,
@@ -186,11 +205,13 @@ export async function publicDays(client: PoolClient, manifest: GeoManifest) {
      JOIN geo.route_points b ON (b.route_id,b.route_version,b.point_id) = (t.route_id,t.route_version,t.end_point_id)
      WHERE h.travel_operation_id = $1 GROUP BY t.route_id`,
     [manifest.operationId],
-  )
-  const routes = new Map(rows.map(route => [route.route_id, route]))
+  );
+  const routes = new Map(rows.map(route => [route.route_id, route]));
   return manifest.routes.map(({ route_id }, index) => {
-    const route = routes.get(route_id)
-    if (!route?.lines.length) throw new BffProblem('DEPENDENCY_UNAVAILABLE')
-    return { position: index + 1, lines: route.lines, legs: route.legs }
-  })
+    const route = routes.get(route_id);
+    if (!route?.lines.length) {
+      throw new BffProblem('DEPENDENCY_UNAVAILABLE');
+    }
+    return { position: index + 1, lines: route.lines, legs: route.legs };
+  });
 }

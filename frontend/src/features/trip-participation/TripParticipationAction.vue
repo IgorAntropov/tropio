@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { PublicTripSummary } from '@fsd/shared/api'
-import { UiButton } from '@fsd/shared/ui/kit'
-import { useTripParticipation } from './use-trip-participation'
+import { computed } from 'vue';
+import type { PublicTripSummary } from '@fsd/shared/api';
+import { UiButton } from '@fsd/shared/ui/kit';
+import { useTripParticipation } from './use-trip-participation';
 
-const props = defineProps<{ trip: Pick<PublicTripSummary, 'trip_id' | 'organizer' | 'applications_open' | 'admission_mode'> }>()
-const { t } = useI18n()
-const { viewer, sent, joined, busy, errors, apply } = useTripParticipation()
-const immediate = computed(() => props.trip.admission_mode === 'open')
+const props = defineProps<{ trip: Pick<PublicTripSummary, 'trip_id' | 'organizer' | 'applications_open' | 'admission_mode'> }>();
+const { t } = useI18n();
+const { viewer, sent, joined, busy, errors, apply } = useTripParticipation();
+const immediate = computed(() => props.trip.admission_mode === 'open');
 const actionLabel = computed(() => {
-  if (busy.value.has(props.trip.trip_id)) return immediate.value ? 'participation.joining' : 'participation.sending'
-  return immediate.value ? 'participation.join' : 'participation.apply'
-})
+  if (busy.value.has(props.trip.trip_id)) {
+    return immediate.value ? 'participation.joining' : 'participation.sending';
+  }
+  return immediate.value ? 'participation.join' : 'participation.apply';
+});
 </script>
 
 <template>
@@ -21,7 +23,10 @@ const actionLabel = computed(() => {
     <span v-else-if="sent.has(trip.trip_id) && (!immediate || !trip.applications_open)" role="status">{{ t('participation.sent') }}</span>
     <UiButton
       v-else-if="trip.applications_open"
-      :disabled="busy.has(trip.trip_id)" :aria-busy="busy.has(trip.trip_id)" @click="apply(trip.trip_id, trip.admission_mode)">
+      :aria-busy="busy.has(trip.trip_id)"
+      :disabled="busy.has(trip.trip_id)"
+      @click="apply(trip.trip_id, trip.admission_mode)"
+    >
       {{ t(actionLabel) }}
     </UiButton>
     <span v-else>{{ t('participation.closed') }}</span>

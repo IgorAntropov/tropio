@@ -1,23 +1,25 @@
 <script setup lang="ts">
-import type { PublicTripSummary } from '@fsd/shared/api'
-import { formatCalendarPeriod } from '@fsd/shared/i18n/format-calendar-period'
-import { MaterialSymbol } from '@fsd/shared/ui/material-symbol'
-import { tripTypeIcons } from '../trip-type'
+import type { PublicTripSummary } from '@fsd/shared/api';
+import { formatCalendarPeriod } from '@fsd/shared/i18n/format-calendar-period';
+import { MaterialSymbol } from '@fsd/shared/ui/material-symbol';
+import { tripTypeIcons } from '../trip-type';
 
-const props = defineProps<{ trip: Pick<PublicTripSummary, 'start_date' | 'end_date' | 'trip_type' | 'difficulty' | 'free_capacity' | 'day_count' | 'confirmed_participants'> }>()
-defineSlots<{ dateNote?(): unknown }>()
-const { t, locale } = useI18n()
-const availablePlaces = computed(() => props.trip.free_capacity === null ? null : Math.max(0, props.trip.free_capacity - (props.trip.confirmed_participants ?? 0)))
+const props = defineProps<{ trip: Pick<PublicTripSummary, 'start_date' | 'end_date' | 'trip_type' | 'difficulty' | 'free_capacity' | 'day_count' | 'confirmed_participants'> }>();
+defineSlots<{ dateNote?(): unknown }>();
+const { t, locale } = useI18n();
+const availablePlaces = computed(() => props.trip.free_capacity === null ? null : Math.max(0, props.trip.free_capacity - (props.trip.confirmed_participants ?? 0)));
 const daysText = computed(() => {
-  const form = new Intl.PluralRules(locale.value).select(props.trip.day_count)
-  return t('catalog.daysCount.' + form, { count: props.trip.day_count })
-})
+  const form = new Intl.PluralRules(locale.value).select(props.trip.day_count);
+  return t('catalog.daysCount.' + form, { count: props.trip.day_count });
+});
 const dateText = computed(() => {
-  const dates = [props.trip.start_date, props.trip.end_date].filter((item): item is string => !!item)
-  const [first, last] = dates.map(date => new Date(date + 'T00:00:00Z'))
-  if (!first) return ''
-  return formatCalendarPeriod(t, first, last)
-})
+  const dates = [props.trip.start_date, props.trip.end_date].filter((item): item is string => !!item);
+  const [first, last] = dates.map(date => new Date(date + 'T00:00:00Z'));
+  if (!first) {
+    return '';
+  }
+  return formatCalendarPeriod(t, first, last);
+});
 </script>
 
 <template>

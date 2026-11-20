@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { AccountAuthPage } from '@fsd/pages/account-auth'
-import { loginReadyKey } from '@fsd/shared/session'
-import { SessionCheck } from '@fsd/shared/ui/session-check'
+import { AccountAuthPage } from '@fsd/pages/account-auth';
+import { loginReadyKey } from '@fsd/shared/session';
+import { SessionCheck } from '@fsd/shared/ui/session-check';
 
-definePageMeta({ middleware: 'session-entry' })
-useSeoMeta({ robots: 'noindex' })
+definePageMeta({ middleware: 'session-entry' });
+useSeoMeta({ robots: 'noindex' });
 
-const loginReady = useState(loginReadyKey, () => false)
+const loginReady = useState(loginReadyKey, () => false);
 </script>
 
 <template>

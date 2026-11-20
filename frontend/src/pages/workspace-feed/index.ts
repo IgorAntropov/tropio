@@ -1,1 +1,1 @@
-export { default as WorkspaceFeed } from './ui/WorkspaceFeed.vue'
+export { default as WorkspaceFeed } from './ui/WorkspaceFeed.vue';

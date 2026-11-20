@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import { useEditorCopy } from './presentation'
+import { useEditorCopy } from './presentation';
 
-defineProps<{ issue: string, signInRequired?: boolean, compact?: boolean }>()
-const { t } = useEditorCopy()
+defineProps<{ issue: string; signInRequired?: boolean; compact?: boolean }>();
+const { t } = useEditorCopy();
 </script>
 
 <template>
   <div class="editor-issue" :class="{ 'editor-form-issue': compact }">
     <p role="alert">{{ issue }}</p>
-    <NuxtLink v-if="signInRequired" to="/login" target="_blank" rel="noopener" class="tk-button tk-button-text editor-reauth">
+    <NuxtLink
+      v-if="signInRequired"
+      class="tk-button tk-button-text editor-reauth"
+      rel="noopener"
+      target="_blank"
+      to="/login"
+    >
       {{ t('signInNewTab') }}
     </NuxtLink>
   </div>

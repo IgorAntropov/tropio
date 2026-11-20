@@ -1,43 +1,43 @@
 type Marker = {
-  x: number
-  y: number
-  kind: 'peak' | 'camp' | 'water' | 'lookout'
-  tone: 'trail' | 'ridge' | 'coast'
-}
+  x: number;
+  y: number;
+  kind: 'peak' | 'camp' | 'water' | 'lookout';
+  tone: 'trail' | 'ridge' | 'coast';
+};
 
 type Route = {
-  path: string
-  tone: Marker['tone']
-}
+  path: string;
+  tone: Marker['tone'];
+};
 
 type Hill = {
-  x: number
-  y: number
-  scale: number
-  angle: number
-  contours: number
-}
+  x: number;
+  y: number;
+  scale: number;
+  angle: number;
+  contours: number;
+};
 
 type Scene = {
-  id: 'wide' | 'narrow'
-  viewBox: string
-  land: string[]
-  water: string
-  shoreline: string
-  streams: string[]
-  trails: string[]
-  hills: Hill[]
-  routes: Route[]
-  markers: Marker[]
-}
+  id: 'wide' | 'narrow';
+  viewBox: string;
+  land: string[];
+  water: string;
+  shoreline: string;
+  streams: string[];
+  trails: string[];
+  hills: Hill[];
+  routes: Route[];
+  markers: Marker[];
+};
 
-export const hillOutline =
-  'M-145 32C-164-9-139-60-112-86C-84-110-43-109-14-121C25-136 61-128 89-108C115-89 139-74 145-46C155-13 128 8 121 31C115 57 134 77 104 104C78 129 53 126 20 126C-21 126-31 106-59 95C-94 82-121 81-145 32Z'
+export const hillOutline
+  = 'M-145 32C-164-9-139-60-112-86C-84-110-43-109-14-121C25-136 61-128 89-108C115-89 139-74 145-46C155-13 128 8 121 31C115 57 134 77 104 104C78 129 53 126 20 126C-21 126-31 106-59 95C-94 82-121 81-145 32Z';
 
 export function contourTransform(index: number, count: number): string {
-  const scale = 1 - (index / count) * 0.76
-  const drift = index * 1.1
-  return `translate(${drift},${-drift}) rotate(${index * 1.2}) scale(${scale})`
+  const scale = 1 - (index / count) * 0.76;
+  const drift = index * 1.1;
+  return `translate(${drift},${-drift}) rotate(${index * 1.2}) scale(${scale})`;
 }
 
 export const scenes: Scene[] = [
@@ -65,13 +65,55 @@ export const scenes: Scene[] = [
       'M1289 716C1379 752 1435 693 1490 728',
     ],
     hills: [
-      { x: 194, y: 204, scale: 1.46, angle: -24, contours: 10 },
-      { x: 398, y: 486, scale: 0.83, angle: -44, contours: 7 },
-      { x: 1219, y: 238, scale: 1.66, angle: 30, contours: 12 },
-      { x: 1363, y: 544, scale: 0.82, angle: 9, contours: 7 },
-      { x: 1304, y: 863, scale: 1.13, angle: 54, contours: 8 },
-      { x: 839, y: 39, scale: 0.66, angle: -22, contours: 5 },
-      { x: 1015, y: 765, scale: 0.71, angle: 34, contours: 6 },
+      {
+        x: 194,
+        y: 204,
+        scale: 1.46,
+        angle: -24,
+        contours: 10,
+      },
+      {
+        x: 398,
+        y: 486,
+        scale: 0.83,
+        angle: -44,
+        contours: 7,
+      },
+      {
+        x: 1219,
+        y: 238,
+        scale: 1.66,
+        angle: 30,
+        contours: 12,
+      },
+      {
+        x: 1363,
+        y: 544,
+        scale: 0.82,
+        angle: 9,
+        contours: 7,
+      },
+      {
+        x: 1304,
+        y: 863,
+        scale: 1.13,
+        angle: 54,
+        contours: 8,
+      },
+      {
+        x: 839,
+        y: 39,
+        scale: 0.66,
+        angle: -22,
+        contours: 5,
+      },
+      {
+        x: 1015,
+        y: 765,
+        scale: 0.71,
+        angle: 34,
+        contours: 6,
+      },
     ],
     routes: [
       { tone: 'trail', path: 'M-16 547C55 534 69 505 114 498C158 490 194 513 226 495C263 475 253 424 288 405C328 383 368 405 396 382C426 358 429 300 461 287C503 269 548 307 609 276' },
@@ -79,15 +121,60 @@ export const scenes: Scene[] = [
       { tone: 'coast', path: 'M709 829C793 829 830 793 875 787C915 780 950 812 992 799C1048 782 1075 714 1121 717C1167 720 1167 766 1216 766C1255 766 1282 731 1321 736C1354 739 1377 765 1459 735' },
     ],
     markers: [
-      { x: 114, y: 498, kind: 'camp', tone: 'trail' },
-      { x: 288, y: 405, kind: 'peak', tone: 'trail' },
-      { x: 461, y: 287, kind: 'lookout', tone: 'trail' },
-      { x: 1018, y: 148, kind: 'lookout', tone: 'ridge' },
-      { x: 1205, y: 220, kind: 'peak', tone: 'ridge' },
-      { x: 1309, y: 309, kind: 'camp', tone: 'ridge' },
-      { x: 875, y: 787, kind: 'water', tone: 'coast' },
-      { x: 1121, y: 717, kind: 'camp', tone: 'coast' },
-      { x: 1321, y: 736, kind: 'lookout', tone: 'coast' },
+      {
+        x: 114,
+        y: 498,
+        kind: 'camp',
+        tone: 'trail',
+      },
+      {
+        x: 288,
+        y: 405,
+        kind: 'peak',
+        tone: 'trail',
+      },
+      {
+        x: 461,
+        y: 287,
+        kind: 'lookout',
+        tone: 'trail',
+      },
+      {
+        x: 1018,
+        y: 148,
+        kind: 'lookout',
+        tone: 'ridge',
+      },
+      {
+        x: 1205,
+        y: 220,
+        kind: 'peak',
+        tone: 'ridge',
+      },
+      {
+        x: 1309,
+        y: 309,
+        kind: 'camp',
+        tone: 'ridge',
+      },
+      {
+        x: 875,
+        y: 787,
+        kind: 'water',
+        tone: 'coast',
+      },
+      {
+        x: 1121,
+        y: 717,
+        kind: 'camp',
+        tone: 'coast',
+      },
+      {
+        x: 1321,
+        y: 736,
+        kind: 'lookout',
+        tone: 'coast',
+      },
     ],
   },
   {
@@ -112,10 +199,34 @@ export const scenes: Scene[] = [
       'M426 991C362 928 388 870 355 817S281 771 270 725',
     ],
     hills: [
-      { x: 72, y: 109, scale: 0.95, angle: -25, contours: 8 },
-      { x: 381, y: 155, scale: 0.60, angle: 34, contours: 7 },
-      { x: 87, y: 699, scale: 0.70, angle: 25, contours: 6 },
-      { x: 361, y: 747, scale: 0.80, angle: 40, contours: 8 },
+      {
+        x: 72,
+        y: 109,
+        scale: 0.95,
+        angle: -25,
+        contours: 8,
+      },
+      {
+        x: 381,
+        y: 155,
+        scale: 0.60,
+        angle: 34,
+        contours: 7,
+      },
+      {
+        x: 87,
+        y: 699,
+        scale: 0.70,
+        angle: 25,
+        contours: 6,
+      },
+      {
+        x: 361,
+        y: 747,
+        scale: 0.80,
+        angle: 40,
+        contours: 8,
+      },
     ],
     routes: [
       { tone: 'trail', path: 'M-28 161C29 137 38 106 77 106C113 106 143 129 171 105C195 85 206 54 240 53C275 52 295 84 333 76C362 69 385 30 460 47' },
@@ -123,13 +234,48 @@ export const scenes: Scene[] = [
       { tone: 'coast', path: 'M11 915C64 910 82 864 121 862C160 860 186 901 224 899C258 897 273 853 309 845C343 837 376 861 410 838C434 822 445 797 470 802' },
     ],
     markers: [
-      { x: 77, y: 106, kind: 'camp', tone: 'trail' },
-      { x: 240, y: 53, kind: 'peak', tone: 'trail' },
-      { x: 333, y: 76, kind: 'lookout', tone: 'trail' },
-      { x: 83, y: 741, kind: 'lookout', tone: 'ridge' },
-      { x: 272, y: 728, kind: 'camp', tone: 'ridge' },
-      { x: 121, y: 862, kind: 'water', tone: 'coast' },
-      { x: 309, y: 845, kind: 'peak', tone: 'coast' },
+      {
+        x: 77,
+        y: 106,
+        kind: 'camp',
+        tone: 'trail',
+      },
+      {
+        x: 240,
+        y: 53,
+        kind: 'peak',
+        tone: 'trail',
+      },
+      {
+        x: 333,
+        y: 76,
+        kind: 'lookout',
+        tone: 'trail',
+      },
+      {
+        x: 83,
+        y: 741,
+        kind: 'lookout',
+        tone: 'ridge',
+      },
+      {
+        x: 272,
+        y: 728,
+        kind: 'camp',
+        tone: 'ridge',
+      },
+      {
+        x: 121,
+        y: 862,
+        kind: 'water',
+        tone: 'coast',
+      },
+      {
+        x: 309,
+        y: 845,
+        kind: 'peak',
+        tone: 'coast',
+      },
     ],
   },
-]
+];

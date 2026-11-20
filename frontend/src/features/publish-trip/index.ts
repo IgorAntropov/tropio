@@ -1,1 +1,1 @@
-export { default as TripPublication } from './TripPublication.vue'
+export { default as TripPublication } from './TripPublication.vue';

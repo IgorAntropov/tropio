@@ -1,64 +1,100 @@
 <script setup lang="ts">
-import { useId } from 'vue'
-import { contourTransform, hillOutline, scenes } from './auth-map-scene'
+import { useId } from 'vue';
+import {
+  contourTransform,
+  hillOutline,
+  scenes,
+} from './auth-map-scene';
 
-const id = useId()
+const id = useId();
 
 const markerSymbols = {
   peak: 'm-7 5 5-10 4 7 2-4 4 7H-7ZM-4-1l2 2 2-2',
   camp: 'm-7 6 7-12L7 6H-7ZM-3 6l3-5 3 5M-2-8l2 2 2-2',
   water: 'M-7-3c2-2 4 2 7 0s5 2 7 0M-7 1c2-2 4 2 7 0s5 2 7 0M-7 5c2-2 4 2 7 0s5 2 7 0',
   lookout: 'M-7 0s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5ZM0-2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z',
-}
+};
 </script>
 
 <template>
-  <div class="auth-map-backdrop" aria-hidden="true">
+  <div aria-hidden="true" class="auth-map-backdrop">
     <svg
-      v-for="scene in scenes" :key="scene.id" :class="`map-scene map-scene-${scene.id}`"
-      :viewBox="scene.viewBox" preserveAspectRatio="xMidYMid slice" focusable="false"
+      v-for="scene in scenes"
+      :key="scene.id"
+      :class="`map-scene map-scene-${scene.id}`"
+      focusable="false"
+      preserveAspectRatio="xMidYMid slice"
+      :viewBox="scene.viewBox"
     >
       <defs>
-        <pattern :id="`${id}-${scene.id}-grid`" width="48" height="48" patternUnits="userSpaceOnUse">
-          <path d="M48 0H0V48" fill="none" class="map-grid-lines" />
+        <pattern
+          :id="`${id}-${scene.id}-grid`"
+          height="48"
+          patternUnits="userSpaceOnUse"
+          width="48"
+        >
+          <path class="map-grid-lines" d="M48 0H0V48" fill="none" />
         </pattern>
       </defs>
-      <rect width="100%" height="100%" class="map-paper" />
-      <path v-for="path in scene.land" :key="path" :d="path" class="map-land" />
-      <path :d="scene.water" class="map-water" />
-      <rect width="100%" height="100%" :fill="`url(#${id}-${scene.id}-grid)`" />
+      <rect class="map-paper" height="100%" width="100%" />
+      <path
+        v-for="path in scene.land"
+        :key="path"
+        class="map-land"
+        :d="path"
+      />
+      <path class="map-water" :d="scene.water" />
+      <rect :fill="`url(#${id}-${scene.id}-grid)`" height="100%" width="100%" />
       <g class="map-contours">
         <g
-          v-for="hill in scene.hills" :key="hill.x"
+          v-for="hill in scene.hills"
+          :key="hill.x"
           :transform="`translate(${hill.x},${hill.y}) rotate(${hill.angle}) scale(${hill.scale})`"
         >
           <path
-            v-for="contour in hill.contours" :key="contour" :d="hillOutline"
-            :transform="contourTransform(contour - 1, hill.contours)"
+            v-for="contour in hill.contours"
+            :key="contour"
             :class="{ 'map-contour-index': contour % 5 === 1 }"
+            :d="hillOutline"
+            :transform="contourTransform(contour - 1, hill.contours)"
           />
         </g>
       </g>
-      <path :d="scene.shoreline" class="map-shoreline" />
-      <path v-for="path in scene.streams" :key="path" :d="path" class="map-stream" />
-      <path v-for="path in scene.trails" :key="path" :d="path" class="map-trail" />
+      <path class="map-shoreline" :d="scene.shoreline" />
+      <path
+        v-for="path in scene.streams"
+        :key="path"
+        class="map-stream"
+        :d="path"
+      />
+      <path
+        v-for="path in scene.trails"
+        :key="path"
+        class="map-trail"
+        :d="path"
+      />
       <g
-        v-for="route in scene.routes" :key="route.tone" :data-map-route="route.tone"
+        v-for="route in scene.routes"
+        :key="route.tone"
         :class="`map-route map-tone-${route.tone}`"
+        :data-map-route="route.tone"
       >
-        <path :d="route.path" class="map-route-hit" />
-        <path :d="route.path" class="map-route-casing" />
-        <path :d="route.path" class="map-route-line" />
+        <path class="map-route-hit" :d="route.path" />
+        <path class="map-route-casing" :d="route.path" />
+        <path class="map-route-line" :d="route.path" />
       </g>
       <g
-        v-for="marker in scene.markers" :key="marker.x" :data-map-marker="marker.kind"
-        :class="`map-marker map-tone-${marker.tone}`" :transform="`translate(${marker.x},${marker.y})`"
+        v-for="marker in scene.markers"
+        :key="marker.x"
+        :class="`map-marker map-tone-${marker.tone}`"
+        :data-map-marker="marker.kind"
+        :transform="`translate(${marker.x},${marker.y})`"
       >
-        <circle r="21" class="map-marker-hit" />
+        <circle class="map-marker-hit" r="21" />
         <g class="map-marker-badge">
-          <circle r="21" class="map-marker-halo" />
-          <circle r="15" class="map-marker-base" />
-          <path :d="markerSymbols[marker.kind]" class="map-marker-symbol" />
+          <circle class="map-marker-halo" r="21" />
+          <circle class="map-marker-base" r="15" />
+          <path class="map-marker-symbol" :d="markerSymbols[marker.kind]" />
         </g>
       </g>
     </svg>

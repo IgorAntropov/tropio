@@ -1,8 +1,11 @@
-import type { DynamicModule } from '@nestjs/common'
-import { Module } from '@nestjs/common'
-import { CatalogService } from './catalog.service.js'
-import { PUBLICATION_WORKER_ENABLED, PublicationWorker } from './publication-worker.js'
-import { PublicationController } from './publication.controller.js'
+import type { DynamicModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
+import { CatalogService } from './catalog.service.js';
+import {
+  PUBLICATION_WORKER_ENABLED,
+  PublicationWorker,
+} from './publication-worker.js';
+import { PublicationController } from './publication.controller.js';
 
 @Module({})
 export class PublicationModule {
@@ -12,6 +15,6 @@ export class PublicationModule {
       imports: [identity, travel, geo],
       controllers: [PublicationController],
       providers: [CatalogService, PublicationWorker, { provide: PUBLICATION_WORKER_ENABLED, useValue: workerEnabled }],
-    }
+    };
   }
 }

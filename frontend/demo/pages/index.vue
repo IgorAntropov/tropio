@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { TripCatalog } from '@fsd/pages/demo-trips'
+import { TripCatalog } from '@fsd/pages/demo-trips';
 
-defineOptions({ name: 'DemoCatalogPage' })
+defineOptions({ name: 'DemoCatalogPage' });
 
-const { t } = useI18n()
+const { t } = useI18n();
 
-useSeoMeta({ title: () => t('pageTitle', { title: t('demo.catalog.title') }) })
+useSeoMeta({ title: () => t('pageTitle', { title: t('demo.catalog.title') }) });
 </script>
 
 <template>

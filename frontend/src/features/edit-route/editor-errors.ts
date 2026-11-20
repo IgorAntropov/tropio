@@ -1,4 +1,7 @@
-import { EditorResponseError, IdentityResponseError } from '@fsd/shared/api'
+import {
+  EditorResponseError,
+  IdentityResponseError,
+} from '@fsd/shared/api';
 
 const editorProblems: Record<string, string> = {
   INVALID_REQUEST: 'Проверь координаты и параметры маршрута.',
@@ -18,21 +21,29 @@ const editorProblems: Record<string, string> = {
   INVALID_POI_CATEGORY: 'Обнови список категорий и выбери доступную.',
   INVALID_TRIP_DATES: 'Проверь даты путешествия.',
   DEPENDENCY_UNAVAILABLE: 'Сервис временно недоступен. Повтори попытку.',
-}
+};
 
 export function editorProblemCode(error: unknown) {
-  return error instanceof EditorResponseError || error instanceof IdentityResponseError ? error.code : ''
+  return error instanceof EditorResponseError || error instanceof IdentityResponseError ? error.code : '';
 }
 
 export function describeEditorError(error: unknown) {
-  const code = editorProblemCode(error)
-  if (code) return editorProblems[code] ?? 'Не удалось выполнить действие. Попробуй ещё раз.'
-  if (error instanceof TypeError) return 'Проверь подключение к сети и повтори попытку.'
-  if (error instanceof EditorResponseError && error.status >= 500) return editorProblems.DEPENDENCY_UNAVAILABLE!
-  return 'Не удалось выполнить действие. Попробуй ещё раз.'
+  const code = editorProblemCode(error);
+  if (code) {
+    return editorProblems[code] ?? 'Не удалось выполнить действие. Попробуй ещё раз.';
+  }
+  if (error instanceof TypeError) {
+    return 'Проверь подключение к сети и повтори попытку.';
+  }
+  if (error instanceof EditorResponseError && error.status >= 500) {
+    return editorProblems.DEPENDENCY_UNAVAILABLE!;
+  }
+  return 'Не удалось выполнить действие. Попробуй ещё раз.';
 }
 
 export function routeErrorState(error: unknown): 'offline' | 'conflict' | 'error' {
-  if (error instanceof TypeError) return 'offline'
-  return editorProblemCode(error) === 'ROUTE_REVISION_CONFLICT' ? 'conflict' : 'error'
+  if (error instanceof TypeError) {
+    return 'offline';
+  }
+  return editorProblemCode(error) === 'ROUTE_REVISION_CONFLICT' ? 'conflict' : 'error';
 }

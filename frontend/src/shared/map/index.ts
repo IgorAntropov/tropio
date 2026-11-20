@@ -1,4 +1,4 @@
-export { default as RouteMap } from './RouteMap.vue'
+export { default as RouteMap } from './RouteMap.vue';
 export type {
   MapCoordinate,
   MapFocus,
@@ -11,4 +11,4 @@ export type {
   MapSelection,
   MapTrack,
   MapTripFlight,
-} from './types'
+} from './types';

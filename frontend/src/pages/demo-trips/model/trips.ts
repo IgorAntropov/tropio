@@ -1,11 +1,11 @@
 export interface DemoTrip {
-  slug: string
-  title: string
-  region: string
-  distanceKm: number
-  durationDays: number
-  summary: string
-  stops: readonly string[]
+  slug: string;
+  title: string;
+  region: string;
+  distanceKm: number;
+  durationDays: number;
+  summary: string;
+  stops: readonly string[];
 }
 
 export const demoTrips: readonly DemoTrip[] = [
@@ -36,4 +36,4 @@ export const demoTrips: readonly DemoTrip[] = [
     summary: 'Маршрут по открытым склонам с видом на долину и выходом к озеру.',
     stops: ['Степная тропа', 'Восточный гребень', 'Озёрный берег'],
   },
-]
+];

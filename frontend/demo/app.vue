@@ -1,16 +1,16 @@
 <script setup lang="ts">
-const { t, locale } = useI18n()
+const { t, locale } = useI18n();
 
-useSeoMeta({ robots: 'noindex' })
+useSeoMeta({ robots: 'noindex' });
 useHead(() => ({
   htmlAttrs: { lang: locale.value },
-}))
+}));
 </script>
 
 <template>
   <div class="demo-shell font-sans">
     <header class="demo-header demo-width flex items-center justify-between">
-      <NuxtLink to="/" class="demo-wordmark">{{ t('productName') }}</NuxtLink>
+      <NuxtLink class="demo-wordmark" to="/">{{ t('productName') }}</NuxtLink>
       <span>{{ t('demo.label') }}</span>
     </header>
     <NuxtPage />

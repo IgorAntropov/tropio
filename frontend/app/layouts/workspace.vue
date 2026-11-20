@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { workspaceConfirmedKey } from '@fsd/shared/session'
-import { SessionCheck } from '@fsd/shared/ui/session-check'
-import { WorkspaceShell } from '@fsd/widgets/workspace-shell'
+import { workspaceConfirmedKey } from '@fsd/shared/session';
+import { SessionCheck } from '@fsd/shared/ui/session-check';
+import { WorkspaceShell } from '@fsd/widgets/workspace-shell';
 
-const route = useRoute()
-const sessionConfirmed = useState<boolean>(workspaceConfirmedKey, () => false)
-const immersive = computed(() => route.meta.workspaceImmersive === true)
+const route = useRoute();
+const sessionConfirmed = useState<boolean>(workspaceConfirmedKey, () => false);
+const immersive = computed(() => route.meta.workspaceImmersive === true);
 </script>
 
 <template>

@@ -1,4 +1,4 @@
-export { default as RouteEditor } from './ui/RouteEditor.vue'
+export { default as RouteEditor } from './ui/RouteEditor.vue';
 export type {
   EditorBuildMode,
   EditorConflict,
@@ -18,4 +18,4 @@ export type {
   EditorTrack,
   EditorTrackChange,
   EditorTransportMode,
-} from './types'
+} from './types';

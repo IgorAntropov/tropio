@@ -9,7 +9,7 @@ function startReader({ documents, includeLocal }) {
   const index = new URL('index.html', location.href);
   const sourceIndex = new URL('index.html', document.currentScript.src);
   const localAssets = new URL('../.agents/', sourceIndex).href;
-  const documentKeys = new Map(Object.keys(documents).map((path) => [new URL(path, sourceIndex).href, path]));
+  const documentKeys = new Map(Object.keys(documents).map(path => [new URL(path, sourceIndex).href, path]));
   const reader = document.querySelector('#reader');
   const article = document.querySelector('#document');
   const sourceLink = document.querySelector('#reader-source');
@@ -33,7 +33,9 @@ function startReader({ documents, includeLocal }) {
     return [{ ...target, link, group: link.closest('details') }];
   });
   for (const group of document.querySelectorAll('#contents details')) {
-    if (!group.querySelector('a[href]')) group.remove();
+    if (!group.querySelector('a[href]')) {
+      group.remove();
+    }
   }
   const diagramObserver = new IntersectionObserver((entries) => {
     for (const entry of entries) {
@@ -60,7 +62,9 @@ function startReader({ documents, includeLocal }) {
   });
 
   document.addEventListener('click', (event) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
     const link = event.target.closest('a[href]');
     if (link?.classList.contains('skip-link')) {
       event.preventDefault();
@@ -69,10 +73,14 @@ function startReader({ documents, includeLocal }) {
       window.scrollTo(0, 0);
       return;
     }
-    if (!link || !link.hash.startsWith('#doc=') || link.pathname !== index.pathname) return;
+    if (!link || !link.hash.startsWith('#doc=') || link.pathname !== index.pathname) {
+      return;
+    }
     event.preventDefault();
     toggle.setAttribute('aria-expanded', 'false');
-    if (location.hash === link.hash) showSelection(true);
+    if (location.hash === link.hash) {
+      showSelection(true);
+    }
     else {
       history.pushState(null, '', link.hash);
       showSelection(true);
@@ -92,7 +100,9 @@ function startReader({ documents, includeLocal }) {
 
   function readerLink({ path, section }) {
     const params = new URLSearchParams({ doc: path });
-    if (section) params.set('section', section);
+    if (section) {
+      params.set('section', section);
+    }
     return `#${params}`;
   }
 
@@ -108,11 +118,13 @@ function startReader({ documents, includeLocal }) {
     }
 
     const heading = section ? document.getElementById(section) : null;
-    const selected = entries.find((entry) => entry.path === path && entry.section === section)
+    const selected = entries.find(entry => entry.path === path && entry.section === section)
       ?? closestSection(path, heading)
-      ?? entries.find((entry) => entry.path === path && !entry.section);
+      ?? entries.find(entry => entry.path === path && !entry.section);
 
-    for (const { link } of entries) link.removeAttribute('aria-current');
+    for (const { link } of entries) {
+      link.removeAttribute('aria-current');
+    }
     if (selected) {
       selected.link.setAttribute('aria-current', 'page');
       selected.group.open = true;
@@ -122,21 +134,30 @@ function startReader({ documents, includeLocal }) {
     if (heading && article.contains(heading)) {
       heading.scrollIntoView();
       if (moveFocus) {
-        if (!heading.hasAttribute('tabindex')) heading.tabIndex = -1;
+        if (!heading.hasAttribute('tabindex')) {
+          heading.tabIndex = -1;
+        }
         heading.focus({ preventScroll: true });
       }
-    } else if (changed || moveFocus) {
+    }
+    else if (changed || moveFocus) {
       window.scrollTo(0, 0);
-      if (moveFocus) reader.focus({ preventScroll: true });
+      if (moveFocus) {
+        reader.focus({ preventScroll: true });
+      }
     }
   }
 
   function closestSection(path, heading) {
-    if (!heading || !article.contains(heading)) return null;
-    const sections = new Map(entries.filter((entry) => entry.path === path).map((entry) => [entry.section, entry]));
+    if (!heading || !article.contains(heading)) {
+      return null;
+    }
+    const sections = new Map(entries.filter(entry => entry.path === path).map(entry => [entry.section, entry]));
     let closest = null;
     for (const anchor of article.querySelectorAll('[id]')) {
-      if (anchor === heading) break;
+      if (anchor === heading) {
+        break;
+      }
       closest = sections.get(anchor.id) ?? closest;
     }
     return closest;
@@ -151,14 +172,22 @@ function startReader({ documents, includeLocal }) {
     prepareContent(template.content, base);
 
     const title = template.content.querySelector('h1');
-    if (title && !title.id) title.id = 'document-title';
-    if (title) article.setAttribute('aria-labelledby', title.id);
+    if (title && !title.id) {
+      title.id = 'document-title';
+    }
+    if (title) {
+      article.setAttribute('aria-labelledby', title.id);
+    }
     document.title = title ? `${title.textContent} · Tropio` : 'Технический справочник Tropio';
 
     sourceLink.hidden = !hasDocument;
-    if (hasDocument) sourceLink.href = base;
+    if (hasDocument) {
+      sourceLink.href = base;
+    }
     article.replaceChildren(template.content);
-    for (const code of article.querySelectorAll('pre > .language-mermaid')) diagramObserver.observe(code.parentElement);
+    for (const code of article.querySelectorAll('pre > .language-mermaid')) {
+      diagramObserver.observe(code.parentElement);
+    }
   }
 
   function prepareContent(content, base) {
@@ -174,10 +203,13 @@ function startReader({ documents, includeLocal }) {
           link.replaceWith(...link.childNodes);
           continue;
         }
-        if (url.origin === sourceIndex.origin && url.pathname === sourceIndex.pathname) url.pathname = index.pathname;
+        if (url.origin === sourceIndex.origin && url.pathname === sourceIndex.pathname) {
+          url.pathname = index.pathname;
+        }
         const target = documentTarget(url);
         link.href = target ? readerLink(target) : url;
-      } catch {
+      }
+      catch {
         link.removeAttribute('href');
       }
     }
@@ -188,15 +220,22 @@ function startReader({ documents, includeLocal }) {
           image.replaceWith(image.alt);
           continue;
         }
-        if (allowedLinks.has(url.protocol) && url.protocol !== 'mailto:') image.src = url;
-        else image.removeAttribute('src');
-      } catch {
+        if (allowedLinks.has(url.protocol) && url.protocol !== 'mailto:') {
+          image.src = url;
+        }
+        else {
+          image.removeAttribute('src');
+        }
+      }
+      catch {
         image.removeAttribute('src');
       }
       image.loading = 'lazy';
     }
     for (const table of content.querySelectorAll('table')) {
-      if (table.parentElement?.classList.contains('table-scroll')) continue;
+      if (table.parentElement?.classList.contains('table-scroll')) {
+        continue;
+      }
       const wrapper = document.createElement('div');
       wrapper.className = 'table-scroll';
       wrapper.setAttribute('role', 'region');
@@ -210,9 +249,13 @@ function startReader({ documents, includeLocal }) {
   async function renderDiagram(source) {
     try {
       const renderer = await (mermaid ??= loadMermaid());
-      if (!source.isConnected) return;
+      if (!source.isConnected) {
+        return;
+      }
       const { svg } = await renderer.render(`diagram-${++diagramNumber}`, source.textContent);
-      if (!source.isConnected) return;
+      if (!source.isConnected) {
+        return;
+      }
       const frame = document.createElement('div');
       frame.className = 'diagram';
       frame.setAttribute('role', 'region');
@@ -221,9 +264,12 @@ function startReader({ documents, includeLocal }) {
       frame.innerHTML = svg;
       const drawing = frame.querySelector('svg');
       const width = drawing.viewBox.baseVal.width;
-      if (width) drawing.style.minInlineSize = `${Math.min(width, 1600)}px`;
+      if (width) {
+        drawing.style.minInlineSize = `${Math.min(width, 1600)}px`;
+      }
       source.replaceWith(frame);
-    } catch {
+    }
+    catch {
       source.classList.add('diagram-source');
     }
   }

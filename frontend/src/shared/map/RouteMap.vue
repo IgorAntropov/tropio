@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import 'maplibre-gl/dist/maplibre-gl.css'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import 'maplibre-gl/dist/maplibre-gl.css';
+import {
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from 'vue';
 import type {
-  MapFocus,
   MapFlightPhase,
+  MapFocus,
   MapHint,
   MapMode,
   MapPoi,
@@ -14,23 +19,23 @@ import type {
   MapSelection,
   MapTrack,
   MapTripFlight,
-} from './types'
+} from './types';
 
 const props = withDefaults(defineProps<{
-  points?: readonly MapPoint[]
-  tracks?: readonly MapTrack[]
-  pois?: readonly MapPoi[]
-  selection?: MapSelection | null
-  focus?: MapFocus | null
-  hint?: MapHint | null
-  mode?: MapMode
-  center?: MapPosition
-  styleUrl?: string
-  clusterPoints?: boolean
-  tripMarkers?: boolean
-  unavailableText?: string
-  routeKey?: string
-  tripFlight?: MapTripFlight | null
+  points?: readonly MapPoint[];
+  tracks?: readonly MapTrack[];
+  pois?: readonly MapPoi[];
+  selection?: MapSelection | null;
+  focus?: MapFocus | null;
+  hint?: MapHint | null;
+  mode?: MapMode;
+  center?: MapPosition;
+  styleUrl?: string;
+  clusterPoints?: boolean;
+  tripMarkers?: boolean;
+  unavailableText?: string;
+  routeKey?: string;
+  tripFlight?: MapTripFlight | null;
 }>(), {
   points: () => [],
   tracks: () => [],
@@ -44,124 +49,166 @@ const props = withDefaults(defineProps<{
   unavailableText: 'Карта недоступна в этом браузере. Открой схему маршрута.',
   routeKey: undefined,
   tripFlight: null,
-})
+});
 
 const emit = defineEmits<{
-  coordinate: [position: MapPosition]
-  select: [selection: MapSelection, position: MapPosition]
-  ready: []
-}>()
+  coordinate: [position: MapPosition];
+  select: [selection: MapSelection, position: MapPosition];
+  ready: [];
+}>();
 
-const container = ref<HTMLElement>()
-const loading = ref(true)
-const unavailable = ref(false)
-const flightPhase = ref<MapFlightPhase>()
-const { app: { baseURL } } = useRuntimeConfig()
-const { t } = useI18n()
-let renderer: MapRendererAdapter | undefined
-let resize: ResizeObserver | undefined
-let disposed = false
-let fitted = false
-let pendingFocus: MapFocus | null | undefined
-let lastFocus: MapFocus | null | undefined
-let lastRouteKey: string | undefined
-let flightId: string | undefined
-let publicationId: string | undefined
-const emptyScene: MapScene = { points: [], tracks: [], pois: [], mode: 'view' }
+const container = ref<HTMLElement>();
+const loading = ref(true);
+const unavailable = ref(false);
+const flightPhase = ref<MapFlightPhase>();
+const { app: { baseURL } } = useRuntimeConfig();
+const { t } = useI18n();
+let renderer: MapRendererAdapter | undefined;
+let resize: ResizeObserver | undefined;
+let disposed = false;
+let fitted = false;
+let pendingFocus: MapFocus | null | undefined;
+let lastFocus: MapFocus | null | undefined;
+let lastRouteKey: string | undefined;
+let flightId: string | undefined;
+let publicationId: string | undefined;
+const emptyScene: MapScene = {
+  points: [],
+  tracks: [],
+  pois: [],
+  mode: 'view',
+};
 
 function updateCamera(): void {
-  if (!renderer || !container.value?.clientWidth || !container.value.clientHeight) return
+  if (!renderer || !container.value?.clientWidth || !container.value.clientHeight) {
+    return;
+  }
   if (pendingFocus) {
     if (renderer.focus(pendingFocus)) {
-      pendingFocus = null
-      fitted = true
+      pendingFocus = null;
+      fitted = true;
     }
-  } else if (!fitted) {
-    fitted = renderer.fitRoute()
+  }
+  else if (!fitted) {
+    fitted = renderer.fitRoute();
   }
 }
 
 function syncScene(): void {
-  if (!renderer || disposed) return
-  const flight = props.tripFlight
-  const changedRoute = lastRouteKey !== props.routeKey
-  lastRouteKey = props.routeKey
-  if (props.focus !== lastFocus) pendingFocus = props.focus
-  lastFocus = props.focus
+  if (!renderer || disposed) {
+    return;
+  }
+  const flight = props.tripFlight;
+  const changedRoute = lastRouteKey !== props.routeKey;
+  lastRouteKey = props.routeKey;
+  if (props.focus !== lastFocus) {
+    pendingFocus = props.focus;
+  }
+  lastFocus = props.focus;
   const scene = {
-    points: props.points, tracks: props.tracks, pois: props.pois,
-    mode: props.mode, selection: props.selection, hint: props.hint,
+    points: props.points,
+    tracks: props.tracks,
+    pois: props.pois,
+    mode: props.mode,
+    selection: props.selection,
+    hint: props.hint,
     tripMarkers: !flight && props.tripMarkers,
     clusterPoints: !flight && props.clusterPoints,
-  }
+  };
   if (flight) {
-    const wasArrived = flightId === flight.id && publicationId === flight.publicationId && flightPhase.value === 'arrived'
-    flightId = flight.id
-    publicationId = flight.publicationId
-    flightPhase.value = renderer.approachTrip(flight, scene)
+    const wasArrived = flightId === flight.id && publicationId === flight.publicationId && flightPhase.value === 'arrived';
+    flightId = flight.id;
+    publicationId = flight.publicationId;
+    flightPhase.value = renderer.approachTrip(flight, scene);
     if (flightPhase.value !== 'arrived') {
-      renderer.setScene(flight.marker ? { ...emptyScene, points: [flight.marker], tripMarkers: true, interactiveMarkers: false } : emptyScene)
-      return
+      renderer.setScene(flight.marker
+        ? {
+            ...emptyScene,
+            points: [flight.marker],
+            tripMarkers: true,
+            interactiveMarkers: false,
+          }
+        : emptyScene);
+      return;
     }
-    if (!wasArrived) fitted = true
-    else if (changedRoute) fitted = false
-  } else if (flightId) {
-    flightId = undefined
-    publicationId = undefined
-    flightPhase.value = undefined
-    pendingFocus = null
-    fitted = renderer.leaveTrip()
-  } else if (changedRoute) fitted = false
-  renderer.setScene(scene)
-  updateCamera()
+    if (!wasArrived) {
+      fitted = true;
+    }
+    else if (changedRoute) {
+      fitted = false;
+    }
+  }
+  else if (flightId) {
+    flightId = undefined;
+    publicationId = undefined;
+    flightPhase.value = undefined;
+    pendingFocus = null;
+    fitted = renderer.leaveTrip();
+  }
+  else if (changedRoute) {
+    fitted = false;
+  }
+  renderer.setScene(scene);
+  updateCamera();
 }
 
 watch(() => [
   props.points, props.tracks, props.pois, props.mode, props.selection, props.hint, props.focus,
   props.routeKey, props.tripFlight, props.clusterPoints, props.tripMarkers,
-], syncScene, { flush: 'post' })
-watch(() => props.styleUrl, value => renderer?.setStyle(value))
-watch(() => props.center, value => {
-  if (value) renderer?.center(value)
-})
+], syncScene, { flush: 'post' });
+watch(() => props.styleUrl, value => renderer?.setStyle(value));
+watch(() => props.center, (value) => {
+  if (value) {
+    renderer?.center(value);
+  }
+});
 
 onMounted(async () => {
   try {
-    const { MapLibreRenderer } = await import('./maplibre-adapter')
-    if (disposed || !container.value) return
+    const { MapLibreRenderer } = await import('./maplibre-adapter');
+    if (disposed || !container.value) {
+      return;
+    }
     renderer = new MapLibreRenderer(container.value, {
       coordinate: position => emit('coordinate', position),
       select: (selection, position) => emit('select', selection, position),
       flightEnd: () => queueMicrotask(syncScene),
       ready: () => {
-        loading.value = false
-        emit('ready')
+        loading.value = false;
+        emit('ready');
       },
     }, {
-      baseURL, center: props.center, styleUrl: props.styleUrl,
-      clusterLabels: props.clusterPoints ? {
-        zoomGroup: count => t('catalog.zoomCluster', { count }),
-        unnamedTrip: t('catalog.unnamedTrip'),
-      } : undefined,
-    })
-    syncScene()
+      baseURL,
+      center: props.center,
+      styleUrl: props.styleUrl,
+      clusterLabels: props.clusterPoints
+        ? {
+            zoomGroup: count => t('catalog.zoomCluster', { count }),
+            unnamedTrip: t('catalog.unnamedTrip'),
+          }
+        : undefined,
+    });
+    syncScene();
     resize = new ResizeObserver(() => {
-      if (!container.value?.clientWidth || !container.value.clientHeight) return
-      renderer?.resize()
-      syncScene()
-    })
-    resize.observe(container.value)
-  } catch {
-    loading.value = false
-    unavailable.value = true
+      if (!container.value?.clientWidth || !container.value.clientHeight) {
+        return;
+      }
+      renderer?.resize();
+      syncScene();
+    });
+    resize.observe(container.value);
   }
-})
+  catch {
+    loading.value = false;
+    unavailable.value = true;
+  }
+});
 
 onBeforeUnmount(() => {
-  disposed = true
-  resize?.disconnect()
-  renderer?.destroy()
-})
+  disposed = true;
+  resize?.disconnect();
+  renderer?.destroy();
+});
 </script>
 
 <template>

@@ -1,7 +1,7 @@
-export { default as UiAvatar } from './UiAvatar.vue'
-export { default as UiButton } from './UiButton.vue'
-export { default as UiDialog } from './UiDialog.vue'
-export { default as UiSegmented } from './UiSegmented.vue'
-export { default as UiSelect } from './UiSelect.vue'
-export { default as UiStatus } from './UiStatus.vue'
-export { default as UiTextField } from './UiTextField.vue'
+export { default as UiAvatar } from './UiAvatar.vue';
+export { default as UiButton } from './UiButton.vue';
+export { default as UiDialog } from './UiDialog.vue';
+export { default as UiSegmented } from './UiSegmented.vue';
+export { default as UiSelect } from './UiSelect.vue';
+export { default as UiStatus } from './UiStatus.vue';
+export { default as UiTextField } from './UiTextField.vue';

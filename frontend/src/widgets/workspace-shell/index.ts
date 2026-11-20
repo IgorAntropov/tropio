@@ -1,1 +1,1 @@
-export { default as WorkspaceShell } from './ui/WorkspaceShell.vue'
+export { default as WorkspaceShell } from './ui/WorkspaceShell.vue';

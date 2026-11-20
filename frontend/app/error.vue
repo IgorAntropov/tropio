@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { NuxtError } from '#app'
-import { PageError } from '@fsd/shared/ui/page-error'
+import type { NuxtError } from '#app';
+import { PageError } from '@fsd/shared/ui/page-error';
 
-defineProps<{ error: NuxtError }>()
+defineProps<{ error: NuxtError }>();
 </script>
 
 <template>

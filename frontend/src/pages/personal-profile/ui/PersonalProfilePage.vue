@@ -1,130 +1,162 @@
 <script setup lang="ts">
-import { identityApi, useIdentityAction } from '@fsd/shared/api'
-import type { IdentityProfile, SystemAvatar } from '@fsd/shared/api'
-import { workspaceMemberKey, workspaceMemberOf } from '@fsd/shared/session'
-import type { WorkspaceMember } from '@fsd/shared/session'
-import { AccountPanel } from '@fsd/shared/ui/account-panel'
-import { hasInvalidText, useFormValidation } from '@fsd/shared/ui/form'
-import { UiAvatar, UiStatus, UiTextField } from '@fsd/shared/ui/kit'
+import {
+  identityApi,
+  useIdentityAction,
+} from '@fsd/shared/api';
+import type {
+  IdentityProfile,
+  SystemAvatar,
+} from '@fsd/shared/api';
+import {
+  workspaceMemberKey,
+  workspaceMemberOf,
+} from '@fsd/shared/session';
+import type { WorkspaceMember } from '@fsd/shared/session';
+import { AccountPanel } from '@fsd/shared/ui/account-panel';
+import {
+  hasInvalidText,
+  useFormValidation,
+} from '@fsd/shared/ui/form';
+import {
+  UiAvatar,
+  UiStatus,
+  UiTextField,
+} from '@fsd/shared/ui/kit';
 
-const { t } = useI18n()
-const profile = shallowRef<IdentityProfile>()
-const member = useState<WorkspaceMember | null>(workspaceMemberKey, () => null)
-const assets = shallowRef<SystemAvatar[]>()
-const name = ref('')
-const bio = ref('')
-const editingAvatar = ref(false)
-const selectedId = ref('')
-const feedback = ref('')
-const avatarHeading = ref<HTMLHeadingElement>()
-const avatarOpener = ref<HTMLButtonElement>()
+const { t } = useI18n();
+const profile = shallowRef<IdentityProfile>();
+const member = useState<WorkspaceMember | null>(workspaceMemberKey, () => null);
+const assets = shallowRef<SystemAvatar[]>();
+const name = ref('');
+const bio = ref('');
+const editingAvatar = ref(false);
+const selectedId = ref('');
+const feedback = ref('');
+const avatarHeading = ref<HTMLHeadingElement>();
+const avatarOpener = ref<HTMLButtonElement>();
 
-const loadProfile = useIdentityAction()
-const loadAssets = useIdentityAction()
-const save = useIdentityAction()
-const { pending, message, problem: saveProblem } = save
-const { pending: loadingProfile, message: profileError, problem: profileProblem } = loadProfile
-const { pending: loadingAssets, message: assetsError } = loadAssets
+const loadProfile = useIdentityAction();
+const loadAssets = useIdentityAction();
+const save = useIdentityAction();
+const { pending, message, problem: saveProblem } = save;
+const { pending: loadingProfile, message: profileError, problem: profileProblem } = loadProfile;
+const { pending: loadingAssets, message: assetsError } = loadAssets;
 
-const signInNeeded = computed(() => profileProblem.value?.status === 401 && profileProblem.value.code === 'SESSION_REQUIRED')
-const sessionExpired = computed(() => saveProblem.value?.status === 401 && saveProblem.value.code === 'SESSION_REQUIRED')
-const hasEdits = computed(() => name.value.trim() !== profile.value?.display_name || (bio.value || null) !== profile.value?.bio)
+const signInNeeded = computed(() => profileProblem.value?.status === 401 && profileProblem.value.code === 'SESSION_REQUIRED');
+const sessionExpired = computed(() => saveProblem.value?.status === 401 && saveProblem.value.code === 'SESSION_REQUIRED');
+const hasEdits = computed(() => name.value.trim() !== profile.value?.display_name || (bio.value || null) !== profile.value?.bio);
 const { valid, errors, touch, reset: resetValidation } = useFormValidation({
   name: () => {
-    const value = name.value.trim()
-    if (!value) return t('identity.profile.nameError')
-    if (hasInvalidText(value)) return t('identity.profile.invalidText')
-    if ([...value].length > 80) return t('identity.profile.nameMaxError')
+    const value = name.value.trim();
+    if (!value) {
+      return t('identity.profile.nameError');
+    }
+    if (hasInvalidText(value)) {
+      return t('identity.profile.invalidText');
+    }
+    if ([...value].length > 80) {
+      return t('identity.profile.nameMaxError');
+    }
   },
   bio: () => {
-    if (hasInvalidText(bio.value)) return t('identity.profile.invalidText')
-    if ([...bio.value].length > 1000) return t('identity.profile.bioMaxError')
+    if (hasInvalidText(bio.value)) {
+      return t('identity.profile.invalidText');
+    }
+    if ([...bio.value].length > 1000) {
+      return t('identity.profile.bioMaxError');
+    }
   },
-})
+});
 const avatar = computed(() => editingAvatar.value
   ? assets.value?.find(item => item.id === selectedId.value) ?? profile.value?.avatar
-  : profile.value?.avatar)
-const avatarChanged = computed(() => avatar.value?.id !== profile.value?.avatar?.id)
-const pageTitle = computed(() => t(editingAvatar.value ? 'identity.profile.avatarTitle' : 'identity.profile.title'))
+  : profile.value?.avatar);
+const avatarChanged = computed(() => avatar.value?.id !== profile.value?.avatar?.id);
+const pageTitle = computed(() => t(editingAvatar.value ? 'identity.profile.avatarTitle' : 'identity.profile.title'));
 
 useHead(() => ({
   title: t('pageTitle', { title: pageTitle.value }),
   meta: [{ name: 'robots', content: 'noindex' }],
-}))
+}));
 
-onMounted(reloadProfile)
+onMounted(reloadProfile);
 
 function resetFields() {
-  name.value = profile.value?.display_name ?? ''
-  bio.value = profile.value?.bio ?? ''
-  resetValidation()
+  name.value = profile.value?.display_name ?? '';
+  bio.value = profile.value?.bio ?? '';
+  resetValidation();
 }
 
 async function reloadProfile() {
   await loadProfile.run(identityApi.me, (result) => {
-    applyProfile(result)
-    resetFields()
-  })
+    applyProfile(result);
+    resetFields();
+  });
 }
 
 function applyProfile(result: IdentityProfile) {
-  profile.value = result
-  member.value = workspaceMemberOf(result)
+  profile.value = result;
+  member.value = workspaceMemberOf(result);
 }
 
 async function reloadAssets() {
-  await loadAssets.run(identityApi.avatarAssets, (result) => { assets.value = result.items })
+  await loadAssets.run(identityApi.avatarAssets, (result) => {
+    assets.value = result.items;
+  });
 }
 
 async function openAvatars() {
-  selectedId.value = profile.value?.avatar?.id ?? ''
-  editingAvatar.value = true
-  feedback.value = ''
-  save.reset()
-  await nextTick()
-  avatarHeading.value?.focus()
-  await reloadAssets()
+  selectedId.value = profile.value?.avatar?.id ?? '';
+  editingAvatar.value = true;
+  feedback.value = '';
+  save.reset();
+  await nextTick();
+  avatarHeading.value?.focus();
+  await reloadAssets();
 }
 
 async function closeAvatars() {
-  editingAvatar.value = false
-  save.reset()
-  await nextTick()
-  avatarOpener.value?.focus()
+  editingAvatar.value = false;
+  save.reset();
+  await nextTick();
+  avatarOpener.value?.focus();
 }
 
 function cancelProfile() {
-  resetFields()
-  feedback.value = ''
-  save.reset()
+  resetFields();
+  feedback.value = '';
+  save.reset();
 }
 
 async function saveProfile() {
-  const current = profile.value
-  if (!current || pending.value || !hasEdits.value || !valid.value) return
-  save.reset()
-  feedback.value = ''
-  const displayName = name.value.trim()
+  const current = profile.value;
+  if (!current || pending.value || !hasEdits.value || !valid.value) {
+    return;
+  }
+  save.reset();
+  feedback.value = '';
+  const displayName = name.value.trim();
   await save.run(signal => identityApi.updateProfile({
     display_name: displayName,
     bio: bio.value || null,
   }, current.csrf_token, signal), (result) => {
-    applyProfile(result)
-    resetFields()
-    feedback.value = 'identity.profile.saved'
-  })
+    applyProfile(result);
+    resetFields();
+    feedback.value = 'identity.profile.saved';
+  });
 }
 
 async function saveAvatar() {
-  const current = profile.value
-  const chosen = avatar.value
-  if (!current || !chosen || !avatarChanged.value || pending.value || loadingAssets.value) return
+  const current = profile.value;
+  const chosen = avatar.value;
+  if (!current || !chosen || !avatarChanged.value || pending.value || loadingAssets.value) {
+    return;
+  }
   const saved = await save.run(signal => identityApi.selectAvatar({
     avatar_id: chosen.id,
-  }, current.csrf_token, signal), applyProfile)
+  }, current.csrf_token, signal), applyProfile);
   if (saved) {
-    feedback.value = 'identity.profile.avatarSaved'
-    await closeAvatars()
+    feedback.value = 'identity.profile.avatarSaved';
+    await closeAvatars();
   }
 }
 </script>
@@ -135,7 +167,7 @@ async function saveAvatar() {
       <UiStatus v-if="loadingProfile || !profileError" tone="pending">{{ t('identity.loading') }}</UiStatus>
       <template v-else-if="signInNeeded">
         <p class="account-notice">{{ t('identity.errors.sessionRequired') }}</p>
-        <nav class="account-links" :aria-label="t('identity.navigation')">
+        <nav :aria-label="t('identity.navigation')" class="account-links">
           <NuxtLink to="/login">{{ t('identity.login.submit') }}</NuxtLink>
           <NuxtLink to="/register">{{ t('identity.register.submit') }}</NuxtLink>
         </nav>
@@ -146,27 +178,51 @@ async function saveAvatar() {
       </template>
     </div>
     <template v-else>
-      <form v-if="!editingAvatar" class="account-form" novalidate :aria-busy="pending" @submit.prevent="saveProfile">
+      <form
+        v-if="!editingAvatar"
+        :aria-busy="pending"
+        class="account-form"
+        novalidate
+        @submit.prevent="saveProfile"
+      >
         <div class="profile-grid">
           <div class="account-form">
             <UiTextField
-              v-model="name" :label="t('identity.profile.name')" name="display-name" autocomplete="nickname"
-              :maxlength="160" :error="errors.name" :disabled="pending" required
+              v-model="name"
+              autocomplete="nickname"
+              :disabled="pending"
+              :error="errors.name"
+              :label="t('identity.profile.name')"
+              :maxlength="160"
+              name="display-name"
+              required
               @blur="touch('name')"
             />
             <UiTextField
-              v-model="bio" :label="t('identity.profile.bio')" name="bio" :rows="4" :maxlength="2000"
-              :error="errors.bio" :disabled="pending" @blur="touch('bio')"
+              v-model="bio"
+              :disabled="pending"
+              :error="errors.bio"
+              :label="t('identity.profile.bio')"
+              :maxlength="2000"
+              name="bio"
+              :rows="4"
+              @blur="touch('bio')"
             />
           </div>
-          <section class="profile-preview" :aria-label="t('identity.profile.preview')">
+          <section :aria-label="t('identity.profile.preview')" class="profile-preview">
             <h2>{{ t('identity.profile.preview') }}</h2>
             <div class="profile-preview-heading">
               <UiAvatar :name="name || profile.display_name" :src="avatar?.url" />
               <strong>{{ name || profile.display_name }}</strong>
             </div>
             <p v-if="bio" class="profile-text">{{ bio }}</p>
-            <button ref="avatarOpener" class="tk-button" type="button" :disabled="pending" @click="openAvatars">
+            <button
+              ref="avatarOpener"
+              class="tk-button"
+              :disabled="pending"
+              type="button"
+              @click="openAvatars"
+            >
               {{ t('identity.profile.changeAvatar') }}
             </button>
           </section>
@@ -176,14 +232,24 @@ async function saveAvatar() {
         <footer class="profile-footer">
           <UiStatus v-if="feedback" tone="success">{{ t(feedback) }}</UiStatus>
           <div class="account-actions">
-            <button class="tk-button" type="button" :disabled="pending || !hasEdits" @click="cancelProfile">{{ t('identity.cancel') }}</button>
-            <button class="tk-button tk-button-primary" type="submit" :disabled="pending || !hasEdits || !valid">
+            <button
+              class="tk-button"
+              :disabled="pending || !hasEdits"
+              type="button"
+              @click="cancelProfile"
+            >{{ t('identity.cancel') }}</button>
+            <button class="tk-button tk-button-primary" :disabled="pending || !hasEdits || !valid" type="submit">
               {{ t(pending ? 'identity.working' : 'identity.save') }}
             </button>
           </div>
         </footer>
       </form>
-      <form v-else class="account-form" :aria-busy="pending || loadingAssets" @submit.prevent="saveAvatar">
+      <form
+        v-else
+        :aria-busy="pending || loadingAssets"
+        class="account-form"
+        @submit.prevent="saveAvatar"
+      >
         <section class="profile-preview">
           <h2 ref="avatarHeading" tabindex="-1">{{ t(avatarChanged ? 'identity.profile.avatarPreview' : 'identity.profile.currentAvatar') }}</h2>
           <div class="profile-preview-heading">
@@ -200,7 +266,13 @@ async function saveAvatar() {
           <legend>{{ t('identity.profile.avatars') }}</legend>
           <div class="profile-avatar-options">
             <label v-for="(item, index) in assets" :key="item.id" class="profile-avatar-option">
-              <input v-model="selectedId" class="tk-sr-only" type="radio" name="avatar" :value="item.id">
+              <input
+                v-model="selectedId"
+                class="tk-sr-only"
+                name="avatar"
+                type="radio"
+                :value="item.id"
+              >
               <span class="tk-sr-only">{{ t('identity.profile.avatarChoice', { number: index + 1 }) }}</span>
               <span aria-hidden="true">
                 <UiAvatar :name="t('identity.profile.avatarChoice', { number: index + 1 })" :src="item.url" />
@@ -213,8 +285,13 @@ async function saveAvatar() {
         <NuxtLink v-if="sessionExpired" to="/login">{{ t('identity.login.submit') }}</NuxtLink>
         <footer class="profile-footer">
           <div class="account-actions">
-            <button class="tk-button" type="button" :disabled="pending" @click="closeAvatars">{{ t('identity.cancel') }}</button>
-            <button class="tk-button tk-button-primary" type="submit" :disabled="pending || loadingAssets || !avatarChanged">
+            <button
+              class="tk-button"
+              :disabled="pending"
+              type="button"
+              @click="closeAvatars"
+            >{{ t('identity.cancel') }}</button>
+            <button class="tk-button tk-button-primary" :disabled="pending || loadingAssets || !avatarChanged" type="submit">
               {{ t(pending ? 'identity.working' : 'identity.save') }}
             </button>
           </div>

@@ -1,1 +1,1 @@
-export { default as WorkspaceMapPage } from './ui/WorkspaceMapPage.vue'
+export { default as WorkspaceMapPage } from './ui/WorkspaceMapPage.vue';

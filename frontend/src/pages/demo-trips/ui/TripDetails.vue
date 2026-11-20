@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import type { DemoTrip } from '../model/trips'
+import type { DemoTrip } from '../model/trips';
 
-defineProps<{ trip: DemoTrip }>()
+defineProps<{ trip: DemoTrip }>();
 
-const { t, n } = useI18n()
+const { t, n } = useI18n();
 </script>
 
 <template>
   <main class="demo-width demo-main">
-    <NuxtLink to="/" class="catalog-link"><span aria-hidden="true">←</span> {{ t('demo.trip.backToCatalog') }}</NuxtLink>
+    <NuxtLink class="catalog-link" to="/"><span aria-hidden="true">←</span> {{ t('demo.trip.backToCatalog') }}</NuxtLink>
     <h1>{{ trip.title }}</h1>
     <p class="demo-summary">{{ trip.summary }}</p>
     <dl class="trip-facts">

@@ -1,59 +1,89 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
-import type { PublicTrip } from '@fsd/shared/api'
-import { RouteScheme } from '@fsd/shared/ui/route-scheme'
-import type { SchemeSelection } from '@fsd/shared/ui/route-scheme'
-import { routeScheme } from '../trip-route'
+import {
+  computed,
+  useId,
+} from 'vue';
+import type { PublicTrip } from '@fsd/shared/api';
+import { RouteScheme } from '@fsd/shared/ui/route-scheme';
+import type { SchemeSelection } from '@fsd/shared/ui/route-scheme';
+import { routeScheme } from '../trip-route';
 
-const props = defineProps<{ trip: PublicTrip }>()
-const day = defineModel<number>('day', { required: true })
-const segment = defineModel<string>('segment', { required: true })
-const { t, locale } = useI18n()
-const id = useId()
-const dates = computed(() => new Intl.DateTimeFormat(locale.value, { day: 'numeric', month: 'long', timeZone: 'UTC' }))
-const days = computed(() => props.trip.days.map(item => {
-  const route = routeScheme(item)
+const props = defineProps<{ trip: PublicTrip }>();
+const day = defineModel<number>('day', { required: true });
+const segment = defineModel<string>('segment', { required: true });
+const { t, locale } = useI18n();
+const id = useId();
+const dates = computed(() => new Intl.DateTimeFormat(locale.value, { day: 'numeric', month: 'long', timeZone: 'UTC' }));
+const days = computed(() => props.trip.days.map((item) => {
+  const route = routeScheme(item);
   const points = route.points.map((point, index) => ({
-    ...point, label: point.label || t('catalog.routeStops.' + point.stop, { number: index + 1 }),
-  }))
+    ...point,
+    label: point.label || t('catalog.routeStops.' + point.stop, { number: index + 1 }),
+  }));
   const tracks = route.tracks.map((track, index) => {
-    const mode = track.transportMode && t('catalog.types.' + track.transportMode)
+    const mode = track.transportMode && t('catalog.types.' + track.transportMode);
     return {
-      id: track.id, label: track.name || mode || t('catalog.routeLeg', { number: index + 1 }),
-      transportMode: track.transportMode, distance: track.distance, detail: track.name ? mode : undefined,
-    }
-  })
-  return { ...item, points, tracks }
-}))
+      id: track.id,
+      label: track.name || mode || t('catalog.routeLeg', { number: index + 1 }),
+      transportMode: track.transportMode,
+      distance: track.distance,
+      detail: track.name ? mode : undefined,
+    };
+  });
+  return { ...item, points, tracks };
+}));
 const selection = computed<SchemeSelection | undefined>(() => {
-  const route = days.value.find(item => item.position === day.value)
-  if (route?.points.some(point => point.id === segment.value)) return { type: 'point', id: segment.value }
-  if (route?.tracks.some(track => track.id === segment.value)) return { type: 'track', id: segment.value }
-  return undefined
-})
+  const route = days.value.find(item => item.position === day.value);
+  if (route?.points.some(point => point.id === segment.value)) {
+    return { type: 'point', id: segment.value };
+  }
+  if (route?.tracks.some(track => track.id === segment.value)) {
+    return { type: 'track', id: segment.value };
+  }
+  return undefined;
+});
 function toggle(position: number) {
-  segment.value = ''
-  day.value = day.value === position ? 0 : position
+  segment.value = '';
+  day.value = day.value === position ? 0 : position;
 }
 </script>
 
 <template>
-  <section class="trip-timeline" :aria-label="t('catalog.routeTimeline')">
+  <section :aria-label="t('catalog.routeTimeline')" class="trip-timeline">
     <ol class="trip-days" :style="{ '--trip-day-count': Math.max(1, days.length) }">
-      <li v-for="(item, index) in days" :key="item.position" class="trip-day" :style="{ '--trip-day-index': index }">
+      <li
+        v-for="(item, index) in days"
+        :key="item.position"
+        class="trip-day"
+        :style="{ '--trip-day-index': index }"
+      >
         <button
-          class="trip-day-toggle" type="button" :aria-expanded="day === item.position"
-          :aria-controls="id + '-route-' + item.position" @click="toggle(item.position)">
+          :aria-controls="id + '-route-' + item.position"
+          :aria-expanded="day === item.position"
+          class="trip-day-toggle"
+          type="button"
+          @click="toggle(item.position)"
+        >
           <span>{{ t('catalog.day', { day: item.position }) }}</span>
           <time v-if="item.local_date" :datetime="item.local_date">{{ dates.format(new Date(item.local_date + 'T00:00:00Z')) }}</time>
-          <i class="tk-chevron" aria-hidden="true" />
+          <i aria-hidden="true" class="tk-chevron" />
         </button>
-        <div :id="id + '-route-' + item.position" class="trip-day-scheme" :class="{ 'is-open': day === item.position }" :inert="day !== item.position">
+        <div
+          :id="id + '-route-' + item.position"
+          class="trip-day-scheme"
+          :class="{ 'is-open': day === item.position }"
+          :inert="day !== item.position"
+        >
           <div>
             <p v-if="item.description" class="trip-day-description">{{ item.description }}</p>
             <RouteScheme
-              :label="t('catalog.routeScheme')" :points="item.points" :tracks="item.tracks" :selection="selection"
-              interactive @select="target => segment = target.id" />
+              interactive
+              :label="t('catalog.routeScheme')"
+              :points="item.points"
+              :selection="selection"
+              :tracks="item.tracks"
+              @select="target => segment = target.id"
+            />
           </div>
         </div>
       </li>
@@ -62,7 +92,7 @@ function toggle(position: number) {
       <h3 class="trip-places-title">{{ t('publication.pois') }}</h3>
       <ul class="trip-places">
         <li v-for="poi in trip.pois" :key="poi.poi_id">
-          <button type="button" :aria-pressed="segment === poi.poi_id" @click="segment = poi.poi_id">{{ poi.name }}</button>
+          <button :aria-pressed="segment === poi.poi_id" type="button" @click="segment = poi.poi_id">{{ poi.name }}</button>
         </li>
       </ul>
     </template>

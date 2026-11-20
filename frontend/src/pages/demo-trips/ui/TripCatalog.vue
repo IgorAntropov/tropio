@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { demoTrips } from '../model/trips'
+import { demoTrips } from '../model/trips';
 
-const { t, n } = useI18n()
+const { t, n } = useI18n();
 </script>
 
 <template>
@@ -10,7 +10,7 @@ const { t, n } = useI18n()
     <p class="demo-summary">{{ t('demo.catalog.summary') }}</p>
     <ul class="trip-list">
       <li v-for="trip in demoTrips" :key="trip.slug">
-        <NuxtLink :to="`/trips/${trip.slug}/`" class="trip-link">
+        <NuxtLink class="trip-link" :to="`/trips/${trip.slug}/`">
           <span>
             <span class="trip-region">{{ trip.region }}</span>
             <strong>{{ trip.title }}</strong>

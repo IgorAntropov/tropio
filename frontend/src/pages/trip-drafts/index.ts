@@ -1,1 +1,1 @@
-export { default as TripDraftsPage } from './ui/TripDraftsPage.vue'
+export { default as TripDraftsPage } from './ui/TripDraftsPage.vue';

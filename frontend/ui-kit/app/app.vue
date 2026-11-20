@@ -1,31 +1,67 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { UiAvatar, UiButton, UiDialog, UiSegmented, UiSelect, UiStatus, UiTextField } from '@kit'
+import {
+  computed,
+  ref,
+} from 'vue';
+import {
+  UiAvatar,
+  UiButton,
+  UiDialog,
+  UiSegmented,
+  UiSelect,
+  UiStatus,
+  UiTextField,
+} from '@kit';
 
-const themes = [{ value: 'light', label: 'Светлая' }, { value: 'dark', label: 'Тёмная' }]
-const views = [{ value: 'map', label: 'Карта' }, { value: 'list', label: 'Список' }]
-const builtBy = [{ value: 'follow', label: 'По дорогам и тропам' }, { value: 'straight', label: 'Прямой отрезок' }]
+const themes = [{ value: 'light', label: 'Светлая' }, { value: 'dark', label: 'Тёмная' }];
+const views = [{ value: 'map', label: 'Карта' }, { value: 'list', label: 'Список' }];
+const builtBy = [{ value: 'follow', label: 'По дорогам и тропам' }, { value: 'straight', label: 'Прямой отрезок' }];
 const transports = [
   { value: 'walk', label: 'Пешком', icon: 'directions_walk' },
   { value: 'bike', label: 'Велосипед', icon: 'pedal_bike' },
   { value: 'car', label: 'Авто', icon: 'directions_car' },
-] as const
+] as const;
 const tripTypes = [
   { value: 'walk', label: 'Пеший', icon: 'directions_walk' },
   { value: 'bike', label: 'Велосипедный', icon: 'pedal_bike' },
   { value: 'car', label: 'Автомобильный', icon: 'directions_car' },
   { value: 'mixed', label: 'Комбинированный', icon: 'alt_route' },
-] as const
+] as const;
 const trips = [
-  { name: 'Тропы над Томью', date: '14–16 августа', type: 'walk', distance: '16,5 км' },
-  { name: 'Вдоль соснового бора', date: '22 августа', type: 'bike', distance: '28 км' },
-  { name: 'От реки до озера', date: '29–30 августа', type: 'mixed', distance: '43 км' },
-]
+  {
+    name: 'Тропы над Томью',
+    date: '14–16 августа',
+    type: 'walk',
+    distance: '16,5 км',
+  },
+  {
+    name: 'Вдоль соснового бора',
+    date: '22 августа',
+    type: 'bike',
+    distance: '28 км',
+  },
+  {
+    name: 'От реки до озера',
+    date: '29–30 августа',
+    type: 'mixed',
+    distance: '43 км',
+  },
+];
 const people = [
-  { name: 'Ирина Волкова', src: '/avatar_04.png', presence: 'online', description: 'В сети' },
-  { name: 'Максим Ким', src: '/avatar_09.png', presence: 'offline', description: 'Не в сети' },
+  {
+    name: 'Ирина Волкова',
+    src: '/avatar_04.png',
+    presence: 'online',
+    description: 'В сети',
+  },
+  {
+    name: 'Максим Ким',
+    src: '/avatar_09.png',
+    presence: 'offline',
+    description: 'Не в сети',
+  },
   { name: 'Анна Левина', src: '/avatar_01.png', description: 'Без статуса' },
-] as const
+] as const;
 const colors = [
   { token: 'accent', label: 'Акцент' },
   { token: 'ink', label: 'Текст' },
@@ -33,74 +69,91 @@ const colors = [
   { token: 'success', label: 'Успех' },
   { token: 'warning', label: 'Внимание' },
   { token: 'danger', label: 'Ошибка' },
-]
-const spacings = [4, 8, 12, 16, 24, 32]
+];
+const spacings = [4, 8, 12, 16, 24, 32];
 const buttonSizes = [
   { value: 'small', label: 'Маленькая' },
   { value: 'medium', label: 'Средняя' },
   { value: 'large', label: 'Большая' },
-] as const
-const formButtonSize = ref<(typeof buttonSizes)[number]['value']>('medium')
+] as const;
+const formButtonSize = ref<(typeof buttonSizes)[number]['value']>('medium');
 const sections = [
   { id: 'controls', label: 'Управление' },
   { id: 'feedback', label: 'Состояния' },
   { id: 'tokens', label: 'Токены' },
-]
+];
 
-const theme = ref('light')
-const view = ref('map')
-const transport = ref<readonly string[]>(['walk'])
-const filters = ref<readonly string[]>([])
-const building = ref<readonly string[]>(['follow'])
-const trackName = ref('')
-const tripName = ref('')
-const submitted = ref(false)
-const dialogOpen = ref(false)
-const formMode = ref<'track' | 'trip'>('track')
-const formSaved = ref(false)
-const tripResults = computed(() => filters.value.length ? trips.filter(trip => filters.value.includes(trip.type)) : trips)
-const fieldError = computed(() => submitted.value && formMode.value === 'trip' && !tripName.value.trim() ? 'Укажи название путешествия.' : undefined)
+const theme = ref('light');
+const view = ref('map');
+const transport = ref<readonly string[]>(['walk']);
+const filters = ref<readonly string[]>([]);
+const building = ref<readonly string[]>(['follow']);
+const trackName = ref('');
+const tripName = ref('');
+const submitted = ref(false);
+const dialogOpen = ref(false);
+const formMode = ref<'track' | 'trip'>('track');
+const formSaved = ref(false);
+const tripResults = computed(() => filters.value.length ? trips.filter(trip => filters.value.includes(trip.type)) : trips);
+const fieldError = computed(() => submitted.value && formMode.value === 'trip' && !tripName.value.trim() ? 'Укажи название путешествия.' : undefined);
 
 function saveExample() {
-  submitted.value = true
-  if (fieldError.value) return
-  formSaved.value = true
-  dialogOpen.value = false
+  submitted.value = true;
+  if (fieldError.value) {
+    return;
+  }
+  formSaved.value = true;
+  dialogOpen.value = false;
 }
 
 function openForm(mode: 'track' | 'trip') {
-  formMode.value = mode
-  submitted.value = false
-  formSaved.value = false
-  dialogOpen.value = true
+  formMode.value = mode;
+  submitted.value = false;
+  formSaved.value = false;
+  dialogOpen.value = true;
 }
 </script>
 
 <template>
   <div class="showcase" :data-theme="theme">
-    <a href="#main" class="skip-link">К содержанию</a>
+    <a class="skip-link" href="#main">К содержанию</a>
     <header class="mast">
-      <a href="#" class="wordmark">
-        <img src="/logo.png" alt="" width="36" height="36">
+      <a class="wordmark" href="#">
+        <img
+          alt=""
+          height="36"
+          src="/logo.png"
+          width="36"
+        >
         Тропио
       </a>
-      <UiSegmented v-model="theme" class="theme-switch" label="Тема" :options="themes" />
+      <UiSegmented
+        v-model="theme"
+        class="theme-switch"
+        label="Тема"
+        :options="themes"
+      />
     </header>
 
     <div class="showcase-layout">
-      <nav class="section-nav" aria-label="Разделы UI-kit">
+      <nav aria-label="Разделы UI-kit" class="section-nav">
         <a v-for="section in sections" :key="section.id" :href="`#${section.id}`">{{ section.label }}</a>
       </nav>
 
       <main id="main" class="showcase-main">
         <h1>UI-kit Тропио</h1>
-        <section id="controls" class="showcase-section" aria-labelledby="controls-heading">
+        <section id="controls" aria-labelledby="controls-heading" class="showcase-section">
           <h2 id="controls-heading">Управление</h2>
           <div class="showcase-grid showcase-grid-map">
             <article class="sample map-sample">
               <h3>Карта и список</h3>
               <div class="map-stage" :data-view="view">
-                <div class="map-switch"><UiSegmented v-model="view" label="Вид каталога" :options="views" :glass="view === 'map'" /></div>
+                <div class="map-switch"><UiSegmented
+                  v-model="view"
+                  :glass="view === 'map'"
+                  label="Вид каталога"
+                  :options="views"
+                /></div>
                 <div v-if="view === 'map'" class="map-credits">
                   <a href="https://openmaptiles.org/">© OpenMapTiles</a>
                   <span aria-hidden="true">·</span>
@@ -121,14 +174,21 @@ function openForm(mode: 'track' | 'trip') {
               <div class="example-stack">
                 <UiSelect v-model="transport" label="Транспорт отрезка" :options="transports" />
                 <UiSelect v-model="building" label="Способ построения" :options="builtBy" />
-                <UiSelect v-model="filters" label="Тип путешествия" placeholder="Все типы" :options="tripTypes" multiple searchable />
-                <p class="example-meta tk-muted" aria-live="polite">В выдаче {{ tripResults.length }} из {{ trips.length }}</p>
+                <UiSelect
+                  v-model="filters"
+                  label="Тип путешествия"
+                  multiple
+                  :options="tripTypes"
+                  placeholder="Все типы"
+                  searchable
+                />
+                <p aria-live="polite" class="example-meta tk-muted">В выдаче {{ tripResults.length }} из {{ trips.length }}</p>
               </div>
             </article>
           </div>
         </section>
 
-        <section id="feedback" class="showcase-section" aria-labelledby="feedback-heading">
+        <section id="feedback" aria-labelledby="feedback-heading" class="showcase-section">
           <h2 id="feedback-heading">Состояния</h2>
           <div class="showcase-grid">
             <article class="sample">
@@ -144,7 +204,7 @@ function openForm(mode: 'track' | 'trip') {
               <h3>Аватар и присутствие</h3>
               <ul class="people-list">
                 <li v-for="person in people" :key="person.name">
-                  <UiAvatar :name="person.name" :src="person.src" :presence="'presence' in person ? person.presence : undefined" />
+                  <UiAvatar :name="person.name" :presence="'presence' in person ? person.presence : undefined" :src="person.src" />
                   <div><strong>{{ person.name }}</strong><small>{{ person.description }}</small></div>
                 </li>
               </ul>
@@ -156,22 +216,26 @@ function openForm(mode: 'track' | 'trip') {
                 <legend>Размер кнопок формы</legend>
                 <div class="button-size-options">
                   <UiButton
-                    v-for="size in buttonSizes" :key="size.value" :size="size.value"
-                    :aria-pressed="formButtonSize === size.value" @click="formButtonSize = size.value">
+                    v-for="size in buttonSizes"
+                    :key="size.value"
+                    :aria-pressed="formButtonSize === size.value"
+                    :size="size.value"
+                    @click="formButtonSize = size.value"
+                  >
                     {{ size.label }}
                   </UiButton>
                 </div>
               </fieldset>
               <div class="form-examples">
-                <button type="button" class="tk-button tk-button-primary" @click="openForm('track')">Редактировать трек</button>
-                <button type="button" class="tk-button" @click="openForm('trip')">Новое путешествие</button>
+                <button class="tk-button tk-button-primary" type="button" @click="openForm('track')">Редактировать трек</button>
+                <button class="tk-button" type="button" @click="openForm('trip')">Новое путешествие</button>
               </div>
               <p v-if="formSaved" class="save-confirmation"><UiStatus tone="success">Пример сохранён</UiStatus></p>
             </article>
           </div>
         </section>
 
-        <section id="tokens" class="showcase-section" aria-labelledby="tokens-heading">
+        <section id="tokens" aria-labelledby="tokens-heading" class="showcase-section">
           <h2 id="tokens-heading">Токены</h2>
           <div class="showcase-grid">
             <article class="sample sample-colors">
@@ -203,16 +267,29 @@ function openForm(mode: 'track' | 'trip') {
       </main>
     </div>
 
-    <UiDialog v-model="dialogOpen" :title="formMode === 'track' ? 'Редактирование трека' : 'Новое путешествие'" :subtitle="formMode === 'track' ? 'Лесная тропа → Поворот к озеру' : undefined">
-      <form novalidate class="example-stack" @submit.prevent="saveExample">
+    <UiDialog v-model="dialogOpen" :subtitle="formMode === 'track' ? 'Лесная тропа → Поворот к озеру' : undefined" :title="formMode === 'track' ? 'Редактирование трека' : 'Новое путешествие'">
+      <form class="example-stack" novalidate @submit.prevent="saveExample">
         <template v-if="formMode === 'track'">
-          <UiTextField v-model="trackName" name="trackName" label="Название трека" placeholder="Например, Сосновый спуск" />
+          <UiTextField
+            v-model="trackName"
+            label="Название трека"
+            name="trackName"
+            placeholder="Например, Сосновый спуск"
+          />
           <UiSelect v-model="building" label="Способ построения" :options="builtBy" />
         </template>
-        <UiTextField v-else v-model="tripName" name="tripName" label="Название путешествия" placeholder="Например, Новый год у реки" :error="fieldError" required />
+        <UiTextField
+          v-else
+          v-model="tripName"
+          :error="fieldError"
+          label="Название путешествия"
+          name="tripName"
+          placeholder="Например, Новый год у реки"
+          required
+        />
         <div class="dialog-actions">
           <UiButton :size="formButtonSize" @click="dialogOpen = false">Отмена</UiButton>
-          <UiButton type="submit" :size="formButtonSize" class="tk-button-primary">Сохранить пример</UiButton>
+          <UiButton class="tk-button-primary" :size="formButtonSize" type="submit">Сохранить пример</UiButton>
         </div>
       </form>
     </UiDialog>

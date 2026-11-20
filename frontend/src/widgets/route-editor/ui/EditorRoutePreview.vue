@@ -1,26 +1,30 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { UiDialog } from '@fsd/shared/ui/kit'
-import type { EditorPreview } from '../types'
-import { coordinateLabel, distanceLabel, useEditorCopy } from './presentation'
+import { computed } from 'vue';
+import { UiDialog } from '@fsd/shared/ui/kit';
+import type { EditorPreview } from '../types';
+import {
+  coordinateLabel,
+  distanceLabel,
+  useEditorCopy,
+} from './presentation';
 
-const props = defineProps<{ preview: EditorPreview, disabled?: boolean }>()
-const emit = defineEmits<{ accept: [], choose: [index: number], close: [] }>()
-const { t } = useEditorCopy()
+const props = defineProps<{ preview: EditorPreview; disabled?: boolean }>();
+const emit = defineEmits<{ accept: []; choose: [index: number]; close: [] }>();
+const { t } = useEditorCopy();
 
-const reasons = { no_edge: 'noEdge', disconnected: 'disconnected', outside_coverage: 'outsideCoverage' } as const
+const reasons = { no_edge: 'noEdge', disconnected: 'disconnected', outside_coverage: 'outsideCoverage' } as const;
 const endpoints = computed(() => [
   { label: t('proposedStart'), ...props.preview.from },
   { label: t('proposedFinish'), ...props.preview.to },
-])
+]);
 </script>
 
 <template>
   <UiDialog
-    :model-value="true"
     class="editor-dialog"
-    :title="t(preview.status === 'available' ? 'previewAvailable' : 'previewUnavailable')"
+    :model-value="true"
     :subtitle="preview.label"
+    :title="t(preview.status === 'available' ? 'previewAvailable' : 'previewUnavailable')"
     @update:model-value="!$event && emit('close')"
   >
     <p v-if="preview.reason" class="editor-support">{{ t(reasons[preview.reason]) }}</p>
@@ -46,10 +50,11 @@ const endpoints = computed(() => [
     </p>
     <div v-if="preview.alternatives.length" class="editor-preview-alternatives">
       <button
-        v-for="(alternative, index) in preview.alternatives" :key="index"
-        type="button"
+        v-for="(alternative, index) in preview.alternatives"
+        :key="index"
         class="tk-button editor-preview-alternative"
         :disabled="disabled"
+        type="button"
         @click="emit('choose', index)"
       >
         <span>
@@ -66,8 +71,8 @@ const endpoints = computed(() => [
       <button
         v-if="preview.status === 'available' || preview.canKeepUnbuilt"
         class="tk-button tk-button-primary"
-        type="button"
         :disabled="disabled"
+        type="button"
         @click="emit('accept')"
       >{{ t(preview.status === 'available' ? 'accept' : 'acceptUnbuilt') }}</button>
     </div>

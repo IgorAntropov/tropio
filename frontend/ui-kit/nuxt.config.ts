@@ -1,7 +1,7 @@
-import { fileURLToPath } from 'node:url'
-import tailwindcss from '@tailwindcss/vite'
+import { fileURLToPath } from 'node:url';
+import tailwindcss from '@tailwindcss/vite';
 
-const shared = fileURLToPath(new URL('../src/shared', import.meta.url))
+const shared = fileURLToPath(new URL('../src/shared', import.meta.url));
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-19',
@@ -20,4 +20,4 @@ export default defineNuxtConfig({
       link: [{ rel: 'icon', href: '/favicon.ico' }],
     },
   },
-})
+});

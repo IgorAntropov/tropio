@@ -1,1 +1,1 @@
-export { default as AccountAuthPage } from './ui/AccountAuthPage.vue'
+export { default as AccountAuthPage } from './ui/AccountAuthPage.vue';

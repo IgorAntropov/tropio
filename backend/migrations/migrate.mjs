@@ -1,46 +1,56 @@
-import { log } from 'node:console'
-import { createHash } from 'node:crypto'
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { fileURLToPath, URL } from 'node:url'
-import { composeSql } from './compose-sql.mjs'
+import { log } from 'node:console';
+import { createHash } from 'node:crypto';
+import {
+  readdirSync,
+  readFileSync,
+} from 'node:fs';
+import { join } from 'node:path';
+import {
+  fileURLToPath,
+  URL,
+} from 'node:url';
+import { composeSql } from './compose-sql.mjs';
 
-export const migrationDirectory = fileURLToPath(new URL('./', import.meta.url))
-export const migrationOwners = ['platform', 'identity', 'travel', 'geo']
+export const migrationDirectory = fileURLToPath(new URL('./', import.meta.url));
+export const migrationOwners = ['platform', 'identity', 'travel', 'geo'];
 
 function readMigrations(directory) {
   return migrationOwners.flatMap((owner) => {
-    const ownerDirectory = join(directory, owner)
-    const files = readdirSync(ownerDirectory).filter((name) => name.endsWith('.sql')).sort()
-    if (files.length === 0) throw new Error(`Missing migrations for ${owner}`)
+    const ownerDirectory = join(directory, owner);
+    const files = readdirSync(ownerDirectory).filter(name => name.endsWith('.sql')).sort();
+    if (files.length === 0) {
+      throw new Error(`Missing migrations for ${owner}`);
+    }
 
     return files.map((filename, index) => {
-      const version = index + 1
-      const prefix = String(version).padStart(4, '0')
+      const version = index + 1;
+      const prefix = String(version).padStart(4, '0');
       if (!/^\d{4}_[a-z][a-z0-9_]*\.sql$/.test(filename) || !filename.startsWith(`${prefix}_`)) {
-        throw new Error(`Expected migration ${owner}/${prefix}_<name>.sql, found ${filename}`)
+        throw new Error(`Expected migration ${owner}/${prefix}_<name>.sql, found ${filename}`);
       }
-      const bytes = readFileSync(join(ownerDirectory, filename))
+      const bytes = readFileSync(join(ownerDirectory, filename));
       return {
         owner,
         version,
         filename,
         checksum: createHash('sha256').update(bytes).digest('hex'),
         sql: bytes.toString('utf8'),
-      }
-    })
-  })
+      };
+    });
+  });
 }
 
 function manifestRow({ owner, version, filename, checksum }) {
-  return `('${owner}', ${version}, '${filename}', '${checksum}')`
+  return `('${owner}', ${version}, '${filename}', '${checksum}')`;
 }
 
 function migrationBlock(migration) {
-  const { owner, version, filename, sql } = migration
-  const role = owner === 'platform' ? '' : `
+  const { owner, version, filename, sql } = migration;
+  const role = owner === 'platform'
+    ? ''
+    : `
 SET LOCAL ROLE tropio_${owner}_owner;
-SET LOCAL search_path = ${owner}, public;`
+SET LOCAL search_path = ${owner}, public;`;
   return `
 SELECT NOT EXISTS (
     SELECT FROM tropio_migrations.applied WHERE owner = '${owner}' AND version = ${version}
@@ -54,12 +64,12 @@ SET LOCAL search_path = pg_catalog, public;
 INSERT INTO tropio_migrations.applied (owner, version, filename, checksum)
 VALUES ${manifestRow(migration)};
 \\endif
-`
+`;
 }
 
 export function applyMigrations({ database, directory = migrationDirectory } = {}) {
-  const migrations = readMigrations(directory)
-  const manifest = migrations.map(manifestRow).join(',\n')
+  const migrations = readMigrations(directory);
+  const manifest = migrations.map(manifestRow).join(',\n');
   const sql = `
 SET LOCAL client_min_messages = warning;
 SET LOCAL search_path = pg_catalog, public;
@@ -116,13 +126,15 @@ END;
 $history$;
 
 ${migrations.map(migrationBlock).join('\n')}
-`
+`;
 
-  return composeSql(sql, { database, transaction: true })
+  return composeSql(sql, { database, transaction: true });
 }
 
 if (import.meta.main) {
-  const applied = applyMigrations()
-  if (applied) log(applied)
-  log('Миграции PostgreSQL применены.')
+  const applied = applyMigrations();
+  if (applied) {
+    log(applied);
+  }
+  log('Миграции PostgreSQL применены.');
 }

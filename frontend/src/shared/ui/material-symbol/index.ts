@@ -1,1 +1,1 @@
-export { default as MaterialSymbol } from './MaterialSymbol.vue'
+export { default as MaterialSymbol } from './MaterialSymbol.vue';

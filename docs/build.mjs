@@ -1,5 +1,18 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { extname, join, relative, resolve, sep } from 'node:path';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
+import {
+  extname,
+  join,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marked } from 'marked';
 
@@ -11,12 +24,14 @@ const includeLocal = localBuild && existsSync(localDocs);
 const output = localBuild ? join(project, '.local', 'handbook') : handbook;
 const generated = join(output, 'generated');
 const mermaid = resolve(fileURLToPath(import.meta.resolve('mermaid')), '../..');
-const escapeHtml = (text) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+const escapeHtml = text => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
 function filesIn(directory, suffix, excluded) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    if (entry.isDirectory() && !excluded.has(entry.name)) return filesIn(path, suffix, excluded);
+    if (entry.isDirectory() && !excluded.has(entry.name)) {
+      return filesIn(path, suffix, excluded);
+    }
     return entry.isFile() && extname(entry.name) === suffix ? [path] : [];
   });
 }
@@ -30,7 +45,9 @@ function renderMarkdown(text) {
         const plain = this.parser.parseInline(tokens, this.parser.textRenderer);
         const base = plain.toLowerCase().trim().replace(/[^\p{L}\p{N}\p{M}_ -]/gu, '').replaceAll(' ', '-') || 'раздел';
         let id = base;
-        for (let number = 1; headings.has(id); number += 1) id = `${base}-${number}`;
+        for (let number = 1; headings.has(id); number += 1) {
+          id = `${base}-${number}`;
+        }
         headings.add(id);
         return `<h${depth} id="${id}">${this.parser.parseInline(tokens)}</h${depth}>\n`;
       },
@@ -42,7 +59,7 @@ function renderMarkdown(text) {
 const excluded = new Set(['generated', 'node_modules']);
 const markdown = filesIn(handbook, '.md', excluded);
 const htmlPages = filesIn(handbook, '.html', excluded)
-  .filter((path) => path !== join(handbook, 'index.html'));
+  .filter(path => path !== join(handbook, 'index.html'));
 const files = [...markdown, ...htmlPages, join(handbook, 'contracts', 'openapi.yaml')];
 if (includeLocal) {
   files.push(...filesIn(localDocs, '.md', excluded));
@@ -50,7 +67,7 @@ if (includeLocal) {
     join(project, 'AGENTS.md'),
     join(localDocs, 'poc-04', 'events.schema.json'),
     join(localDocs, 'poc-04', 'events.examples.json'),
-  ].filter((path) => existsSync(path)));
+  ].filter(path => existsSync(path)));
 }
 const documents = {};
 for (const file of files) {
@@ -59,11 +76,15 @@ for (const file of files) {
   const type = extname(file).slice(1);
   if (type === 'md') {
     documents[key] = renderMarkdown(text);
-  } else if (type === 'html') {
+  }
+  else if (type === 'html') {
     const content = text.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i);
-    if (!content) throw new Error(`В ${key} должен быть элемент main`);
+    if (!content) {
+      throw new Error(`В ${key} должен быть элемент main`);
+    }
     documents[key] = content[1];
-  } else {
+  }
+  else {
     const name = key.split('/').at(-1);
     documents[key] = `<h1>${escapeHtml(name)}</h1><pre><code class="language-${type}">${escapeHtml(text)}</code></pre>`;
   }

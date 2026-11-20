@@ -1,12 +1,12 @@
-import process from 'node:process'
+import process from 'node:process';
 
 export interface TravelOptions {
-  databaseUrl?: string
-  publicationWorker?: boolean
+  databaseUrl?: string;
+  publicationWorker?: boolean;
 }
 
-export const TRAVEL_DATABASE_URL = Symbol('travel database url')
+export const TRAVEL_DATABASE_URL = Symbol('travel database url');
 
 export function travelDatabaseUrl(options: TravelOptions) {
-  return options.databaseUrl ?? process.env.TROPIO_TRAVEL_DATABASE_URL
+  return options.databaseUrl ?? process.env.TROPIO_TRAVEL_DATABASE_URL;
 }

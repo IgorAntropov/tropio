@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { UiStatus } from '../kit'
-import '../kit/kit.css'
+import { UiStatus } from '../kit';
+import '../kit/kit.css';
 
-const { t } = useI18n()
+const { t } = useI18n();
 </script>
 
 <template>

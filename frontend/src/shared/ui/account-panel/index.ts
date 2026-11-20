@@ -1,1 +1,1 @@
-export { default as AccountPanel } from './AccountPanel.vue'
+export { default as AccountPanel } from './AccountPanel.vue';

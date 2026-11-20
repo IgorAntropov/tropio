@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { RouteMap } from '@fsd/shared/map'
-import { UiSelect, UiStatus } from '@fsd/shared/ui/kit'
-import { useWorkspaceMap } from '../model/use-workspace-map'
-import '@fsd/shared/ui/kit/kit.css'
+import { computed } from 'vue';
+import { RouteMap } from '@fsd/shared/map';
+import {
+  UiSelect,
+  UiStatus,
+} from '@fsd/shared/ui/kit';
+import { useWorkspaceMap } from '../model/use-workspace-map';
+import '@fsd/shared/ui/kit/kit.css';
 
 const { t, n } = useI18n({
   useScope: 'local',
@@ -35,51 +38,53 @@ const { t, n } = useI18n({
       login: 'Войти',
     },
   },
-})
+});
 
-const { public: { routeMapStyle } } = useRuntimeConfig()
+const { public: { routeMapStyle } } = useRuntimeConfig();
 const {
   trips, trip, day, preview, selectedTripId, nextCursor, listLoading, previewLoading,
   listError, previewError, signedOut, loadTrips, retryTrips, selectTrip, selectDay, retryPreview,
-} = useWorkspaceMap()
+} = useWorkspaceMap();
 
-const tripSelection = computed(() => selectedTripId.value ? [selectedTripId.value] : [])
-const daySelection = computed(() => day.value ? [day.value.day_id] : [])
-const tripOptions = computed(() => trips.value.map(item => ({ value: item.trip_id, label: item.title })))
+const tripSelection = computed(() => selectedTripId.value ? [selectedTripId.value] : []);
+const daySelection = computed(() => day.value ? [day.value.day_id] : []);
+const tripOptions = computed(() => trips.value.map(item => ({ value: item.trip_id, label: item.title })));
 const dayOptions = computed(() => trip.value?.days.map(item => ({
   value: item.day_id,
   label: t('dayNumber', { number: item.position }),
-})) ?? [])
+})) ?? []);
 
-const readableRoute = computed(() => preview.value?.kind === 'ready' ? preview.value.route : null)
+const readableRoute = computed(() => preview.value?.kind === 'ready' ? preview.value.route : null);
 const points = computed(() => readableRoute.value?.points.map((point, index) => ({
   id: point.point_id,
   position: point.position,
   label: point.name || t('pointNumber', { number: index + 1 }),
   number: index + 1,
-})) ?? [])
+})) ?? []);
 const tracks = computed(() => readableRoute.value?.tracks.map(track => ({
   id: track.track_id,
   coordinates: track.geometry.coordinates,
   transportMode: track.transport_mode,
   dashed: track.status === 'needs_rebuild',
-})) ?? [])
+})) ?? []);
 
 const distance = computed(() => {
-  const currentTracks = readableRoute.value?.tracks ?? []
-  if (!currentTracks.length || currentTracks.some(track => track.status !== 'ready')) return null
-  const kilometers = currentTracks.reduce((total, track) => total + track.distance_m, 0) / 1000
-  return n(kilometers, { key: 'distance', maximumFractionDigits: 2 })
-})
-const tripPath = computed(() => trip.value ? `/trips/${trip.value.trip_id}` : null)
+  const currentTracks = readableRoute.value?.tracks ?? [];
+  if (!currentTracks.length || currentTracks.some(track => track.status !== 'ready')) {
+    return null;
+  }
+  const kilometers = currentTracks.reduce((total, track) => total + track.distance_m, 0) / 1000;
+  return n(kilometers, { key: 'distance', maximumFractionDigits: 2 });
+});
+const tripPath = computed(() => trip.value ? `/trips/${trip.value.trip_id}` : null);
 const editorPath = computed(() => tripPath.value && day.value && preview.value && preview.value.kind !== 'restricted'
   ? `${tripPath.value}/days/${day.value.day_id}/route?from=map`
-  : null)
+  : null);
 </script>
 
 <template>
   <main class="workspace-map">
-    <section class="workspace-map__panel" aria-labelledby="workspace-map-title">
+    <section aria-labelledby="workspace-map-title" class="workspace-map__panel">
       <h1 id="workspace-map-title">{{ t('title') }}</h1>
 
       <template v-if="signedOut">
@@ -90,13 +95,19 @@ const editorPath = computed(() => tripPath.value && day.value && preview.value &
       <template v-else>
         <div v-if="tripOptions.length" class="workspace-map__selectors">
           <UiSelect
-            :model-value="tripSelection" :label="t('trip')" :options="tripOptions"
-            :placeholder="t('chooseTrip')" :searchable="tripOptions.length > 5"
+            :label="t('trip')"
+            :model-value="tripSelection"
+            :options="tripOptions"
+            :placeholder="t('chooseTrip')"
+            :searchable="tripOptions.length > 5"
             @update:model-value="selectTrip($event[0])"
           />
           <UiSelect
-            v-if="dayOptions.length" :model-value="daySelection" :label="t('day')"
-            :options="dayOptions" @update:model-value="selectDay($event[0])"
+            v-if="dayOptions.length"
+            :label="t('day')"
+            :model-value="daySelection"
+            :options="dayOptions"
+            @update:model-value="selectDay($event[0])"
           />
         </div>
 
@@ -106,8 +117,11 @@ const editorPath = computed(() => tripPath.value && day.value && preview.value &
           <button class="tk-button" type="button" @click="retryTrips">{{ t('retry') }}</button>
         </template>
         <button
-          v-else-if="nextCursor" class="tk-button tk-button-text workspace-map__more" type="button"
-          :disabled="listLoading" @click="loadTrips(true)"
+          v-else-if="nextCursor"
+          class="tk-button tk-button-text workspace-map__more"
+          :disabled="listLoading"
+          type="button"
+          @click="loadTrips(true)"
         >
           {{ listLoading ? t('loadingTrips') : t('loadMore') }}
         </button>
@@ -141,10 +155,13 @@ const editorPath = computed(() => tripPath.value && day.value && preview.value &
       </template>
     </section>
 
-    <section v-if="!signedOut" class="workspace-map__canvas" :aria-label="t('mapLabel')">
+    <section v-if="!signedOut" :aria-label="t('mapLabel')" class="workspace-map__canvas">
       <RouteMap
-        :key="readableRoute?.route_id ?? 'basemap'" :style-url="routeMapStyle || undefined"
-        :points="points" :tracks="tracks" :route-key="readableRoute?.route_id"
+        :key="readableRoute?.route_id ?? 'basemap'"
+        :points="points"
+        :route-key="readableRoute?.route_id"
+        :style-url="routeMapStyle || undefined"
+        :tracks="tracks"
       />
     </section>
   </main>
