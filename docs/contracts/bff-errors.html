@@ -11,7 +11,7 @@
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Контракты, дизайн и приёмка</nav>
     <h1>Ошибки BFF и восстановление</h1>
     <p>HTTP-статус сообщает исход запроса, а машинный <code>code</code> помогает выбрать действие в интерфейсе. После потери ответа клиент перепроверяет состояние. Для команд Travel и Geo с предусмотренным контрактом ключом повтор использует исходный ключ. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#5-общие-соглашения-api">Соглашения POC-04</a></p>
-    <p class="document-note"><strong>Статус.</strong> OpenAPI <code>0.3.0</code> фиксирует точные пары HTTP-статуса и машинного кода для операций Identity из GIS-02 и черновиков Travel из GIS-03. Остальные операции Travel и Geo описаны в проекте POC-04. Текущий health-маршрут Nuxt при недоступности BFF возвращает <code>502</code>. <a href="openapi.yaml">OpenAPI</a> · <a href="../../.agents/docs/MEMORY.md#что-уже-работает">Что уже работает</a></p>
+    <p class="document-note"><strong>Статус.</strong> OpenAPI <code>0.4.0</code> фиксирует пары HTTP-статуса и кода для аккаунта Identity, черновиков Travel, маршрутов и POI в Geo. Пары публикации и каталога описаны в POC-04 для GIS-06. Health-маршрут Nuxt при недоступности BFF возвращает <code>502</code>. <a href="openapi.yaml">OpenAPI</a> · <a href="../../.agents/docs/MEMORY.md#что-уже-работает">Что уже работает</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
@@ -19,6 +19,7 @@
         <li><a href="#statuses">HTTP-статусы и коды</a></li>
         <li><a href="#identity">Ошибки аккаунта и профиля</a></li>
         <li><a href="#travel-drafts">Ошибки черновика путешествия</a></li>
+        <li><a href="#geo">Ошибки маршрута и POI</a></li>
         <li><a href="#states">Ответы 2xx и состояния клиента</a></li>
         <li><a href="#recovery">Когда повторять запрос</a></li>
         <li><a href="#acceptance">Приёмка</a></li>
@@ -28,7 +29,7 @@
 
     <section aria-labelledby="response">
       <h2 id="response">Формат ответа</h2>
-      <p>Отказы BFF имеют формат <code>application/problem+json</code> со схемой <code>Problem</code>. В ответах Identity и черновиков Travel <code>X-Request-Id</code> совпадает с <code>request_id</code> ошибки и применяется <code>Cache-Control: no-store</code>. Identity удостоверяет сессию, Travel и Geo проверяют объектные права. Клиент выбирает реакцию по HTTP-статусу и <code>code</code>. <a href="openapi.yaml">Схема Problem</a> · <a href="../../.agents/docs/microservices.md#31-внешние-api">Границы BFF</a></p>
+      <p>Отказы BFF имеют формат <code>application/problem+json</code> со схемой <code>Problem</code>. В ответах Identity, Travel и Geo <code>X-Request-Id</code> совпадает с <code>request_id</code> ошибки и применяется <code>Cache-Control: no-store</code>. Identity удостоверяет сессию, Travel и Geo проверяют объектные права. Клиент выбирает реакцию по HTTP-статусу и <code>code</code>. <a href="openapi.yaml">Схема Problem</a> · <a href="../../.agents/docs/microservices.md#31-внешние-api">Границы BFF</a></p>
       <ul>
         <li><code>type</code> — ссылка на тип ошибки, <code>title</code> — краткий заголовок, <code>status</code> — статус HTTP, <code>code</code> — машинный код, <code>request_id</code> — UUID запроса для диагностики.</li>
         <li>В конфликте могут прийти <code>current_trip_revision_id</code>, <code>current_route_revision_id</code> или <code>current_poi_revision_id</code>. Сервер раскрывает актуальную ревизию только после проверки прав. Клиент перечитывает объект перед новым изменением.</li>
@@ -36,8 +37,8 @@
       </ul>
       <h3>Пример конфликта ревизий</h3>
       <pre><code id="bff-conflict-example">{
-  "type": "about:blank",
-  "title": "Conflict",
+  "type": "urn:tropio:problem:route_revision_conflict",
+  "title": "Route revision conflict",
   "status": 409,
   "code": "ROUTE_REVISION_CONFLICT",
   "request_id": "21ac6a93-d580-4f82-8958-0dc7c6160a3d",
@@ -45,8 +46,8 @@
 }</code></pre>
       <h3>Пример общего ответа при недоступности объекта</h3>
       <pre><code id="bff-not-found-example">{
-  "type": "about:blank",
-  "title": "Not Found",
+  "type": "urn:tropio:problem:not_found",
+  "title": "Not found",
   "status": 404,
   "code": "NOT_FOUND",
   "request_id": "93f96c0f-2302-4533-ba1f-efd17c63f405"
@@ -98,7 +99,7 @@
       </div>
       <h3>Пример отказа входа</h3>
       <pre><code>{
-  "type": "about:blank",
+  "type": "urn:tropio:problem:invalid_credentials",
   "title": "Invalid credentials",
   "status": 401,
   "code": "INVALID_CREDENTIALS",
@@ -126,6 +127,29 @@
       </div>
     </section>
 
+    <section aria-labelledby="geo">
+      <h2 id="geo">Ошибки маршрута и POI</h2>
+      <p>HTTP-тесты сверяют 92 пары статуса и кода в 15 операциях Geo с OpenAPI. При ошибке проверки сессии, CSRF или доступа применяй общие реакции выше. <code>GET</code> маршрута возвращает <code>404</code> при отсутствии права Travel и <code>200 geometry_restricted</code> при ограничении зависимости POI. Пользователь без права модерации получает общий <code>404</code>. <a href="openapi.yaml">OpenAPI Geo</a> · <a href="../route-editor/geo-routing.html#api">Операции маршрута</a> · <a href="../route-editor/poi-privacy.html#api">Операции POI</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Отказы редактора маршрута и POI">
+        <table>
+          <thead><tr><th scope="col">HTTP и код</th><th scope="col">Причина</th><th scope="col">Реакция клиента</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>400 INVALID_REQUEST</code></th><td>Неверные параметры, обязательный заголовок или тело. Полный снимок маршрута превышает лимит JSON в 256 КиБ.</td><td>Исправить параметры. Сохранить незаписанные изменения до успешного ответа.</td></tr>
+            <tr><th scope="row"><code>409 ROUTE_REVISION_CONFLICT</code><br><code>409 POI_REVISION_CONFLICT</code></th><td>Ревизия изменилась. UUID текущей ревизии маршрута передаётся владельцу, когда ревизия есть. Для POI текущий UUID может получить её автор.</td><td>Перечитать объект, сохранить правки для сравнения и отправить подтверждённую новую команду с новым ключом.</td></tr>
+            <tr><th scope="row"><code>409 IDEMPOTENCY_KEY_REUSED</code></th><td>Ключ уже относится к другой команде или параметрам.</td><td>Разобрать исход первой команды. Для другого действия запросить актуальную ревизию и использовать новый ключ.</td></tr>
+            <tr><th scope="row"><code>422 INVALID_ROUTE_TOPOLOGY</code></th><td>Точки и треки не образуют последовательность, повторяется UUID или новый трек вырожден.</td><td>Проверить пары соседних точек и исправить состав маршрута.</td></tr>
+            <tr><th scope="row"><code>422 ROUTE_BUILD_UNAVAILABLE</code></th><td>Выбранный режим не может построить новый трек.</td><td>Повторить предпросмотр и предложить доступный вариант.</td></tr>
+            <tr><th scope="row"><code>422 SNAP_CONFIRMATION_REQUIRED</code></th><td>Дорожная привязка ещё не подтверждена или отличается от подтверждённых координат и версии графа.</td><td>Показать исходные и предложенные координаты со смещением. После подтверждения отправить новую команду с координатами привязки и версией графа в <code>confirm_snap</code>.</td></tr>
+            <tr><th scope="row"><code>422 INVALID_SPLIT_POSITION</code></th><td>Позиция слишком далеко от трека или от деления получится слишком короткий отрезок.</td><td>Предложить другую позицию на готовом треке.</td></tr>
+            <tr><th scope="row"><code>422 ROUTE_GEOMETRY_RESTRICTED</code></th><td>Команда использует ревизию с закрытой или изменившейся зависимостью.</td><td>Скрыть ограниченную геометрию и предложить пересборку из разрешённых опор.</td></tr>
+            <tr><th scope="row"><code>422 POI_SCOPE_RESTRICTED</code></th><td>Операция требует полномочия в другой области или место ограничено исходной поездкой.</td><td>Предложить доступное место или разрешённую область видимости.</td></tr>
+            <tr><th scope="row"><code>422 INVALID_POI_CATEGORY</code></th><td>Категория POI отсутствует или отключена.</td><td>Перечитать справочник категорий и предложить другой выбор.</td></tr>
+            <tr><th scope="row"><code>503 DEPENDENCY_UNAVAILABLE</code></th><td>Сбой хранилища, сервиса прав или обязательного расчёта.</td><td>Сохранить ввод и повторить чтение или предпросмотр после восстановления. Для неподтверждённой записи повторить исходную команду с прежним ключом.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section aria-labelledby="states">
       <h2 id="states">Ответы 2xx и состояния клиента</h2>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Состояния успешного HTTP-ответа">
@@ -136,6 +160,7 @@
             <tr><th scope="row"><code>200</code> и <code>failed</code></th><td>Опрос или повтор завершённой команды получил бизнес-отказ. Интерфейс показывает причину по <code>PublicationFailed.code</code> и действие для восстановления. <a href="../travel/publication.html#errors">Семь кодов публикации</a></td></tr>
             <tr><th scope="row"><code>200</code> и <code>succeeded</code></th><td>Операция зафиксировала снимок. Для текущего указателя перечитать черновик, а для проверки публичной доступности запросить карточку.</td></tr>
             <tr><th scope="row"><code>200</code> и <code>geometry_restricted</code></th><td>Доступ к самому черновику есть. Редактор показывает необходимость пересборки без закрытых узлов, линий и POI. <a href="../route-editor/poi-privacy.html#revocation">Что происходит при отзыве</a></td></tr>
+            <tr><th scope="row"><code>200</code> и <code>unavailable</code> в предпросмотре</th><td>Граф подтвердил отсутствие подходящего пути или покрытия. Редактор сохраняет исходные координаты, показывает причину и доступные варианты. <a href="../route-editor/geo-routing.html#providers">Расчёт маршрута</a></td></tr>
             <tr><th scope="row"><code>204</code> при привязке POI</th><td>Разрешённая связь подтверждена. Ответ без тела, клиенту достаточно статуса.</td></tr>
             <tr><th scope="row"><code>200</code> или <code>201</code> с <code>TripDraft</code></th><td>Travel вернул подтверждённый черновик. При точном повторе результат может относиться к прежней редакции. Перечитай текущий черновик перед следующей правкой, если пришёл результат ранее отправленной команды.</td></tr>
           </tbody>
@@ -145,7 +170,7 @@
 
     <section aria-labelledby="recovery">
       <h2 id="recovery">Когда повторять запрос</h2>
-      <p>Правила исходного <code>Idempotency-Key</code> ниже относятся к командам <a href="../travel/drafts.html#errors">черновиков Travel</a> и контрактам Travel и Geo из POC-04. Для аккаунта, сессии и профиля применяются <a href="#identity">сценарии Identity</a>.</p>
+      <p>Правила <code>Idempotency-Key</code> ниже относятся к командам записи с ключом в Travel и Geo. Предпросмотр маршрута можно запросить снова после восстановления зависимости. Для аккаунта, сессии и профиля действуют отдельные сценарии. <a href="../travel/drafts.html#errors">Черновики Travel</a> · <a href="../route-editor/split-track.html#api">Повтор деления Geo</a> · <a href="#identity">Сценарии Identity</a></p>
       <ol>
         <li><strong>Чтение временно недоступно.</strong> Повтори <code>GET</code> после восстановления сети или сервиса, пока экран и параметры ещё актуальны. Отменяй устаревшие чтения при смене фильтра или экрана. Поздний ответ не должен заменять данные более нового запроса.</li>
         <li><strong>Ответ команды потерян, результат неизвестен.</strong> После обрыва сети, таймаута или <code>503</code> показывай неподтверждённое сохранение. Если адрес операции известен, опрашивай её через <code>GET</code>. Иначе повторяй исходную команду с тем же <code>Idempotency-Key</code>, ресурсом, ожидаемой ревизией и телом.</li>
@@ -157,7 +182,7 @@
 
     <section aria-labelledby="acceptance">
       <h2 id="acceptance">Приёмка</h2>
-      <p>С первой продуктовой операции допустимые пары HTTP-статуса и машинного <code>code</code> фиксируются в OpenAPI. Команды <code>pnpm db:test:identity</code> и <code>pnpm db:test:travel</code> входят в <code>pnpm check</code> и сверяют реальные HTTP-ответы BFF с OpenAPI. При подключении операции клиентские тесты проверяют реакцию интерфейса на эти ответы и на сетевой сбой, если он влияет на сценарий. При изменении контракта ошибок тесты и затронутые статьи справочника обновляют в том же шаге. <a href="openapi.yaml">OpenAPI</a> · <a href="../../backend/test/identity-http.test.ts">HTTP-тесты Identity</a> · <a href="../../backend/test/travel-http.test.ts">HTTP-тесты Travel</a></p>
+      <p>Команды <code>pnpm db:test:identity</code>, <code>pnpm db:test:travel</code> и <code>pnpm db:test:geo</code> входят в <code>pnpm check</code> и сверяют реальные HTTP-ответы BFF с OpenAPI. При подключении API клиентские тесты проверяют реакции интерфейса на отказы и сетевой сбой. При изменении контракта ошибок тесты и затронутые статьи справочника обновляют в том же шаге. <a href="openapi.yaml">OpenAPI</a> · <a href="../../backend/test/identity-http.test.ts">HTTP-тесты Identity</a> · <a href="../../backend/test/travel-http.test.ts">HTTP-тесты Travel</a> · <a href="../../backend/test/geo-http.test.ts">HTTP-тесты Geo</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Кейсы проверки ошибок и восстановления">
         <table>
           <thead><tr><th scope="col">Кейс</th><th scope="col">Что проверить</th><th scope="col">Ожидаемый результат</th></tr></thead>
@@ -180,7 +205,7 @@
     <section aria-labelledby="open">
       <h2 id="open">Открытые вопросы</h2>
       <ul>
-        <li><strong>Сессия и CSRF.</strong> Операции Identity и черновиков Travel используют cookie <code>tropio_session</code>. Защищённые команды проверяют <code>Origin</code> и <code>X-CSRF-Token</code>. Расширение на остальные операции Travel и Geo проверяется в задачах их API. <a href="../identity/account.html">Сценарии Identity</a></li>
+        <li><strong>Сессия и CSRF.</strong> Защищённые команды Identity, черновиков Travel и Geo проверяют <code>Origin</code> и <code>X-CSRF-Token</code> в контексте <code>tropio_session</code>. Сценарии публикации и каталога относятся к GIS-06. <a href="../identity/account.html">Сценарии Identity</a></li>
         <li><strong>Клиентские повторы.</strong> Предел автоматических попыток, задержки и поведение между перезапусками клиента нужно определить для конкретных сценариев.</li>
         <li><strong>Интерфейс ошибок.</strong> Тексты общего сбоя, конфликта и подтверждения повторного действия уточняются по сценариям UX-01 и при подключении продуктовых ручек.</li>
       </ul>

@@ -11,7 +11,7 @@
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Редактор маршрутов</nav>
     <h1>Приватность POI</h1>
     <p>Права на место проверяются при каждом чтении, включая карту, поиск, карточку и фотографии. Если доступ отозван, необязательная метка исчезает из слоя. Если от закрытого положения зависит геометрия опубликованного маршрута, из публичной выдачи исчезает вся поездка. <a href="../../.agents/docs/tropio_tz_v1.1.md#od-06-приватность-poi-в-gis-mvp">OD-06</a></p>
-    <p class="document-note"><strong>Статус.</strong> Правила приватности утверждены в OD-06, макеты карточки и галереи согласованы в UX-01. HTTP-операции описаны в проекте POC-04. Реализация POI и редактора относится к GIS-04/05, публичная выдача и сквозная проверка отзыва — к GIS-06. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#8-утверждённые-решения">Утверждённые решения</a> · <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
+    <p class="document-note"><strong>Статус.</strong> GIS-04 реализует слои, поиск, запись POI, проверку положения и чтение существующих фото за BFF. Карточка и галерея следуют согласованным макетам UX-01 при подключении редактора в GIS-05. Публичная выдача поездки запланирована на GIS-06. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#8-утверждённые-решения">Утверждённые решения</a> · <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
@@ -37,7 +37,7 @@
           </tbody>
         </table>
       </div>
-      <p><strong>Слои и поиск.</strong> «Глобальные» (<code>scope=global</code>) всегда работают в гостевом контексте. «Мои» (<code>scope=mine</code>) показывают созданные пользователем места, к которым у него есть текущий доступ. «В этом путешествии» (<code>scope=trip</code>) требует отдельного права на поездку слоя, затем для каждой POI проверяется её исходная область. Поиск по имени и границам карты выполняется в пределах разрешённой выдачи.</p>
+      <p><strong>Слои и поиск.</strong> «Глобальные» (<code>scope=global</code>) всегда работают в гостевом контексте. «Мои» (<code>scope=mine</code>) показывают созданные пользователем места, к которым у него есть текущий доступ. «В этом путешествии» (<code>scope=trip</code>) требует права на поездку слоя и включает привязанные места и POI собственной области поездки. Для каждой POI сервер проверяет актуальную область. Поиск по имени и границам карты выполняется в пределах разрешённой выдачи.</p>
       <p><strong>Переиспользование.</strong> Geo сохраняет связь поездки с существующим UUID POI. Travel проверяет право на целевой черновик, Geo — доступ к POI и допустимость связи. Разрешённые глобальные места можно использовать в нескольких поездках, приватные — в своих черновиках, а <code>trip</code>-места — в исходной поездке. Наборы могут пересекаться и ссылаться на один объект. <a href="../../.agents/docs/tropio_tz_v1.1.md#101-видимость">ТЗ, § 10.1</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#4-приватность-и-копирование-poi">POC-04, § 4</a> · <a href="../../.agents/docs/er-diagram.md#32-poi-и-медиа">Модель Geo</a></p>
     </section>
 
@@ -48,7 +48,7 @@
         <li><strong>Карточка, слой и медиа.</strong> При новой проверке место пропадает из доступных слоёв и поиска. Прямое чтение и запросы фото возвращают общий <code>404</code> при утрате права. BFF проверяет право на POI и принадлежность медиа этому месту при каждом запросе, включая повторное открытие ранее выданной ссылки.</li>
         <li><strong>Необязательная метка.</strong> В опубликованный слой попадают явно выбранные глобальные POI. Закрывшуюся метку убирают из слоя, сам разрешённый снимок остаётся видимым. Список меток закрепляется при публикации, а положение каждой разрешённой метки берётся из текущей версии POI.</li>
         <li><strong>Зависимость геометрии.</strong> Если положение места раскрывается стартом, точкой или производной линией, ревизия маршрута хранит ссылку на точную версию положения POI. Необходимы актуальное право, совпадение с текущей версией положения и её одобрение для публичного чтения. При ограничении карточка, карта и список исключают всю поездку. Одобрение нового положения не открывает старые координаты.</li>
-        <li><strong>Восстановление.</strong> Редактор с правом на маршрут получает <code>geometry_restricted</code> и только UUID маршрута и его ревизии вместе с признаком ограничения. Для восстановления он явно пересобирает маршрут из разрешённых опор. Удаление ссылки на POI сохраняет сведения о происхождении уже рассчитанной линии. Чтобы выставить пересобранный маршрут, владелец публикует новый снимок.</li>
+        <li><strong>Восстановление.</strong> Владелец получает <code>geometry_restricted</code> и только UUID маршрута и его ревизии вместе с признаком ограничения. Для восстановления передай новый состав из разрешённых опор без UUID прежних точек и треков. Если правка переиспользует объекты из прежнего снимка, Geo проверяет их прежние зависимости. Чтобы выставить пересобранный маршрут в GIS-06, владелец публикует новый снимок. <a href="geo-routing.html#flow">Пересборка маршрута</a></li>
       </ol>
       <p>Отзыв применяется к чтениям, обязательная проверка которых началась после его фиксации. Пересекающееся чтение может завершиться по состоянию, разрешённому в момент своей проверки. BFF отдаёт данные, медиа и ошибки доступа с <code>Cache-Control: no-store</code>. PWA исключает эти ответы из Cache Storage. Уже полученные байты остаются у получателя. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#3-чтение-отзыв-и-публичный-каталог">Чтение и отзыв</a> · <a href="../travel/publication.html#data">Публичные снимки Travel/Geo</a></p>
     </section>
@@ -80,23 +80,35 @@
 
     <section aria-labelledby="api">
       <h2 id="api">Операции API</h2>
-      <p>Проект BFF <code>0.1.0</code> использует UUID и префикс <code>/api/v1</code>. Для записи требуются действующая сессия, <code>X-CSRF-Token</code> и ключ <code>Idempotency-Key</code> в формате UUID. Если результат записи не подтверждён, повтор отправляет тот же ключ и те же параметры. <a href="../contracts/openapi.yaml">OpenAPI GIS MVP</a></p>
+      <p>Контракт BFF <code>0.4.0</code> использует UUID и префикс <code>/api/v1</code>. Для записи нужны сессия <code>tropio_session</code>, разрешённый <code>Origin</code>, <code>X-CSRF-Token</code> и <code>Idempotency-Key</code> в формате UUID. Запросы с телом используют <code>application/json</code>. При неопределённом исходе повтор использует тот же ключ и те же параметры. BFF передаёт <code>Cache-Control: no-store</code> и <code>X-Request-Id</code>. <a href="../contracts/openapi.yaml">OpenAPI GIS MVP</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Операции API приватности POI">
         <table>
           <thead><tr><th scope="col">Ручка</th><th scope="col">Право и результат</th></tr></thead>
           <tbody>
+            <tr><th scope="row"><code>GET /api/v1/poi-categories</code><br><code>listPoiCategories</code></th><td><code>200 PoiCategories</code> с активными системными категориями. Сессия не требуется.</td></tr>
             <tr><th scope="row"><code>GET /api/v1/pois</code><br><code>listPois</code></th><td><code>200 PoiPage</code> после ACL и модерации. Обязателен <code>scope</code>. Для <code>mine</code> нужна сессия. <code>trip_id</code> указывается только при <code>scope=trip</code> и требует действующего права на поездку. Дополнительно: <code>q</code>, <code>bbox</code>, <code>cursor</code> и <code>limit</code>.</td></tr>
-            <tr><th scope="row"><code>GET /api/v1/pois/{poiId}</code><br><code>getPoi</code></th><td><code>200 Poi</code> с разрешёнными полями. <code>poi_revision_id</code> выдаётся в авторизованном контексте при праве менять видимость. Скрытый или неизвестный объект даёт <code>404</code>.</td></tr>
+            <tr><th scope="row"><code>POST /api/v1/pois</code><br><code>createPoi</code></th><td><code>201 Poi</code>. Автор передаёт <code>category_id</code>, <code>name</code>, <code>position</code> и <code>visibility</code>. Приватное или глобальное место можно создать отдельно от маршрута и поездки. Для <code>visibility: trip</code> нужен <code>scope_trip_id</code> доступной для правки поездки.</td></tr>
+            <tr><th scope="row"><code>GET /api/v1/pois/{poiId}</code><br><code>getPoi</code></th><td><code>200 Poi</code> с разрешёнными полями. В контексте автора доступны <code>poi_revision_id</code>, <code>visibility</code>, <code>moderation_status</code> и для области поездки <code>scope_trip_id</code>. Скрытый или неизвестный объект даёт <code>404</code>.</td></tr>
+            <tr><th scope="row"><code>PATCH /api/v1/pois/{poiId}</code><br><code>editPoi</code></th><td><code>200 Poi</code>. Автор передаёт ожидаемую <code>poi_revision_id</code> и изменяемые поля: <code>category_id</code>, <code>name</code>, <code>description</code> или <code>position</code>. Перенос в другую координату сбрасывает одобрение положения.</td></tr>
             <tr><th scope="row"><code>PATCH /api/v1/pois/{poiId}/visibility</code><br><code>changePoiVisibility</code></th><td><code>200 PoiVisibilityResult</code> после записи Geo. Тело содержит ожидаемую <code>poi_revision_id</code> и <code>visibility</code>. <code>scope_trip_id</code> обязателен только для <code>trip</code>.</td></tr>
+            <tr><th scope="row"><code>POST /api/v1/pois/{poiId}/moderation</code><br><code>moderatePoi</code></th><td><code>200 PoiVisibilityResult</code>. Активный пользователь с ролью <code>poi_moderator</code> или <code>admin</code> передаёт ожидаемую <code>poi_revision_id</code>, решение <code>approved</code> или <code>rejected</code> и при необходимости причину. Решение применяется к глобальной POI и записывается в аудит.</td></tr>
+            <tr><th scope="row"><code>DELETE /api/v1/pois/{poiId}</code><br><code>removePoi</code></th><td><code>204</code>. Автор передаёт ожидаемую <code>poi_revision_id</code>. Geo скрывает место из выдачи и сохраняет его историю.</td></tr>
             <tr><th scope="row"><code>PUT /api/v1/trips/{tripId}/pois/{poiId}</code><br><code>attachExistingPoi</code></th><td><code>204</code> без тела после подтверждения разрешённой связи. Нужны право редактировать целевой черновик и доступ к исходной POI.</td></tr>
-            <tr><th scope="row"><code>GET /api/v1/pois/{poiId}/media/{mediaId}</code><br><code>getPoiMedia</code></th><td><code>200</code> с разрешённым изображением JPEG, PNG или WebP целиком в пределах лимита GIS MVP. URL относится к BFF. Geo проверяет принадлежность медиа указанному месту и текущие права.</td></tr>
+            <tr><th scope="row"><code>GET /api/v1/pois/{poiId}/media/{mediaId}</code><br><code>getPoiMedia</code></th><td><code>200</code> с разрешённым изображением JPEG, PNG или WebP размером до 10 МиБ. URL относится к BFF. Geo проверяет принадлежность медиа и права, затем читает объект из закрытого S3.</td></tr>
             <tr><th scope="row"><code>GET /api/v1/routes/{routeId}</code><br><code>getRouteDraft</code></th><td><code>200 RouteDraft</code> при доступе к маршруту. Для отозванной зависимости возвращается <code>geometry_restricted</code>. При утрате права на маршрут возвращается <code>404</code>.</td></tr>
-            <tr><th scope="row"><code>GET /api/v1/catalog/trips/{tripId}</code><br><code>getPublicTrip</code></th><td><code>200 PublicTrip</code> после проверки опубликованных ревизий. Ограниченная зависимость исключает поездку из выдачи и даёт <code>404</code> карточки.</td></tr>
-            <tr><th scope="row"><code>GET /api/v1/catalog/trips</code><br><code>listPublicTrips</code></th><td><code>200 PublicTripPage</code> с общим разрешённым набором для карты и списка. Отозванные поездки исключаются до счётчиков, курсора и пространственных агрегатов.</td></tr>
           </tbody>
         </table>
       </div>
-      <p><code>q</code> ищет по имени среди доступных мест в выбранном слое. <code>bbox</code> содержит четыре значения в порядке запад, юг, восток, север в WGS 84. Курсор привязан к фильтрам и контексту, права проверяются повторно при запросе следующей страницы. Для отдельного слоя публичной поездки правила выбора меток и отказа публикации описаны в <a href="../travel/publication.html#api">контракте публикации</a>.</p>
+      <p><code>q</code> ищет по имени среди доступных мест в выбранном слое. <code>bbox</code> содержит четыре значения в порядке запад, юг, восток, север в WGS 84. Курсор привязан к фильтрам и контексту, права проверяются повторно при запросе следующей страницы. Слой <code>global</code> выдаёт гостевое представление и для автора места. Для отдельного слоя публичной поездки правила выбора меток описаны в контракте GIS-06. <a href="../travel/publication.html#api">Контракт публикации</a></p>
+      <p>Локальное чтение медиа использует закрытый бакет Compose. <code>TROPIO_S3_URL</code> и <code>TROPIO_S3_REGION</code> позволяют указать другой адрес S3 API и регион подписи запроса. <a href="../../.env.example">Переменные S3</a></p>
+      <h3>Создание места на общей карте</h3>
+      <p>Пример тела <code>POST /api/v1/pois</code> с категорией «Смотровая площадка». После <code>201</code> автор увидит <code>moderation_status: pending</code> и сможет открыть место в слое «Мои».</p>
+      <pre><code id="poi-create-request">{
+  "category_id": "5d9a807f-b066-4a6b-af95-ecdb8689df01",
+  "name": "Смотровая площадка у реки",
+  "position": { "lon": 84.95, "lat": 56.48 },
+  "visibility": "global"
+}</code></pre>
       <h3>Смена области видимости</h3>
       <p>Пример тела <code>PATCH</code> при переводе места в область поездки:</p>
       <pre><code id="poi-change-request">{
@@ -109,7 +121,7 @@
   "poi_id": "d303b6c4-278b-44bc-bb81-aa28227992fb",
   "poi_revision_id": "1ae62539-8c87-4bc2-b335-55f10fe2508a",
   "visibility": "trip",
-  "moderation_status": "approved"
+  "moderation_status": "pending"
 }</code></pre>
       <h3>Список после фильтрации</h3>
       <p>Пример <code>200</code> для разрешённого запроса без подходящих мест:</p>
@@ -137,8 +149,9 @@
             <tr><th scope="row"><code>401 SESSION_REQUIRED</code></th><td>Защищённая операция требует сессии.</td><td>Предложить вход и перечитать доступные данные.</td></tr>
             <tr><th scope="row"><code>403 CSRF_REJECTED</code></th><td>Команда отклонена защитой CSRF.</td><td>Восстановить защищённую сессию. Показать сохранение после подтверждения команды.</td></tr>
             <tr><th scope="row"><code>404 NOT_FOUND</code></th><td>Место, медиа, маршрут или поездка отсутствуют либо недоступны в текущем контексте.</td><td>Показать недоступность и очистить устаревшее содержимое. Скрытые сведения о причине остаются на сервере.</td></tr>
-            <tr><th scope="row"><code>409 POI_REVISION_CONFLICT</code></th><td>Ревизия POI изменилась. Код следует соглашению POC-04 <code>*_REVISION_CONFLICT</code>.</td><td>Перечитать состояние в текущих правах перед новой редакцией.</td></tr>
+            <tr><th scope="row"><code>409 POI_REVISION_CONFLICT</code></th><td>Ревизия POI изменилась. Текущий UUID может получить автор.</td><td>Перечитать состояние в текущих правах перед новой редакцией.</td></tr>
             <tr><th scope="row"><code>409 IDEMPOTENCY_KEY_REUSED</code></th><td>Один ключ использован с разным содержимым команды.</td><td>Новой команде дать новый ключ. Неопределённый исход прежней команды проверять с первоначальным ключом и параметрами.</td></tr>
+            <tr><th scope="row"><code>422 INVALID_POI_CATEGORY</code></th><td>Категория отсутствует или отключена.</td><td>Перечитать справочник и предложить доступную категорию.</td></tr>
             <tr><th scope="row"><code>422 POI_SCOPE_RESTRICTED</code></th><td>Выбранная область или связь не проходит доменную проверку, хотя запрос корректен.</td><td>Предложить выбрать разрешённую область или место.</td></tr>
             <tr><th scope="row"><code>422 ROUTE_GEOMETRY_RESTRICTED</code></th><td>Geo отклоняет частичную правку существующей геометрии с отозванной зависимостью.</td><td>Предложить пересборку из разрешённых входов. При чтении черновика это отдельный вариант <code>200 geometry_restricted</code>.</td></tr>
             <tr><th scope="row"><code>503 DEPENDENCY_UNAVAILABLE</code></th><td>Обязательная проверка прав в разрешённом контексте временно недоступна либо исход записи не подтверждён.</td><td>Повторить чтение. Защищённые данные остаются скрытыми до успешной проверки. При неопределённом исходе записи повторить первоначальную команду с тем же ключом.</td></tr>
@@ -150,6 +163,7 @@
 
     <section aria-labelledby="acceptance">
       <h2 id="acceptance">Приёмка</h2>
+      <p><code>pnpm db:test:geo</code> проверяет AT-05 и AT-06 на временной базе, включая одобренное фото, отзыв доступа к поиску и привязке, отказ восстановить старую геометрию после одобрения нового положения. Строки о состоянии галереи, SSR и опубликованном каталоге описывают проверки GIS-05/06. <a href="../../backend/test/geo-http.test.ts">HTTP-тесты Geo</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Проверки приватности и отзыва доступа POI">
         <table>
           <thead><tr><th scope="col">Кейс</th><th scope="col">Что проверить</th><th scope="col">Ожидаемый результат</th></tr></thead>
@@ -171,8 +185,7 @@
     <section aria-labelledby="open">
       <h2 id="open">Открытые вопросы</h2>
       <ul>
-        <li><strong>Модерация и восстановление.</strong> Для отдельного действия «Отправить на проверку» и команды безопасной пересборки из разрешённых входов нужны контракты. В текущем OpenAPI описаны смена видимости и результат чтения ограниченного черновика.</li>
-        <li><strong>Поля карточки владельца.</strong> <code>PoiVisibilityResult</code> возвращает видимость и статус модерации после записи. Для открытия существующей карточки форма тоже требует эти поля и контекст поездки. Проект <code>Poi</code> перечисляет содержимое места, фото и доступный редактору UUID ревизии.</li>
+        <li><strong>Модерация и фото.</strong> GIS-04 хранит решение о проверке и выдаёт прикреплённые изображения. Очередь модерации, экран повторной отправки на проверку и загрузку новых фото предстоит уточнить.</li>
         <li><strong>Копирование и роли.</strong> Копирование чужих маршрутов, лицензии, делегирование и права участника остаются открытыми частями OD-05/06.</li>
       </ul>
       <p><a href="../../.agents/docs/tropio_tz_v1.1.md#od-06-приватность-poi-в-gis-mvp">Реестр решений</a> · <a href="../contracts/openapi.yaml">Текущий срез OpenAPI</a></p>

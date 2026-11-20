@@ -244,6 +244,19 @@ export class IdentityService {
     })
   }
 
+  async canModeratePois(userId: string): Promise<boolean> {
+    return this.database.transaction(async (client) => {
+      const { rowCount } = await client.query(
+        `SELECT 1 FROM identity.user_roles r
+         JOIN identity.users u ON u.id = r.user_id
+         WHERE r.user_id = $1 AND r.role_code IN ('admin', 'poi_moderator')
+           AND u.status = 'active' AND u.email_verified_at IS NOT NULL LIMIT 1`,
+        [userId],
+      )
+      return rowCount === 1
+    })
+  }
+
   async authenticate(token: string): Promise<string> {
     return this.database.transaction(async (client) => (await loadSession(client, token)).id)
   }

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Точки, треки и расчёт маршрута — справочник Tropio</title>
+  <link rel="stylesheet" href="../handbook.css">
+</head>
+<body>
+  <main>
+    <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Редактор маршрутов</nav>
+    <h1>Точки, треки и расчёт маршрута</h1>
+    <p>Владелец поездки собирает маршрут дня из упорядоченных точек и соседних треков. Geo сохраняет неизменяемые ревизии, строит автомобильные, велосипедные и пешие участки по графу Valhalla и рассчитывает высоты по Copernicus DEM GLO-30 Public. <a href="../../.agents/docs/tropio_tz_v1.1.md#8-fr-02-редактор-интерактивной-карты">ТЗ, §§ 8–9</a> · <a href="../../.agents/docs/POC-02-routing-dem.md">Пилот POC-02</a></p>
+    <p class="document-note"><strong>Статус.</strong> Серверные операции работают в GIS-04. Подключение карты, мобильной схемы и состояний сохранения запланировано на GIS-05. Публикация закреплённых ревизий запланирована на GIS-06. <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a> · <a href="../contracts/openapi.yaml">OpenAPI 0.4.0</a></p>
+
+    <nav class="document-links" aria-label="На этой странице">
+      <ul>
+        <li><a href="#flow">Сценарий и права</a></li>
+        <li><a href="#api">Операции API</a></li>
+        <li><a href="#providers">Локальные провайдеры</a></li>
+        <li><a href="#acceptance">Приёмка</a></li>
+      </ul>
+    </nav>
+
+    <section aria-labelledby="flow">
+      <h2 id="flow">Сценарий и права</h2>
+      <ol>
+        <li>Владелец с действующей сессией получает <code>route_id</code> из черновика Travel. Если геометрию ещё не сохраняли, Geo возвращает пустые <code>points</code> и <code>tracks</code> и <code>route_revision_id: null</code>. <a href="../travel/drafts.html#api">Привязка маршрута дня</a></li>
+        <li>Для выбранных координат и транспорта редактор запрашивает предпросмотр. Для автоматического режима ответ показывает исходные и предложенные координаты обоих концов и фактическое смещение. Пользователь подтверждает привязку. Предпросмотр может предложить связный пеший вариант и прямой отрезок с предупреждением о непроверенной проходимости. <code>connection: snapped_finish</code> обозначает продолжение от привязанного конца до исходной точки. Без этого поля альтернатива заменяет весь трек. <a href="../../.agents/docs/tropio_tz_v1.1.md#83-конечная-точка-вне-дорожной-сети">ТЗ, § 8.3</a></li>
+        <li>Редактор отправляет новый состав точек и треков с текущей ревизией. Один трек соединяет каждую пару соседних точек. При переносе общей точки Geo согласует концы связанных треков и может пометить трек <code>needs_rebuild</code>. Тип поездки вычисляется по транспорту на треках всех дней. Несколько видов дают <code>combined</code>.</li>
+        <li>Если POI закрыта или её положение изменилось, Geo повторно проверяет доступ к точной сохранённой версии. Авторизованный владелец ограниченного маршрута получает <code>geometry_restricted</code> без координат. Чтобы пересобрать маршрут, отправь новый состав из доступных опор без UUID прежних точек и треков. <a href="poi-privacy.html#revocation">Правила отзыва доступа</a></li>
+      </ol>
+      <p>По макетам на широком экране карта и схема видны одновременно. На смартфоне они сменяют друг друга, сохраняя выбранный объект. Редактор показывает ожидание рядом с объектом, подтверждает сохранение после ответа BFF и сохраняет ввод при сетевом сбое или конфликте. При конфликте пользователь может сравнить версии или продолжить локальную правку. <a href="../../.agents/images/layouts/desktop/route-timeline.png">Макет широкой схемы</a> · <a href="../../.agents/images/layouts/mobile/route-timeline.png">Макет мобильной схемы</a> · <a href="split-track.html#interface">Состояния редактора</a></p>
+    </section>
+
+    <section aria-labelledby="api">
+      <h2 id="api">Операции API</h2>
+      <p>API использует UUID и координаты WGS 84. Защищённым запросам нужна cookie <code>tropio_session</code>. Запросы с телом передают <code>Content-Type: application/json</code>, разрешённый <code>Origin</code> и <code>X-CSRF-Token</code>. Записывающие команды также требуют UUID в <code>Idempotency-Key</code>. BFF передаёт <code>Cache-Control: no-store</code> и <code>X-Request-Id</code>. <a href="../contracts/openapi.yaml">Схемы и точные пары ошибок OpenAPI</a> · <a href="../contracts/bff-errors.html#geo">Восстановление при сбое</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Операции API редактора Geo">
+        <table>
+          <thead><tr><th scope="col">Метод и операция</th><th scope="col">Вход и ответ</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>GET /api/v1/routes/{routeId}</code><br><code>getRouteDraft</code></th><td>Владелец получает <code>200 RouteDraft</code>. Результат содержит текущую ревизию, точки и треки или только UUID маршрута и ревизии при <code>geometry_restricted</code>.</td></tr>
+            <tr><th scope="row"><code>POST /api/v1/routing/calculate</code><br><code>previewRouteTrack</code></th><td>Действующая сессия, <code>from</code>, <code>to</code>, <code>transport_mode</code> и необязательный <code>build_mode</code> (по умолчанию <code>automatic</code>). Ответ <code>200</code> с <code>available</code> или <code>unavailable</code>. При наличии линии сервер возвращает <code>elevation_profile</code>. Это расчёт без версии маршрута и без ключа команды.</td></tr>
+            <tr><th scope="row"><code>PUT /api/v1/routes/{routeId}</code><br><code>replaceRouteDraft</code></th><td>Владелец передаёт ожидаемую <code>route_revision_id</code>, упорядоченные <code>points</code> и <code>tracks</code>. Для первого сохранения укажи <code>null</code>. Для сохранения привязки отправь у трека <code>confirm_snap</code> с координатами <code>from</code> и <code>to</code> из полей <code>snapped</code> предпросмотра и его <code>graph_version</code>. Ответ <code>200</code> содержит подтверждённый снимок. Лимит тела — 256 КиБ.</td></tr>
+            <tr><th scope="row"><code>POST /api/v1/tracks/{trackId}/split</code><br><code>splitTrack</code></th><td>Владелец передаёт UUID маршрута, ожидаемую ревизию и позицию. Ответ <code>200 SplitResult</code> содержит UUID сохранённой ревизии, общей точки и двух треков. <a href="split-track.html#api">Примеры запроса и ответа</a></td></tr>
+            <tr><th scope="row"><code>POST /api/v1/routes/{routeId}/restore</code><br><code>restoreRouteDraft</code></th><td>Владелец передаёт текущую <code>route_revision_id</code> и <code>target_revision_id</code> из истории этого маршрута. Geo заново проверяет зависимости целевой ревизии. Ответ <code>200</code> содержит восстановленный снимок с новым UUID.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Первый прямой трек</h3>
+      <pre><code id="geo-first-track">{
+  "route_revision_id": null,
+  "points": [
+    { "position": { "lon": 84.9514, "lat": 56.4846 } },
+    { "position": { "lon": 84.9684, "lat": 56.4660 } }
+  ],
+  "tracks": [{ "build_mode": "straight", "transport_mode": "foot" }]
+}</code></pre>
+      <p>При успешном <code>PUT</code> используй выданные UUID точек, трека и ревизии для следующей правки. Геометрия BFF использует <code>LineString</code> с парами <code>[lon, lat]</code>. При наличии профиля высот трек содержит отсчёты, покрытую дистанцию, источник, версию, вертикальный датум и метод расчёта. <a href="../contracts/openapi.yaml">Схемы ответа</a></p>
+      <p>Travel владеет привязкой к дню и правами на поездку. Geo владеет снимками геометрии и точными зависимостями от версий положения POI. При делении Geo фиксирует новую ревизию, результат команды и <code>route.track.split</code> в одной транзакции. <a href="split-track.html#data">Данные и событие деления</a> · <a href="../travel/publication.html#data">Публикация и владение данными</a></p>
+    </section>
+
+    <section aria-labelledby="providers">
+      <h2 id="providers">Локальные провайдеры</h2>
+      <p>Храни граф, GeoTIFF и локальный манифест вне Git. <code>pnpm dev:all</code> запускает приложения и хранилища Tropio. Граф Valhalla и растры готовятся отдельно. <a href="../contracts/postgres-migrations.html#commands">Локальный запуск</a> · <a href="../../.env.example">Переменные окружения</a></p>
+      <ul>
+        <li><strong>Valhalla.</strong> Подготовь региональный OSM PBF, собери граф с <code>valhalla_build_tiles</code> и запусти <code>valhalla_service</code> с той же конфигурацией. Для пилота используй командную последовательность и области из POC-02. Задай <code>TROPIO_VALHALLA_URL</code> (например <code>http://127.0.0.1:18002</code>), <code>TROPIO_VALHALLA_GRAPH_VERSION</code> и <code>TROPIO_VALHALLA_COVERAGE</code> как JSON-массив областей <code>[west,south,east,north]</code>. <code>TROPIO_VALHALLA_SNAP_LIMIT_M</code> по умолчанию 50 м и принимает положительные значения до 50 м. <a href="../../.agents/docs/POC-02-routing-dem.md#метод-локального-прогона">Подготовка графа</a> · <a href="../../backend/src/geo/providers/valhalla.ts">Адаптер Valhalla</a></li>
+        <li><strong>Copernicus DEM GLO-30 Public.</strong> Скопируй пилотный манифест рядом с исходными COG, проверь их SHA-256 по манифесту и укажи путь к JSON в <code>TROPIO_DEM_MANIFEST</code>. Он закрепляет версию набора, датум EGM2008 и имена тайлов. Geo проверяет контрольные суммы при чтении и берёт отсчёты с шагом до 30 м. На пропусках высота равна <code>null</code>. При разрыве полного профиля набор и сброс возвращаются как <code>null</code>, а минимум и максимум считаются по доступным отсчётам. <a href="../../backend/geo-data/copernicus-pilot.json">Пилотный манифест и условия атрибуции</a> · <a href="../../.agents/docs/POC-02-routing-dem.md#источники-высот">Данные и метод пилота</a> · <a href="../../backend/src/geo/providers/copernicus-dem.ts">Адаптер Copernicus</a></li>
+      </ul>
+      <p>При недоступной Valhalla автоматический расчёт возвращает <code>503 DEPENDENCY_UNAVAILABLE</code>. Прямой режим доступен без графа. Если граф отвечает, но подходящего пути нет, предпросмотр возвращает <code>200 unavailable</code> с причиной <code>no_edge</code>, <code>disconnected</code> или <code>outside_coverage</code>. Сохранение трека без доступного авторасчёта требует выбрать разрешённый вариант. <a href="../contracts/bff-errors.html#geo">Коды расчёта и сохранения</a></p>
+    </section>
+
+    <section aria-labelledby="acceptance">
+      <h2 id="acceptance">Приёмка</h2>
+      <p><code>pnpm db:test:geo</code> входит в <code>pnpm check</code>, создаёт временную базу PostgreSQL/PostGIS и сверяет ответы реального BFF по AT-01–06. HTTP-тесты используют управляемые ответы провайдера для повторяемых проверок. Отдельные тесты адаптера проверяют выбор профиля, разрывы сети и тайлов, высоты и контрольные суммы. <a href="../../backend/test/geo-http.test.ts">HTTP-тесты</a> · <a href="../../backend/test/geo-providers.test.ts">Тесты провайдеров</a> · <a href="../../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">Критерии ТЗ</a></p>
+      <p>Запусти <code>TROPIO_GEO_PILOT_CHECK=1 pnpm db:test:geo</code> с настроенными переменными провайдеров для дополнительного сценария на реальных данных. В GIS-04 проверены подтверждение привязки по графу Томска и сохранение профиля Copernicus через BFF. Отдельно проверены расчёты Valhalla для Томска и Чемала и покрытие DEM на контрольных треках Томска, Акташа и Салехарда. <a href="#providers">Подготовка пилотных данных</a></p>
+      <ul>
+        <li><strong>AT-01.</strong> Два автоматических автомобильных трека и прямой пеший трек образуют валидный маршрут и дают тип поездки <code>combined</code>.</li>
+        <li><strong>AT-02 и AT-04.</strong> Повторное деление сохраняет порядок и исходную геометрию в истории. Перенос общего узла согласует два соседних трека или помечает участок для пересчёта. <a href="split-track.html#acceptance">Деление и история</a></li>
+        <li><strong>AT-03.</strong> Предпросмотр сохраняет исходную координату удалённой от дороги точки. Клиент получает доступные альтернативы или ошибку зависимости. Дорожная привязка сохраняется после подтверждения.</li>
+        <li><strong>AT-05 и AT-06.</strong> Две поездки ссылаются на один UUID POI. Отзыв доступа к POI скрывает её и ограничивает зависимую геометрию. <a href="poi-privacy.html#acceptance">Приёмка приватности POI</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

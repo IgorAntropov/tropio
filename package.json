@@ -13,10 +13,11 @@
     "db:test:migrations": "node backend/migrations/verify.mjs",
     "db:test:identity": "node backend/migrations/run-identity.mjs test",
     "db:test:travel": "node backend/migrations/run-identity.mjs test-travel",
+    "db:test:geo": "node backend/migrations/run-identity.mjs test-geo",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "check": "pnpm --filter @tropio/frontend api:types:check && pnpm lint && pnpm typecheck && pnpm test && pnpm db:test:identity && pnpm db:test:travel && pnpm build"
+    "check": "pnpm --filter @tropio/frontend api:types:check && pnpm lint && pnpm typecheck && pnpm test && pnpm db:test:identity && pnpm db:test:travel && pnpm db:test:geo && pnpm build"
   }
 }

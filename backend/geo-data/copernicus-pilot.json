@@ -1,0 +1,20 @@
+{
+  "source": "copernicus-dem-glo-30-public",
+  "version": "aws-cog-2021-pilot-v1",
+  "vertical_datum": "EGM2008",
+  "attribution_terms_url": "https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM",
+  "tiles": {
+    "N56_00_E084_00": {
+      "file": "Copernicus_DSM_COG_10_N56_00_E084_00_DEM.tif",
+      "sha256": "efaa71928d2dd910c07fba54c8051c62a5e4cbdbd08ab0122225b5730e65aebe"
+    },
+    "N50_00_E087_00": {
+      "file": "Copernicus_DSM_COG_10_N50_00_E087_00_DEM.tif",
+      "sha256": "75896b8cdabfefb3042e43d33daf6b837176087d0ce8616deebacff380107746"
+    },
+    "N66_00_E066_00": {
+      "file": "Copernicus_DSM_COG_10_N66_00_E066_00_DEM.tif",
+      "sha256": "6841cbccb178e27e35ce7e85d650a1e37c77433ac63b202e0528b5e5518c592b"
+    }
+  }
+}

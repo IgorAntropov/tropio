@@ -11,7 +11,7 @@
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Редактор маршрутов</nav>
     <h1>Деление трека</h1>
     <p>Владелец поездки выбирает позицию на треке. Geo заменяет его двумя треками с общей маршрутной точкой и сохраняет исходную геометрию в истории. Любой дочерний трек можно разделить снова. <a href="../../.agents/docs/tropio_tz_v1.1.md#84-разделение-трека">ТЗ, § 8.4</a></p>
-    <p class="document-note"><strong>Статус.</strong> Поведение задано ТЗ, внешний API описан в проекте POC-04. Реализация относится к GIS-04 и GIS-05. <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
+    <p class="document-note"><strong>Статус.</strong> GIS-04 реализует деление и восстановление ревизии за BFF. Подключение редактора запланировано на GIS-05. <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
@@ -49,17 +49,18 @@
 
     <section aria-labelledby="api">
       <h2 id="api">Операции API</h2>
-      <p>Проект внешнего API BFF, версия <code>0.1.0</code>. <a href="../contracts/openapi.yaml">OpenAPI GIS MVP</a></p>
+      <p>Контракт BFF <code>0.4.0</code>. <a href="../contracts/openapi.yaml">OpenAPI GIS MVP</a></p>
       <ul>
         <li><code>GET /api/v1/trips/{tripId}/draft</code> (<code>getTripDraft</code>) возвращает поля черновика поездки и привязки маршрутов дней.</li>
         <li><code>GET /api/v1/routes/{routeId}</code> (<code>getRouteDraft</code>) возвращает текущую ревизию, точки и треки доступного маршрута. Этой операцией можно перечитать схему после деления или конфликта. При <code>availability: geometry_restricted</code> доступны только UUID маршрута и ревизии вместе с признаком ограничения.</li>
-        <li><code>POST /api/v1/tracks/{trackId}/split</code> (<code>splitTrack</code>) принимает UUID трека в пути и тело <code>SplitCommand</code>. Для проектного контракта требуются действующая сессия (рабочее имя cookie <code>tropio_session</code>), <code>X-CSRF-Token</code>, <code>Idempotency-Key</code> в формате UUID и <code>Content-Type: application/json</code>.</li>
+        <li><code>POST /api/v1/tracks/{trackId}/split</code> (<code>splitTrack</code>) принимает UUID трека в пути и тело <code>SplitCommand</code>. Нужны действующая сессия <code>tropio_session</code>, разрешённый <code>Origin</code>, <code>X-CSRF-Token</code>, <code>Idempotency-Key</code> в формате UUID и <code>Content-Type: application/json</code>.</li>
       </ul>
-      <p>Координаты <code>split_position</code> передаются как <code>{lon, lat}</code> в WGS 84. Долгота от −180 до 180, широта от −90 до 90. Ответы проекта контракта используют <code>X-Request-Id</code> и <code>Cache-Control: no-store</code>.</p>
+      <p>Передай <code>split_position</code> как <code>{lon, lat}</code> в WGS 84. Geo проецирует позицию на готовый трек при отклонении до 25 м. Каждая часть должна быть длиной от 1 м. BFF передаёт <code>X-Request-Id</code> и <code>Cache-Control: no-store</code>. <a href="../../backend/src/geo/routes/route-geometry.ts">Геодезическое деление</a></p>
       <h3>Пример команды</h3>
       <pre><code>POST /api/v1/tracks/a77f78f4-3718-4d73-9aaf-45d638340ce1/split
 Content-Type: application/json
 Cookie: tropio_session=example-session
+Origin: http://127.0.0.1:3000
 X-CSRF-Token: example-token
 Idempotency-Key: b2cbf104-dafb-4fd1-94cf-8afb7f033e64</code></pre>
       <pre><code id="split-request">{
@@ -78,12 +79,13 @@ Idempotency-Key: b2cbf104-dafb-4fd1-94cf-8afb7f033e64</code></pre>
     "287db291-a30c-4774-9a86-f66dbb0d46cd"
   ]
 }</code></pre>
-      <p>Для новой команды создаётся новый ключ. При неопределённом исходе тот же ключ повторяют с теми же UUID трека, маршрута, исходной ревизии и той же позицией. При сохранённом результате Geo возвращает исходный ответ после повторной проверки текущих прав, даже если исходный трек уже заменён. Предлагаемое окно гарантированного повтора завершённой команды — 7 суток. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#5-общие-соглашения-api">POC-04, § 5</a></p>
+      <p>Для новой команды создай новый ключ. При неопределённом исходе повтори запрос с прежним ключом, теми же UUID трека, маршрута, исходной ревизии и той же позицией. При сохранённом результате Geo возвращает исходный ответ после повторной проверки прав, даже если исходный трек уже заменён. <a href="../contracts/bff-errors.html#recovery">Правила повтора</a></p>
+      <p>Для отмены деления редактор может вызвать <code>POST /api/v1/routes/{routeId}/restore</code> с текущей ревизией и UUID состояния перед делением. Geo записывает восстановленное содержание в новую ревизию. <a href="geo-routing.html#api">Операция восстановления</a></p>
     </section>
 
     <section aria-labelledby="errors">
       <h2 id="errors">Ошибки и восстановление</h2>
-      <p>Возвращается <code>application/problem+json</code> с полями <code>type</code>, <code>title</code>, <code>status</code>, <code>code</code> и <code>request_id</code>. При конфликте сервер может вернуть <code>current_route_revision_id</code> после проверки прав. Коды взяты из соглашений POC-04. Действия клиента описывают ожидаемый сценарий восстановления. Визуальные состояния предстоит согласовать. <a href="../contracts/bff-errors.html#recovery">Ошибки BFF и восстановление</a> · <a href="../contracts/openapi.yaml">Схема Problem</a></p>
+      <p>Возвращается <code>application/problem+json</code> с полями <code>type</code>, <code>title</code>, <code>status</code>, <code>code</code> и <code>request_id</code>. При конфликте сервер может вернуть <code>current_route_revision_id</code> после проверки прав. Действия клиента описывают сценарий GIS-05. <a href="../contracts/bff-errors.html#recovery">Ошибки BFF и восстановление</a> · <a href="../contracts/openapi.yaml">Схема Problem</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Таблица ошибок деления трека">
         <table>
           <thead>
@@ -113,6 +115,7 @@ Idempotency-Key: b2cbf104-dafb-4fd1-94cf-8afb7f033e64</code></pre>
 
     <section aria-labelledby="acceptance">
       <h2 id="acceptance">Приёмка</h2>
+      <p><code>pnpm db:test:geo</code> проверяет повторное деление AT-02, перенос узла AT-04, повтор команды, событие и восстановление через реальные HTTP-ответы BFF с временной базой PostgreSQL/PostGIS. Отображение в редакторе и публичный снимок проверяются в GIS-05 и GIS-06. <a href="../../backend/test/geo-http.test.ts">HTTP-проверки Geo</a></p>
       <ul>
         <li><strong>AT-02.</strong> Разделить исходный трек, затем одну из половин. Ожидаются три трека в корректном порядке, две новые общие точки попарно соседних треков и сохранённая исходная геометрия в истории.</li>
         <li><strong>AT-04, связанный сценарий.</strong> Перенести общую точку. Связанные треки согласованы или помечены как требующие пересчёта.</li>
@@ -127,9 +130,7 @@ Idempotency-Key: b2cbf104-dafb-4fd1-94cf-8afb7f033e64</code></pre>
       <h2 id="open">Открытые вопросы</h2>
       <ul>
         <li><strong>UX-01.</strong> Согласовать вход в режим деления, выбор позиции мышью и касанием, подтверждение команды.</li>
-        <li><strong>GIS-04.</strong> Уточнить нижний порог длины и правила привязки позиции к линии, включая выбор участка при нескольких возможных проекциях.</li>
-        <li><strong>Undo.</strong> ТЗ требует возможность отмены. В срезе POC-04 отдельной операции Undo нет. Нужно уточнить контракт отмены, ожидаемую ревизию и поведение при конкурирующей правке.</li>
-        <li><strong>GIS-02.</strong> Уточнить сессионную cookie, выдачу CSRF-токена и проверку origin.</li>
+        <li><strong>GIS-05.</strong> Подключить Undo/Redo к восстановлению ревизии и обработке конфликта. Проверить выбор участка на пересечениях и поведение при приближении к концам линии.</li>
       </ul>
       <p><a href="../../.agents/docs/tropio_tz_v1.1.md#84-разделение-трека">Требования к делению и Undo</a> · <a href="../../.agents/docs/TODO.md#текущая-работа">Очередь UX-01</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#5-общие-соглашения-api">Рабочие параметры API</a></p>
     </section>

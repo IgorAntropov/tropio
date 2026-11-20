@@ -228,7 +228,7 @@ SET CONSTRAINTS poi_head_revision_fk DEFERRED;
 DO $$
 DECLARE
     owner uuid := gen_random_uuid();
-    category uuid := gen_random_uuid();
+    category uuid := (SELECT id FROM poi_categories WHERE code = 'viewpoint');
     place uuid := gen_random_uuid();
     place_revision uuid := gen_random_uuid();
     place_position uuid := gen_random_uuid();
@@ -241,7 +241,12 @@ DECLARE
     late_operation uuid := gen_random_uuid();
     trip uuid := gen_random_uuid();
 BEGIN
-    INSERT INTO poi_categories (id, code, label) VALUES (category, 'poi-test', 'POI Test');
+    BEGIN
+        UPDATE poi_categories SET label = 'POI Test' WHERE id = category;
+        RAISE EXCEPTION 'Allowed runtime edits to a system POI category';
+    EXCEPTION WHEN insufficient_privilege THEN
+        NULL;
+    END;
     INSERT INTO pois (id, author_user_id, head_revision_id) VALUES (place, owner, place_revision);
     INSERT INTO poi_position_revisions (poi_id, id, geom)
     VALUES

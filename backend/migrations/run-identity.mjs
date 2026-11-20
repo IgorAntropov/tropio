@@ -8,6 +8,7 @@ import { composeSql } from './compose-sql.mjs'
 import { applyMigrations } from './migrate.mjs'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
+const services = ['identity', 'travel', 'geo']
 
 function postgresEndpoint() {
   const result = spawnSync('docker', ['compose', 'port', 'postgres', '5432'], {
@@ -58,18 +59,23 @@ GRANT tropio_${service}_runtime TO ${login};
   }
 }
 
+function withDatabaseRoles(database, entries, test, run, env = {}) {
+  const [service, ...remaining] = entries
+  if (!service) return run(env)
+  const key = `TROPIO_${service.toUpperCase()}_${test ? 'TEST_' : ''}DATABASE_URL`
+  const next = (url) => withDatabaseRoles(database, remaining, test, run, { ...env, [key]: url })
+  const configuredUrl = test ? undefined : process.env[key]
+  return configuredUrl ? next(configuredUrl) : withLocalRuntime(database, service, next)
+}
+
 async function testService(service) {
   const database = `tropio_${service}_test_${randomBytes(8).toString('hex')}`
   composeSql(`CREATE DATABASE ${database} TEMPLATE template0;`)
   try {
     applyMigrations({ database })
-    return await withLocalRuntime(database, 'identity', (identityUrl) => {
-      const args = ['--filter', '@tropio/backend', 'exec', 'vitest', 'run', `test/${service}-http.test.ts`]
-      const env = { TROPIO_IDENTITY_TEST_DATABASE_URL: identityUrl }
-      if (service === 'identity') return runPnpm(args, env)
-      return withLocalRuntime(database, 'travel', travelUrl =>
-        runPnpm(args, { ...env, TROPIO_TRAVEL_TEST_DATABASE_URL: travelUrl }))
-    })
+    const args = ['--filter', '@tropio/backend', 'exec', 'vitest', 'run', `test/${service}-http.test.ts`]
+    return await withDatabaseRoles(database, services.slice(0, services.indexOf(service) + 1), true,
+      env => runPnpm(args, env))
   } finally {
     composeSql(`DROP DATABASE ${database};`)
   }
@@ -77,23 +83,17 @@ async function testService(service) {
 
 async function startDevelopment() {
   const proxySecret = process.env.TROPIO_BFF_PROXY_SECRET || randomBytes(32).toString('hex')
-  const run = (identityUrl, travelUrl) => runPnpm(['run', 'dev'], {
-    TROPIO_IDENTITY_DATABASE_URL: identityUrl,
-    TROPIO_TRAVEL_DATABASE_URL: travelUrl,
+  const run = (env) => runPnpm(['run', 'dev'], {
+    ...env,
     TROPIO_AUTH_OUTBOX_DIR: process.env.TROPIO_AUTH_OUTBOX_DIR || resolve(root, '.local/identity-mail'),
     TROPIO_BFF_PROXY_SECRET: proxySecret,
     NUXT_BFF_PROXY_SECRET: proxySecret,
   })
-  const identityUrl = process.env.TROPIO_IDENTITY_DATABASE_URL
-  const travelUrl = process.env.TROPIO_TRAVEL_DATABASE_URL
-  if (identityUrl && travelUrl) return run(identityUrl, travelUrl)
   const database = composeSql('COPY (SELECT current_database()) TO STDOUT;')
-  const withTravel = (activeIdentityUrl) => travelUrl
-    ? run(activeIdentityUrl, travelUrl)
-    : withLocalRuntime(database, 'travel', activeTravelUrl => run(activeIdentityUrl, activeTravelUrl))
-  return identityUrl ? withTravel(identityUrl) : withLocalRuntime(database, 'identity', withTravel)
+  return withDatabaseRoles(database, services, false, run)
 }
 
 const command = process.argv[2]
-if (!['dev', 'test', 'test-travel'].includes(command)) throw new Error('Укажи dev, test или test-travel')
-process.exitCode = await (command === 'dev' ? startDevelopment() : testService(command === 'test' ? 'identity' : 'travel'))
+const testCommands = { test: 'identity', 'test-travel': 'travel', 'test-geo': 'geo' }
+if (command !== 'dev' && !Object.hasOwn(testCommands, command)) throw new Error('Укажи dev, test, test-travel или test-geo')
+process.exitCode = await (command === 'dev' ? startDevelopment() : testService(testCommands[command]))

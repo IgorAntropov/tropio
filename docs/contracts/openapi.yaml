@@ -1,9 +1,9 @@
 openapi: 3.1.1
 info:
   title: Tropio GIS MVP
-  version: 0.3.0
+  version: 0.4.0
   description: |
-    Внешний API BFF. Identity реализован в GIS-02, черновики Travel в GIS-03. Публикация и геометрия описаны в проекте POC-04.
+    Внешний API BFF. Identity реализован в GIS-02, черновики Travel в GIS-03. Редактор маршрутов, расчёт треков и POI реализованы в GIS-04. Публикация относится к проекту POC-04.
     Каждый ответ этого контракта получает Cache-Control: no-store и X-Request-Id.
     Недоступные или неизвестные объекты дают одинаковый 404. Публичные операции
     используют гостевой контекст, даже если браузер отправил сессию.
@@ -611,67 +611,6 @@ paths:
           $ref: '#/components/responses/TravelWriteConflict'
         '503':
           $ref: '#/components/responses/TravelUnavailable'
-  /routes/{routeId}:
-    parameters:
-      - $ref: '#/components/parameters/RouteId'
-    get:
-      operationId: getRouteDraft
-      summary: Получить текущую ревизию Geo для редактора
-      responses:
-        '200':
-          description: Черновик маршрута либо безопасный результат с UUID ревизии для пересборки
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RouteDraft'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthenticated'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '503':
-          $ref: '#/components/responses/Unavailable'
-  /tracks/{trackId}/split:
-    parameters:
-      - name: trackId
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-    post:
-      operationId: splitTrack
-      summary: Разделить трек в ожидаемой ревизии Geo
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CsrfToken'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SplitCommand'
-      responses:
-        '200':
-          description: Операция зафиксирована в Geo
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SplitResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthenticated'
-        '403':
-          $ref: '#/components/responses/ForbiddenRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-        '503':
-          $ref: '#/components/responses/Unavailable'
   /trips/{tripId}/publish:
     parameters:
       - $ref: '#/components/parameters/TripId'
@@ -821,10 +760,206 @@ paths:
           $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /routes/{routeId}:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+    get:
+      operationId: getRouteDraft
+      tags: [Geo]
+      summary: Получить черновик маршрута дня
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Операция выполнена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteDraft'
+        '400':
+          $ref: '#/components/responses/GeoInvalidRequest'
+        '401':
+          $ref: '#/components/responses/GeoSessionRequired'
+        '404':
+          $ref: '#/components/responses/GeoNotFound'
+        '503':
+          $ref: '#/components/responses/GeoUnavailable'
+    put:
+      operationId: replaceRouteDraft
+      tags: [Geo]
+      summary: Сохранить точки и треки новой ревизией
+      description: Порядок задают массивы. Для N треков нужны N+1 точек. Сервер строит геометрию и проверяет актуальное положение POI.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceRouteDraft'
+      responses:
+        '200':
+          description: Операция выполнена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadableRouteDraft'
+        '400':
+          $ref: '#/components/responses/GeoInvalidRequest'
+        '401':
+          $ref: '#/components/responses/GeoSessionRequired'
+        '403':
+          $ref: '#/components/responses/GeoCsrfRejected'
+        '404':
+          $ref: '#/components/responses/GeoNotFound'
+        '409':
+          $ref: '#/components/responses/GeoRouteConflict'
+        '422':
+          $ref: '#/components/responses/GeoRouteRejected'
+        '503':
+          $ref: '#/components/responses/GeoUnavailable'
+  /routes/{routeId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+    post:
+      operationId: restoreRouteDraft
+      tags: [Geo]
+      summary: Восстановить содержание прежней ревизии
+      description: Geo проверяет текущее право на исходную геометрию и фиксирует её копию новой ревизией.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreRouteDraft'
+      responses:
+        '200':
+          description: Операция выполнена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadableRouteDraft'
+        '400':
+          $ref: '#/components/responses/GeoInvalidRequest'
+        '401':
+          $ref: '#/components/responses/GeoSessionRequired'
+        '403':
+          $ref: '#/components/responses/GeoCsrfRejected'
+        '404':
+          $ref: '#/components/responses/GeoNotFound'
+        '409':
+          $ref: '#/components/responses/GeoRouteConflict'
+        '422':
+          $ref: '#/components/responses/GeoGeometryRestricted'
+        '503':
+          $ref: '#/components/responses/GeoUnavailable'
+  /tracks/{trackId}/split:
+    parameters:
+      - name: trackId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+    post:
+      operationId: splitTrack
+      tags: [Geo]
+      summary: Разделить трек в ожидаемой ревизии Geo
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SplitCommand'
+      responses:
+        '200':
+          description: Операция выполнена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitResult'
+        '400':
+          $ref: '#/components/responses/GeoInvalidRequest'
+        '401':
+          $ref: '#/components/responses/GeoSessionRequired'
+        '403':
+          $ref: '#/components/responses/GeoCsrfRejected'
+        '404':
+          $ref: '#/components/responses/GeoNotFound'
+        '409':
+          $ref: '#/components/responses/GeoRouteConflict'
+        '422':
+          $ref: '#/components/responses/GeoSplitRejected'
+        '503':
+          $ref: '#/components/responses/GeoUnavailable'
+  /routing/calculate:
+    post:
+      operationId: previewRouteTrack
+      tags: [Geo]
+      summary: Рассчитать предпросмотр трека
+      description: Запрос сохраняет исходные координаты в ответе, показывает фактическую привязку и возможные продолжения. Чертёж маршрута не изменяется.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteTrackPreviewRequest'
+      responses:
+        '200':
+          description: Операция выполнена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteTrackPreview'
+        '400':
+          $ref: '#/components/responses/GeoInvalidRequest'
+        '401':
+          $ref: '#/components/responses/GeoSessionRequired'
+        '403':
+          $ref: '#/components/responses/GeoCsrfRejected'
+        '503':
+          $ref: '#/components/responses/GeoUnavailable'
+  /poi-categories:
+    get:
+      operationId: listPoiCategories
+      tags: [Geo]
+      summary: Получить активные типы POI
+      security: []
+      responses:
+        '200':
+          description: Операция выполнена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoiCategories'
+        '503':
+          $ref: '#/components/responses/GeoUnavailable'
   /pois:
     get:
       operationId: listPois
-      summary: Получить доступные POI в одном из трёх режимов
+      tags: [Geo]
+      summary: Получить доступные POI в выбранном слое
+      description: Для mine и trip нужна действующая сессия. Global применяется в гостевом контексте.
       security:
         - session: []
         - {}
@@ -832,71 +967,173 @@ paths:
         - name: scope
           in: query
           required: true
-          description: trip требует trip_id и действующих полномочий. mine требует сессии. global всегда имеет гостевой контекст.
-          schema:
-            type: string
-            enum: [global, mine, trip]
+          schema: {type: string, enum: [global, mine, trip]}
         - name: trip_id
           in: query
-          description: Обязателен ровно для scope=trip. UUID поездки слоя, а не источник полномочий.
-          schema:
-            $ref: '#/components/schemas/Uuid'
+          description: UUID обязателен для слоя trip и отсутствует у других слоёв.
+          schema: {$ref: '#/components/schemas/Uuid'}
         - name: q
           in: query
-          description: Поиск по имени среди доступных POI в выбранном слое.
-          schema:
-            type: string
-            minLength: 2
-            maxLength: 100
+          schema: {type: string, minLength: 2, maxLength: 100}
         - $ref: '#/components/parameters/Bbox'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
         '200':
-          description: POI после ACL и модерации
+          description: Операция выполнена.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PoiPage'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/GeoInvalidRequest'
         '401':
-          $ref: '#/components/responses/Unauthenticated'
+          $ref: '#/components/responses/GeoSessionRequired'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/GeoNotFound'
         '503':
-          $ref: '#/components/responses/Unavailable'
-  /pois/{poiId}:
-    parameters:
-      - $ref: '#/components/parameters/PoiId'
-    get:
-      operationId: getPoi
-      summary: Получить POI после проверки его действующей видимости
+          $ref: '#/components/responses/GeoUnavailable'
+    post:
+      operationId: createPoi
+      tags: [Geo]
+      summary: Создать POI
       security:
         - session: []
-        - {}
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePoiRequest'
       responses:
-        '200':
-          description: Разрешённые поля POI
+        '201':
+          description: Операция выполнена.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Poi'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/GeoInvalidRequest'
+        '401':
+          $ref: '#/components/responses/GeoSessionRequired'
+        '403':
+          $ref: '#/components/responses/GeoCsrfRejected'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/GeoNotFound'
+        '409':
+          $ref: '#/components/responses/GeoKeyReused'
+        '422':
+          $ref: '#/components/responses/GeoPoiCreationRejected'
         '503':
-          $ref: '#/components/responses/Unavailable'
+          $ref: '#/components/responses/GeoUnavailable'
+  /pois/{poiId}:
+    parameters:
+      - $ref: '#/components/parameters/PoiId'
+    get:
+      operationId: getPoi
+      tags: [Geo]
+      summary: Получить доступную POI
+      security:
+        - session: []
+        - {}
+      responses:
+        '200':
+          description: Операция выполнена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poi'
+        '400':
+          $ref: '#/components/responses/GeoInvalidRequest'
+        '404':
+          $ref: '#/components/responses/GeoNotFound'
+        '503':
+          $ref: '#/components/responses/GeoUnavailable'
+    patch:
+      operationId: editPoi
+      tags: [Geo]
+      summary: Сохранить данные и положение POI
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePoiRequest'
+      responses:
+        '200':
+          description: Операция выполнена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poi'
+        '400':
+          $ref: '#/components/responses/GeoInvalidRequest'
+        '401':
+          $ref: '#/components/responses/GeoSessionRequired'
+        '403':
+          $ref: '#/components/responses/GeoCsrfRejected'
+        '404':
+          $ref: '#/components/responses/GeoNotFound'
+        '409':
+          $ref: '#/components/responses/GeoPoiConflict'
+        '422':
+          $ref: '#/components/responses/GeoCategoryUnavailable'
+        '503':
+          $ref: '#/components/responses/GeoUnavailable'
+    delete:
+      operationId: removePoi
+      tags: [Geo]
+      summary: Удалить POI из выдачи
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PoiRevisionCommand'
+      responses:
+        '204':
+          description: Операция выполнена.
+        '400':
+          $ref: '#/components/responses/GeoInvalidRequest'
+        '401':
+          $ref: '#/components/responses/GeoSessionRequired'
+        '403':
+          $ref: '#/components/responses/GeoCsrfRejected'
+        '404':
+          $ref: '#/components/responses/GeoNotFound'
+        '409':
+          $ref: '#/components/responses/GeoPoiConflict'
+        '503':
+          $ref: '#/components/responses/GeoUnavailable'
   /pois/{poiId}/visibility:
     parameters:
       - $ref: '#/components/parameters/PoiId'
     patch:
       operationId: changePoiVisibility
+      tags: [Geo]
       summary: Изменить область видимости POI
+      security:
+        - session: []
+          csrf: []
       parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
         - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -905,52 +1142,94 @@ paths:
               $ref: '#/components/schemas/ChangePoiVisibility'
       responses:
         '200':
-          description: Новая ревизия и фактическое состояние после записи Geo
+          description: Операция выполнена.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PoiVisibilityResult'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/GeoInvalidRequest'
         '401':
-          $ref: '#/components/responses/Unauthenticated'
+          $ref: '#/components/responses/GeoSessionRequired'
         '403':
-          $ref: '#/components/responses/ForbiddenRequest'
+          $ref: '#/components/responses/GeoCsrfRejected'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/GeoNotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/GeoPoiConflict'
         '422':
-          $ref: '#/components/responses/Unprocessable'
+          $ref: '#/components/responses/GeoPoiScopeRestricted'
         '503':
-          $ref: '#/components/responses/Unavailable'
+          $ref: '#/components/responses/GeoUnavailable'
+  /pois/{poiId}/moderation:
+    parameters:
+      - $ref: '#/components/parameters/PoiId'
+    post:
+      operationId: moderatePoi
+      tags: [Geo]
+      summary: Проверить публикацию точного положения POI
+      description: Требуется роль модератора POI.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModeratePoiRequest'
+      responses:
+        '200':
+          description: Операция выполнена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoiVisibilityResult'
+        '400':
+          $ref: '#/components/responses/GeoInvalidRequest'
+        '401':
+          $ref: '#/components/responses/GeoSessionRequired'
+        '403':
+          $ref: '#/components/responses/GeoCsrfRejected'
+        '404':
+          $ref: '#/components/responses/GeoNotFound'
+        '409':
+          $ref: '#/components/responses/GeoPoiConflict'
+        '503':
+          $ref: '#/components/responses/GeoUnavailable'
   /trips/{tripId}/pois/{poiId}:
     parameters:
       - $ref: '#/components/parameters/TripId'
       - $ref: '#/components/parameters/PoiId'
     put:
       operationId: attachExistingPoi
-      summary: Привязать существующую POI к черновику поездки
+      tags: [Geo]
+      summary: Добавить существующую POI в поездку
+      description: Travel проверяет редактора целевой поездки. Geo повторно проверяет доступность исходного места.
+      security:
+        - session: []
+          csrf: []
       parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
         - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '204':
-          description: Geo подтвердил наличие разрешённой связи с тем же UUID POI
+          description: Операция выполнена.
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/GeoInvalidRequest'
         '401':
-          $ref: '#/components/responses/Unauthenticated'
+          $ref: '#/components/responses/GeoSessionRequired'
         '403':
-          $ref: '#/components/responses/ForbiddenRequest'
+          $ref: '#/components/responses/GeoCsrfRejected'
         '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/GeoNotFound'
         '422':
-          $ref: '#/components/responses/Unprocessable'
+          $ref: '#/components/responses/GeoPoiScopeRestricted'
         '503':
-          $ref: '#/components/responses/Unavailable'
+          $ref: '#/components/responses/GeoUnavailable'
   /pois/{poiId}/media/{mediaId}:
     parameters:
       - $ref: '#/components/parameters/PoiId'
@@ -961,32 +1240,26 @@ paths:
           $ref: '#/components/schemas/Uuid'
     get:
       operationId: getPoiMedia
-      summary: Получить изображение после проверки POI и самого медиа
+      tags: [Geo]
+      summary: Получить доступное изображение POI
+      description: Доступ проверяется до выдачи байтов.
       security:
         - session: []
         - {}
       responses:
         '200':
-          description: Проверенные байты. GIS MVP отдаёт целый объект в пределах лимита загрузки.
+          description: Изображение размером до 10 МиБ.
           content:
-            image/jpeg:
-              schema:
-                type: string
-                format: binary
-            image/png:
-              schema:
-                type: string
-                format: binary
-            image/webp:
-              schema:
-                type: string
-                format: binary
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/png: {schema: {type: string, format: binary}}
+            image/webp: {schema: {type: string, format: binary}}
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/GeoInvalidRequest'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/GeoNotFound'
         '503':
-          $ref: '#/components/responses/Unavailable'
+          $ref: '#/components/responses/GeoUnavailable'
+
 components:
   securitySchemes:
     session:
@@ -1089,6 +1362,213 @@ components:
         maximum: 100
         default: 30
   responses:
+    GeoInvalidRequest:
+      description: Недопустимое тело, заголовок, UUID или параметры запроса.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 400}
+                  code: {const: INVALID_REQUEST}
+    GeoSessionRequired:
+      description: Требуется действующая сессия.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 401}
+                  code: {const: SESSION_REQUIRED}
+    GeoCsrfRejected:
+      description: Отклонён Origin или токен защиты запроса.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 403}
+                  code: {const: CSRF_REJECTED}
+    GeoNotFound:
+      description: Объект отсутствует или недоступен.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 404}
+                  code: {const: NOT_FOUND}
+    GeoRouteConflict:
+      description: Ключ повтора занят либо ревизия маршрута изменилась.
+      content:
+        application/problem+json:
+          schema:
+            oneOf:
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 409}
+                      code: {const: IDEMPOTENCY_KEY_REUSED}
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 409}
+                      code: {const: ROUTE_REVISION_CONFLICT}
+    GeoPoiConflict:
+      description: Ключ повтора занят либо ревизия POI изменилась.
+      content:
+        application/problem+json:
+          schema:
+            oneOf:
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 409}
+                      code: {const: IDEMPOTENCY_KEY_REUSED}
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 409}
+                      code: {const: POI_REVISION_CONFLICT}
+    GeoKeyReused:
+      description: Ключ использован с другим содержимым либо сохранённый результат недоступен.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 409}
+                  code: {const: IDEMPOTENCY_KEY_REUSED}
+    GeoRouteRejected:
+      description: Инварианты маршрута, дорожная привязка или текущий доступ к зависимости отклонили сохранение.
+      content:
+        application/problem+json:
+          schema:
+            oneOf:
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 422}
+                      code: {const: INVALID_ROUTE_TOPOLOGY}
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 422}
+                      code: {const: ROUTE_BUILD_UNAVAILABLE}
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 422}
+                      code: {const: SNAP_CONFIRMATION_REQUIRED}
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 422}
+                      code: {const: ROUTE_GEOMETRY_RESTRICTED}
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 422}
+                      code: {const: POI_SCOPE_RESTRICTED}
+    GeoSplitRejected:
+      description: Точка деления непригодна либо геометрия ограничена.
+      content:
+        application/problem+json:
+          schema:
+            oneOf:
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 422}
+                      code: {const: INVALID_SPLIT_POSITION}
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 422}
+                      code: {const: ROUTE_GEOMETRY_RESTRICTED}
+    GeoGeometryRestricted:
+      description: Историческая геометрия или её зависимости недоступны.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 422}
+                  code: {const: ROUTE_GEOMETRY_RESTRICTED}
+    GeoCategoryUnavailable:
+      description: Категория POI отсутствует или выключена.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 422}
+                  code: {const: INVALID_POI_CATEGORY}
+    GeoPoiCreationRejected:
+      description: Категория недоступна либо область POI несовместима с командой.
+      content:
+        application/problem+json:
+          schema:
+            oneOf:
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 422}
+                      code: {const: INVALID_POI_CATEGORY}
+              - allOf:
+                  - $ref: '#/components/schemas/Problem'
+                  - type: object
+                    properties:
+                      status: {const: 422}
+                      code: {const: POI_SCOPE_RESTRICTED}
+    GeoPoiScopeRestricted:
+      description: Область POI несовместима с командой.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 422}
+                  code: {const: POI_SCOPE_RESTRICTED}
+    GeoUnavailable:
+      description: Обязательная зависимость Geo недоступна.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 503}
+                  code: {const: DEPENDENCY_UNAVAILABLE}
     TravelInvalidRequest:
       description: Путь, параметры, заголовки или тело запроса недопустимы.
       content:
@@ -1589,6 +2069,182 @@ components:
         local_date: {$ref: '#/components/schemas/TripCalendarDate'}
         description: {$ref: '#/components/schemas/TripText'}
         notes: {$ref: '#/components/schemas/TripText'}
+    GeoBuildMode:
+      type: string
+      enum: [automatic, straight]
+    GeoTransportMode:
+      type: string
+      enum: [car, bicycle, foot]
+    ReplaceRouteDraft:
+      type: object
+      description: Полный упорядоченный снимок. Максимальный размер JSON — 256 КиБ.
+      additionalProperties: false
+      required: [route_revision_id, points, tracks]
+      properties:
+        route_revision_id: {$ref: '#/components/schemas/NullableUuid'}
+        points: {type: array, items: {$ref: '#/components/schemas/RoutePointInput'}}
+        tracks: {type: array, items: {$ref: '#/components/schemas/RouteTrackInput'}}
+    RestoreRouteDraft:
+      type: object
+      additionalProperties: false
+      required: [route_revision_id, target_revision_id]
+      properties:
+        route_revision_id: {$ref: '#/components/schemas/NullableUuid'}
+        target_revision_id: {$ref: '#/components/schemas/Uuid'}
+    RoutePointInput:
+      type: object
+      additionalProperties: false
+      required: [position]
+      properties:
+        point_id: {$ref: '#/components/schemas/Uuid'}
+        position: {$ref: '#/components/schemas/LonLat'}
+        poi_id: {$ref: '#/components/schemas/Uuid'}
+        name: {type: string, maxLength: 120}
+        description: {type: string, maxLength: 4000}
+    RouteTrackInput:
+      type: object
+      additionalProperties: false
+      required: [build_mode, transport_mode]
+      properties:
+        track_id: {$ref: '#/components/schemas/Uuid'}
+        build_mode: {$ref: '#/components/schemas/GeoBuildMode'}
+        transport_mode: {$ref: '#/components/schemas/GeoTransportMode'}
+        confirm_snap:
+          description: Подтверждённые координаты привязки обоих концов и версия графа из предпросмотра. Только для automatic.
+          type: object
+          additionalProperties: false
+          required: [from, to, graph_version]
+          properties:
+            from: {$ref: '#/components/schemas/LonLat'}
+            to: {$ref: '#/components/schemas/LonLat'}
+            graph_version: {type: string, minLength: 1, maxLength: 256}
+        name: {type: string, maxLength: 120}
+        description: {type: string, maxLength: 4000}
+    RouteTrackPreviewRequest:
+      type: object
+      additionalProperties: false
+      required: [from, to, transport_mode]
+      properties:
+        from: {$ref: '#/components/schemas/LonLat'}
+        to: {$ref: '#/components/schemas/LonLat'}
+        transport_mode: {$ref: '#/components/schemas/GeoTransportMode'}
+        build_mode:
+          $ref: '#/components/schemas/GeoBuildMode'
+          default: automatic
+    RouteTrackPreview:
+      type: object
+      additionalProperties: false
+      required: [status, from, to, geometry, distance_m, duration_s, provider, graph_version, alternatives]
+      properties:
+        status: {type: string, enum: [available, unavailable]}
+        reason: {type: string, enum: [no_edge, disconnected, outside_coverage]}
+        from: {$ref: '#/components/schemas/RoutePreviewEnd'}
+        to: {$ref: '#/components/schemas/RoutePreviewEnd'}
+        geometry:
+          anyOf:
+            - $ref: '#/components/schemas/GeoCoordinates'
+            - type: 'null'
+        distance_m: {type: [number, 'null'], minimum: 0}
+        duration_s: {type: [number, 'null'], minimum: 0}
+        provider: {type: [string, 'null']}
+        graph_version: {type: [string, 'null']}
+        alternatives: {type: array, items: {$ref: '#/components/schemas/RoutePreviewAlternative'}}
+        elevation_profile: {$ref: '#/components/schemas/TrackElevation'}
+    GeoCoordinates:
+      type: array
+      minItems: 2
+      items:
+        type: array
+        minItems: 2
+        maxItems: 2
+        prefixItems:
+          - {type: number, minimum: -180, maximum: 180}
+          - {type: number, minimum: -90, maximum: 90}
+    RoutePreviewEnd:
+      type: object
+      additionalProperties: false
+      required: [requested, snapped, distance_m]
+      properties:
+        requested: {$ref: '#/components/schemas/LonLat'}
+        snapped:
+          anyOf:
+            - $ref: '#/components/schemas/LonLat'
+            - type: 'null'
+        distance_m: {type: [number, 'null'], minimum: 0}
+    RoutePreviewAlternative:
+      type: object
+      additionalProperties: false
+      required: [build_mode, transport_mode, geometry, distance_m, duration_s]
+      properties:
+        build_mode: {$ref: '#/components/schemas/GeoBuildMode'}
+        transport_mode: {$ref: '#/components/schemas/GeoTransportMode'}
+        geometry: {$ref: '#/components/schemas/GeoCoordinates'}
+        distance_m: {type: number, minimum: 0}
+        duration_s: {type: [number, 'null'], minimum: 0}
+        connection:
+          type: string
+          const: snapped_finish
+          description: Продолжение от предложенного конца к исходной точке. Без поля вариант заменяет весь трек.
+        warning: {type: string, const: unverified_passability}
+    PoiCategories:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [category_id, code, label]
+            properties:
+              category_id: {$ref: '#/components/schemas/Uuid'}
+              code: {type: string}
+              label: {type: string}
+    CreatePoiRequest:
+      type: object
+      additionalProperties: false
+      required: [category_id, name, position, visibility]
+      properties:
+        category_id: {$ref: '#/components/schemas/Uuid'}
+        name: {type: string, minLength: 1, maxLength: 120}
+        description: {type: [string, 'null'], maxLength: 4000}
+        position: {$ref: '#/components/schemas/LonLat'}
+        visibility: {type: string, enum: [global, private, trip]}
+        scope_trip_id: {$ref: '#/components/schemas/Uuid'}
+      if:
+        properties:
+          visibility: {const: trip}
+      then:
+        required: [scope_trip_id]
+      else:
+        not:
+          required: [scope_trip_id]
+    UpdatePoiRequest:
+      type: object
+      additionalProperties: false
+      required: [poi_revision_id]
+      minProperties: 2
+      properties:
+        poi_revision_id: {$ref: '#/components/schemas/Uuid'}
+        category_id: {$ref: '#/components/schemas/Uuid'}
+        name: {type: string, minLength: 1, maxLength: 120}
+        description: {type: [string, 'null'], maxLength: 4000}
+        position: {$ref: '#/components/schemas/LonLat'}
+    PoiRevisionCommand:
+      type: object
+      additionalProperties: false
+      required: [poi_revision_id]
+      properties:
+        poi_revision_id: {$ref: '#/components/schemas/Uuid'}
+    ModeratePoiRequest:
+      type: object
+      additionalProperties: false
+      required: [poi_revision_id, decision]
+      properties:
+        poi_revision_id: {$ref: '#/components/schemas/Uuid'}
+        decision: {type: string, enum: [approved, rejected]}
+        reason: {type: string, minLength: 1, maxLength: 1000}
     RouteDraft:
       oneOf:
         - $ref: '#/components/schemas/ReadableRouteDraft'
@@ -1596,11 +2252,12 @@ components:
     ReadableRouteDraft:
       type: object
       additionalProperties: false
-      required: [availability, route_id, route_revision_id, points, tracks]
+      required: [availability, route_id, route_revision_id, points, tracks, trip_type]
       properties:
         availability: {type: string, const: available}
         route_id: {$ref: '#/components/schemas/Uuid'}
-        route_revision_id: {$ref: '#/components/schemas/Uuid'}
+        route_revision_id: {$ref: '#/components/schemas/NullableUuid'}
+        trip_type: {enum: [car, bicycle, foot, combined, null]}
         points:
           type: array
           items:
@@ -1625,16 +2282,56 @@ components:
         point_id: {$ref: '#/components/schemas/Uuid'}
         position: {$ref: '#/components/schemas/LonLat'}
         poi_id: {$ref: '#/components/schemas/Uuid'}
+        requested_position: {$ref: '#/components/schemas/LonLat'}
+        snapped_position: {$ref: '#/components/schemas/LonLat'}
+        name: {type: string}
+        description: {type: string}
     Track:
       type: object
       additionalProperties: false
-      required: [track_id, start_point_id, end_point_id, geometry, status]
+      required: [track_id, start_point_id, end_point_id, geometry, status, build_mode, transport_mode, distance_m, ascent_m, descent_m, min_elevation_m, max_elevation_m]
       properties:
         track_id: {$ref: '#/components/schemas/Uuid'}
         start_point_id: {$ref: '#/components/schemas/Uuid'}
         end_point_id: {$ref: '#/components/schemas/Uuid'}
         geometry: {$ref: '#/components/schemas/LineString'}
         status: {type: string, enum: [ready, needs_rebuild]}
+        build_mode: {$ref: '#/components/schemas/GeoBuildMode'}
+        transport_mode: {$ref: '#/components/schemas/GeoTransportMode'}
+        distance_m: {type: number, minimum: 0}
+        ascent_m: {type: [number, 'null'], minimum: 0}
+        descent_m: {type: [number, 'null'], minimum: 0}
+        min_elevation_m: {type: [number, 'null']}
+        max_elevation_m: {type: [number, 'null']}
+        estimated_duration_s: {type: integer, minimum: 0}
+        routing_provider: {type: string}
+        route_source_version: {type: string}
+        elevation_profile: {$ref: '#/components/schemas/TrackElevation'}
+        name: {type: string}
+        description: {type: string}
+    TrackElevation:
+      type: object
+      additionalProperties: false
+      required: [ascent_m, descent_m, min_elevation_m, max_elevation_m, profile, source, version, covered_distance_m, vertical_datum, method]
+      properties:
+        ascent_m: {type: [number, 'null'], minimum: 0}
+        descent_m: {type: [number, 'null'], minimum: 0}
+        min_elevation_m: {type: [number, 'null']}
+        max_elevation_m: {type: [number, 'null']}
+        profile:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [distance_m, elevation_m]
+            properties:
+              distance_m: {type: number, minimum: 0}
+              elevation_m: {type: [number, 'null']}
+        source: {enum: [copernicus-dem-glo-30-public, null]}
+        version: {type: [string, 'null']}
+        covered_distance_m: {type: number, minimum: 0}
+        vertical_datum: {enum: [EGM2008, null]}
+        method: {type: [string, 'null']}
     SplitCommand:
       type: object
       additionalProperties: false
@@ -1801,19 +2498,37 @@ components:
     Poi:
       type: object
       additionalProperties: false
-      required: [poi_id, name, position, media]
+      required: [poi_id, category_id, name, position, media]
       properties:
         poi_id: {$ref: '#/components/schemas/Uuid'}
+        category_id: {$ref: '#/components/schemas/Uuid'}
         name: {type: string}
         description: {type: string}
         position: {$ref: '#/components/schemas/LonLat'}
         poi_revision_id:
           $ref: '#/components/schemas/Uuid'
-          description: Присутствует только при праве изменять видимость в авторизованном контексте.
+          description: Присутствует у автора при действующем доступе к области POI.
+        visibility: {type: string, enum: [global, private, trip]}
+        moderation_status: {type: string, enum: [pending, approved, rejected]}
+        scope_trip_id: {$ref: '#/components/schemas/Uuid'}
         media:
           type: array
           items:
             $ref: '#/components/schemas/PoiMedia'
+      dependentRequired:
+        poi_revision_id: [visibility, moderation_status]
+        visibility: [poi_revision_id]
+        moderation_status: [poi_revision_id]
+        scope_trip_id: [poi_revision_id]
+      if:
+        required: [visibility]
+        properties:
+          visibility: {const: trip}
+      then:
+        required: [scope_trip_id]
+      else:
+        not:
+          required: [scope_trip_id]
     PoiMedia:
       type: object
       additionalProperties: false

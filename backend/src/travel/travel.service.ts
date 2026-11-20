@@ -190,6 +190,48 @@ async function audit(client: PoolClient, tripId: string, command: Command, objec
 export class TravelService {
   constructor(@Inject(TravelDatabase) private readonly database: TravelDatabase) {}
 
+  async canEditTrip(ownerId: string, tripId: string): Promise<boolean> {
+    return this.database.transaction(async (client) => {
+      const { rowCount } = await client.query(
+        'SELECT 1 FROM travel.trips WHERE id = $1 AND owner_user_id = $2 AND archived_at IS NULL',
+        [tripId, ownerId],
+      )
+      return rowCount === 1
+    })
+  }
+
+  async routeTrip(ownerId: string, routeId: string): Promise<string> {
+    return this.database.transaction(async (client) => {
+      const { rows: [route] } = await client.query<{ trip_id: string }>(
+        `SELECT r.trip_id FROM travel.routes r
+         JOIN travel.trip_days d ON d.trip_id = r.trip_id AND d.id = r.trip_day_id
+         JOIN travel.trips t ON t.id = d.trip_id
+         WHERE r.id = $1 AND t.owner_user_id = $2
+           AND r.archived_at IS NULL AND d.archived_at IS NULL AND t.archived_at IS NULL`,
+        [routeId, ownerId],
+      )
+      if (!route) throw new BffProblem('NOT_FOUND')
+      return route.trip_id
+    })
+  }
+
+  async tripRouteIds(ownerId: string, tripId: string): Promise<string[]> {
+    return this.database.transaction(async (client) => {
+      const { rows: [trip] } = await client.query<{ route_ids: string[] }>(
+        `SELECT ARRAY(
+           SELECT r.id FROM travel.routes r
+           JOIN travel.trip_days d ON d.trip_id = r.trip_id AND d.id = r.trip_day_id
+           WHERE r.trip_id = t.id AND r.archived_at IS NULL AND d.archived_at IS NULL
+           ORDER BY d.position
+         ) AS route_ids
+         FROM travel.trips t WHERE t.id = $1 AND t.owner_user_id = $2 AND t.archived_at IS NULL`,
+        [tripId, ownerId],
+      )
+      if (!trip) throw new BffProblem('NOT_FOUND')
+      return trip.route_ids
+    })
+  }
+
   async listTrips(ownerId: string, input: { limit: number; cursor: string | null }) {
     return this.database.transaction(async (client) => {
       const { rows } = await client.query<TripSummary>(

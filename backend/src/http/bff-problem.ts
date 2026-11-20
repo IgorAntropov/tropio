@@ -11,7 +11,16 @@ const problems = {
   NOT_FOUND: [404, 'Not found'],
   IDEMPOTENCY_KEY_REUSED: [409, 'Idempotency key reused'],
   TRIP_REVISION_CONFLICT: [409, 'Trip revision conflict'],
+  ROUTE_REVISION_CONFLICT: [409, 'Route revision conflict'],
+  POI_REVISION_CONFLICT: [409, 'POI revision conflict'],
   INVALID_TRIP_DATES: [422, 'Invalid trip dates'],
+  INVALID_ROUTE_TOPOLOGY: [422, 'Invalid route topology'],
+  INVALID_SPLIT_POSITION: [422, 'Invalid split position'],
+  ROUTE_GEOMETRY_RESTRICTED: [422, 'Route geometry is restricted'],
+  ROUTE_BUILD_UNAVAILABLE: [422, 'Route build unavailable'],
+  SNAP_CONFIRMATION_REQUIRED: [422, 'Snap confirmation required'],
+  POI_SCOPE_RESTRICTED: [422, 'POI scope restricted'],
+  INVALID_POI_CATEGORY: [422, 'Invalid POI category'],
   INVALID_AUTH_TOKEN: [422, 'Invalid authentication token'],
   AVATAR_UNAVAILABLE: [422, 'Avatar is unavailable'],
   RATE_LIMITED: [429, 'Too many requests'],
@@ -23,7 +32,12 @@ export type ProblemCode = keyof typeof problems
 export class BffProblem extends Error {
   constructor(
     readonly code: ProblemCode,
-    readonly details?: { retryAfter?: number; currentTripRevisionId?: string },
+    readonly details?: {
+      retryAfter?: number
+      currentTripRevisionId?: string
+      currentRouteRevisionId?: string | null
+      currentPoiRevisionId?: string
+    },
   ) {
     super(code)
   }
@@ -61,6 +75,12 @@ export class BffProblemFilter implements ExceptionFilter {
       request_id: requestId,
       ...(code === 'TRIP_REVISION_CONFLICT' && details?.currentTripRevisionId
         ? { current_trip_revision_id: details.currentTripRevisionId }
+        : {}),
+      ...(code === 'ROUTE_REVISION_CONFLICT' && details?.currentRouteRevisionId
+        ? { current_route_revision_id: details.currentRouteRevisionId }
+        : {}),
+      ...(code === 'POI_REVISION_CONFLICT' && details?.currentPoiRevisionId
+        ? { current_poi_revision_id: details.currentPoiRevisionId }
         : {}),
     })
   }
