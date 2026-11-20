@@ -6,8 +6,10 @@ import { Marked } from 'marked';
 const handbook = fileURLToPath(new URL('.', import.meta.url));
 const project = resolve(handbook, '..');
 const localDocs = join(project, '.agents', 'docs');
-const includeLocal = process.argv.includes('--local') && existsSync(localDocs);
-const generated = join(handbook, 'generated');
+const localBuild = process.argv.includes('--local');
+const includeLocal = localBuild && existsSync(localDocs);
+const output = localBuild ? join(project, '.local', 'handbook') : handbook;
+const generated = join(output, 'generated');
 const mermaid = resolve(fileURLToPath(import.meta.resolve('mermaid')), '../..');
 const escapeHtml = (text) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
@@ -68,6 +70,14 @@ for (const file of files) {
 }
 
 mkdirSync(generated, { recursive: true });
+if (localBuild) {
+  const sourceDirectory = relative(output, handbook).split(sep).join('/');
+  const entry = readFileSync(join(handbook, 'index.html'), 'utf8')
+    .replace('href="handbook.css"', `href="${sourceDirectory}/handbook.css"`)
+    .replace('src="reader.js"', `src="${sourceDirectory}/reader.js"`)
+    .replace('href="README.md"', `href="${sourceDirectory}/README.md"`);
+  writeFileSync(join(output, 'index.html'), entry);
+}
 const bundle = { documents, includeLocal };
 writeFileSync(join(generated, 'documents.js'), `globalThis.handbookBundle = ${JSON.stringify(bundle, null, 2)};\n`);
 copyFileSync(join(mermaid, 'dist/mermaid.min.js'), join(generated, 'mermaid.min.js'));

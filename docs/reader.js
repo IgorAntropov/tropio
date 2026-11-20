@@ -7,8 +7,9 @@ if (handbookBundle) {
 function startReader({ documents, includeLocal }) {
   const startDocument = 'route-editor/split-track.html';
   const index = new URL('index.html', location.href);
-  const localAssets = new URL('../.agents/', index).href;
-  const documentKeys = new Map(Object.keys(documents).map((path) => [new URL(path, index).href, path]));
+  const sourceIndex = new URL('index.html', document.currentScript.src);
+  const localAssets = new URL('../.agents/', sourceIndex).href;
+  const documentKeys = new Map(Object.keys(documents).map((path) => [new URL(path, sourceIndex).href, path]));
   const reader = document.querySelector('#reader');
   const article = document.querySelector('#document');
   const sourceLink = document.querySelector('#reader-source');
@@ -16,14 +17,14 @@ function startReader({ documents, includeLocal }) {
   const toggle = document.querySelector('.sidebar-toggle');
   if (includeLocal) {
     const favicon = document.querySelector('[data-local-href]');
-    favicon.href = favicon.dataset.localHref;
+    favicon.href = new URL(favicon.dataset.localHref, sourceIndex);
     const logo = document.querySelector('[data-local-src]');
-    logo.src = logo.dataset.localSrc;
+    logo.src = new URL(logo.dataset.localSrc, sourceIndex);
     logo.hidden = false;
     document.documentElement.style.setProperty('--handbook-font', 'Inter, system-ui, sans-serif');
   }
   const entries = [...document.querySelectorAll('#contents a')].flatMap((link) => {
-    const target = documentTarget(new URL(link.getAttribute('href'), index));
+    const target = documentTarget(new URL(link.getAttribute('href'), sourceIndex));
     if (!target) {
       link.closest('li').remove();
       return [];
@@ -146,7 +147,7 @@ function startReader({ documents, includeLocal }) {
     const template = document.createElement('template');
     const hasDocument = Object.hasOwn(documents, path);
     template.innerHTML = hasDocument ? documents[path] : '<h1>Раздел не найден</h1><p>Выбери доступный документ в оглавлении.</p>';
-    const base = hasDocument ? new URL(path, index) : index;
+    const base = hasDocument ? new URL(path, sourceIndex) : sourceIndex;
     prepareContent(template.content, base);
 
     const title = template.content.querySelector('h1');
@@ -173,6 +174,7 @@ function startReader({ documents, includeLocal }) {
           link.replaceWith(...link.childNodes);
           continue;
         }
+        if (url.origin === sourceIndex.origin && url.pathname === sourceIndex.pathname) url.pathname = index.pathname;
         const target = documentTarget(url);
         link.href = target ? readerLink(target) : url;
       } catch {

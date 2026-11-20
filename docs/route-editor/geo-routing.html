@@ -11,7 +11,7 @@
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Редактор маршрутов</nav>
     <h1>Точки, треки и расчёт маршрута</h1>
     <p>Владелец поездки собирает маршрут дня из упорядоченных точек и соседних треков. Geo сохраняет неизменяемые ревизии, строит автомобильные, велосипедные и пешие участки по графу Valhalla и рассчитывает высоты по Copernicus DEM GLO-30 Public. <a href="../../.agents/docs/tropio_tz_v1.1.md#8-fr-02-редактор-интерактивной-карты">ТЗ, §§ 8–9</a> · <a href="../../.agents/docs/POC-02-routing-dem.md">Пилот POC-02</a></p>
-    <p class="document-note"><strong>Статус.</strong> Серверные операции работают с GIS-04. Карта, схема и состояния сохранения подключены в GIS-05 и находятся на визуальной приёмке. Публикация закреплённых ревизий запланирована на GIS-06. <a href="editor.html">Редактор маршрута дня</a> · <a href="../contracts/openapi.yaml">OpenAPI 0.4.0</a></p>
+    <p class="document-note"><strong>Статус.</strong> Серверные операции работают с GIS-04. Карта, схема и состояния сохранения подключены в GIS-05 и визуально приняты. В GIS-06 панель владельца закрепляет сохранённые ревизии при явной публикации. <a href="../travel/publication.html#interface">Публикация из программы</a> · <a href="editor.html">Редактор маршрута дня</a> · <a href="../contracts/openapi.yaml">OpenAPI 0.5.0</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
@@ -59,7 +59,7 @@
 }</code></pre>
       <p>При успешном <code>PUT</code> используй выданные UUID точек, трека и ревизии для следующей правки. Геометрия BFF использует <code>LineString</code> с парами <code>[lon, lat]</code>. При наличии профиля высот трек содержит отсчёты, покрытую дистанцию, источник, версию, вертикальный датум и метод расчёта. <a href="../contracts/openapi.yaml">Схемы ответа</a></p>
       <h3 id="clear-route">Очистка маршрута дня</h3>
-      <p>После подтверждения владельцем редактор вызывает <code>PUT /api/v1/routes/{routeId}</code> (<code>replaceRouteDraft</code>, OpenAPI 0.4.0) с ожидаемой ревизией и пустыми массивами. Ниже приведён пример тела для сохранённого маршрута. Ответ <code>200</code> содержит новую ревизию с пустым составом. Для отмены и повтора редактор использует <code>POST /api/v1/routes/{routeId}/restore</code> (<code>restoreRouteDraft</code>). <a href="../contracts/openapi.yaml">Контракт</a> · <a href="../../backend/src/geo/routes/route-input.ts">Проверка состава маршрута</a></p>
+      <p>После подтверждения владельцем редактор вызывает <code>PUT /api/v1/routes/{routeId}</code> (<code>replaceRouteDraft</code>, OpenAPI 0.5.0) с ожидаемой ревизией и пустыми массивами. Ниже приведён пример тела для сохранённого маршрута. Ответ <code>200</code> содержит новую ревизию с пустым составом. Для отмены и повтора редактор использует <code>POST /api/v1/routes/{routeId}/restore</code> (<code>restoreRouteDraft</code>). <a href="../contracts/openapi.yaml">Контракт</a> · <a href="../../backend/src/geo/routes/route-input.ts">Проверка состава маршрута</a></p>
       <pre><code>{
   "route_revision_id": "10000000-0000-4000-8000-000000000001",
   "points": [],

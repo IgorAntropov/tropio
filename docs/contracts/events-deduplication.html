@@ -11,7 +11,7 @@
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Контракты, дизайн и приёмка</nav>
     <h1>События Travel/Geo и дедупликация</h1>
     <p>Travel и Geo записывают событие вместе с изменением состояния. Kafka может доставить один факт несколько раз. В отчёте ClickHouse каждый <code>event_id</code> учитывается один раз, даже до фонового слияния строк. <a href="../../.agents/docs/tropio_tz_v1.1.md#od-15-транспорт-событий-и-аналитика-gis-mvp">OD-15</a></p>
-    <p class="document-note"><strong>Статус.</strong> Транспорт Kafka/KRaft и правила дедупликации утверждены. Схемы и примеры описаны в POC-04. Сквозная приёмка с Kafka и ClickHouse относится к GIS-07. <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#8-утверждённые-решения">Решения POC-04</a> · <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
+    <p class="document-note"><strong>Статус.</strong> Транспорт Kafka/KRaft и правила дедупликации утверждены. Схемы и примеры описаны в POC-04. В GIS-06 Travel записывает события публикации и снятия в свой outbox. Сквозная приёмка с Kafka и ClickHouse относится к GIS-07. <a href="../../backend/src/travel/publication-state.ts">Запись события вместе с изменением указателя</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#8-утверждённые-решения">Решения POC-04</a> · <a href="../../.agents/docs/TODO.md#этап-1--gis-mvp">Бэклог GIS MVP</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
@@ -56,7 +56,7 @@
         </table>
       </div>
       <h3>Пример доменного события</h3>
-      <p><code>trip.published</code> в <code>tropio.travel.domain</code>. Ключ — <code>d0106c0f-f191-4add-b969-d07edd26c88e</code>.</p>
+      <p><code>trip.published</code> в <code>tropio.travel.domain</code>. Ключ — <code>d0106c0c-f191-4add-b969-d07edd26c88e</code>.</p>
       <pre><code id="event-domain-example">{
   "event_id": "2c15e574-a98e-4af8-afdc-72e0d09c2a7a",
   "event_type": "trip.published",

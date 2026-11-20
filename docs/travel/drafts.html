@@ -11,7 +11,7 @@
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Путешествия и каталог</nav>
     <h1>Черновики путешествий и привязка маршрута</h1>
     <p>Владелец создаёт личный черновик, меняет сведения о поездке и днях и получает идентификатор маршрута выбранного дня. В GIS MVP Travel хранит до одной привязки маршрута на день. <a href="../../.agents/docs/tropio_tz_v1.1.md#11-fr-05-путешествия-дни-и-статусы">ТЗ, § 11</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#8-утверждённые-решения">Решения POC-04</a></p>
-    <p class="document-note"><strong>Статус.</strong> GIS-03 реализует операции с черновиком Travel, GIS-04 — геометрию Geo по UUID маршрута дня. GIS-05 подключает список черновиков, создание поездки, просмотр дней и переход в редактор. Интерфейс находится на визуальной приёмке. Публикация и каталог запланированы на GIS-06. <a href="../route-editor/editor.html">Редактор маршрута дня</a> · <a href="../contracts/openapi.yaml">OpenAPI 0.4.0</a></p>
+    <p class="document-note"><strong>Статус.</strong> GIS-03 реализует операции с черновиком Travel, GIS-04 — геометрию Geo по UUID маршрута дня. GIS-05 подключает список черновиков, создание поездки, просмотр дней и переход в редактор. Интерфейс GIS-05 визуально принят. Панель публикации в программе поездки и публичный каталог приняты в GIS-06. <a href="publication.html#interface">Как опубликовать черновик</a> · <a href="../route-editor/editor.html">Редактор маршрута дня</a> · <a href="../contracts/openapi.yaml">OpenAPI 0.5.0</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
@@ -52,7 +52,7 @@
 
     <section aria-labelledby="api">
       <h2 id="api">Операции API</h2>
-      <p>OpenAPI <code>0.4.0</code>, базовый путь <code>/api/v1</code>. Все операции требуют cookie <code>tropio_session</code>. Команды записи также требуют допустимый <code>Origin</code>, заголовок <code>X-CSRF-Token</code> из текущей сессии, <code>Idempotency-Key</code> формата UUID и тело <code>application/json</code>. Создание поездки получает новую ревизию. Все остальные команды записи передают UUID ожидаемой ревизии как <code>trip_revision_id</code>. <a href="../contracts/openapi.yaml">Точный контракт</a></p>
+      <p>OpenAPI <code>0.5.0</code>, базовый путь <code>/api/v1</code>. Все операции требуют cookie <code>tropio_session</code>. Команды записи также требуют допустимый <code>Origin</code>, заголовок <code>X-CSRF-Token</code> из текущей сессии, <code>Idempotency-Key</code> формата UUID и тело <code>application/json</code>. Создание поездки получает новую ревизию. Все остальные команды записи передают UUID ожидаемой ревизии как <code>trip_revision_id</code>. <a href="../contracts/openapi.yaml">Точный контракт</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Операции Travel для редактора">
         <table>
           <thead><tr><th scope="col">Метод и путь</th><th scope="col"><code>operationId</code></th><th scope="col">Параметры и успешный ответ</th></tr></thead>
@@ -67,7 +67,7 @@
           </tbody>
         </table>
       </div>
-      <p>У поездки доступны описание, даты, часовой пояс, количество мест, сложность, условия участия и список снаряжения. Границы полей и формат элементов заданы схемами OpenAPI. Даты ждут календарную строку <code>YYYY-MM-DD</code>. Поле <code>route_id</code> доступно в ответе дня, UUID назначает Travel. <a href="../contracts/openapi.yaml">Схемы запроса и ответа</a></p>
+      <p>У поездки доступны описание, даты, часовой пояс, количество мест, сложность, условия участия и список снаряжения. Режим набора задаёт <code>admission_mode</code>. Для новых и прежних черновиков исходное значение — <code>request</code>. Выбери <code>open</code> для свободного входа и сохрани черновик. Новый режим появляется в каталоге после явной публикации владельцем. <a href="participation.html#flow">Как работает участие</a> Границы полей и формат элементов заданы схемами OpenAPI. Даты ждут календарную строку <code>YYYY-MM-DD</code>. Поле <code>route_id</code> доступно в ответе дня, UUID назначает Travel. <a href="../contracts/openapi.yaml">Схемы запроса и ответа</a></p>
     </section>
 
     <section aria-labelledby="examples">
@@ -82,6 +82,7 @@
   "trip_revision_id": "2a045bf4-86b9-4656-aaff-5658a02d8dc3",
   "publication_id": null,
   "visibility": "private",
+  "admission_mode": "request",
   "title": "Выходные на Томи",
   "description": null,
   "start_date": null,

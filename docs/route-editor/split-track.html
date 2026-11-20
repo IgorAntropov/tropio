@@ -49,7 +49,7 @@
 
     <section aria-labelledby="api">
       <h2 id="api">Операции API</h2>
-      <p>Контракт BFF <code>0.4.0</code>. <a href="../contracts/openapi.yaml">OpenAPI GIS MVP</a></p>
+      <p>Контракт BFF <code>0.5.0</code>. <a href="../contracts/openapi.yaml">OpenAPI GIS MVP</a></p>
       <ul>
         <li><code>GET /api/v1/trips/{tripId}/draft</code> (<code>getTripDraft</code>) возвращает поля черновика поездки и привязки маршрутов дней.</li>
         <li><code>GET /api/v1/routes/{routeId}</code> (<code>getRouteDraft</code>) возвращает текущую ревизию, точки и треки доступного маршрута. Этой операцией можно перечитать схему после деления или конфликта. При <code>availability: geometry_restricted</code> доступны только UUID маршрута и ревизии вместе с признаком ограничения.</li>
@@ -115,7 +115,7 @@ Idempotency-Key: b2cbf104-dafb-4fd1-94cf-8afb7f033e64</code></pre>
 
     <section aria-labelledby="acceptance">
       <h2 id="acceptance">Приёмка</h2>
-      <p><code>pnpm db:test:geo</code> проверяет повторное деление AT-02, перенос узла AT-04, повтор команды, событие и восстановление через реальные HTTP-ответы BFF с временной базой PostgreSQL/PostGIS. Браузерный прогон GIS-05 проверяет редактирование черновика. Публичный снимок проверяется в GIS-06. <a href="../../backend/test/geo-http.test.ts">HTTP-проверки Geo</a> · <a href="editor.html#acceptance">Приёмка интерфейса</a></p>
+      <p><code>pnpm db:test:geo</code> проверяет повторное деление AT-02, перенос узла AT-04, повтор команды, событие и восстановление через реальные HTTP-ответы BFF с временной базой PostgreSQL/PostGIS. Браузерный прогон GIS-05 проверяет редактирование черновика. Для публичного снимка <code>pnpm db:test:publication</code> проверяет чтение закреплённой геометрии до и после новой публикации. <a href="../travel/publication.html#acceptance">Приёмка публикации</a> · <a href="../../backend/test/geo-http.test.ts">HTTP-проверки Geo</a> · <a href="editor.html#acceptance">Приёмка интерфейса</a></p>
       <ul>
         <li><strong>AT-02.</strong> Разделить исходный трек, затем одну из половин. Ожидаются три трека в корректном порядке, две новые общие точки попарно соседних треков и сохранённая исходная геометрия в истории.</li>
         <li><strong>AT-04, связанный сценарий.</strong> Перенести общую точку. Связанные треки согласованы или помечены как требующие пересчёта.</li>

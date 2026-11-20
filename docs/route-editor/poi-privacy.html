@@ -11,7 +11,7 @@
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Редактор маршрутов</nav>
     <h1>Приватность POI</h1>
     <p>Права на место проверяются при каждом чтении, включая карту, поиск, карточку и фотографии. Если доступ отозван, необязательная метка исчезает из слоя. Если от закрытого положения зависит геометрия опубликованного маршрута, из публичной выдачи исчезает вся поездка. <a href="../../.agents/docs/tropio_tz_v1.1.md#od-06-приватность-poi-в-gis-mvp">OD-06</a></p>
-    <p class="document-note"><strong>Статус.</strong> GIS-04 реализует слои, поиск, запись POI, проверку положения и чтение существующих фото за BFF. В редакторе GIS-05 можно создать POI в области поездки, открыть доступное место и посмотреть его фото. Интерфейс находится на визуальной приёмке. Публичная выдача поездки запланирована на GIS-06. <a href="editor.html#flow">Сценарий редактора</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#8-утверждённые-решения">Утверждённые решения</a></p>
+    <p class="document-note"><strong>Статус.</strong> GIS-04 реализует слои, поиск, запись POI, проверку положения и чтение существующих фото за BFF. В редакторе GIS-05 можно создать POI в области поездки, открыть доступное место и посмотреть его фото. Редактор GIS-05 визуально принят. В GIS-06 публичное чтение проверяет доступ к зависимостям геометрии и выбранным меткам. <a href="../travel/publication.html#data">Проверка опубликованного снимка</a> · <a href="editor.html#flow">Сценарий редактора</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#8-утверждённые-решения">Утверждённые решения</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
@@ -80,7 +80,7 @@
 
     <section aria-labelledby="api">
       <h2 id="api">Операции API</h2>
-      <p>Контракт BFF <code>0.4.0</code> использует UUID и префикс <code>/api/v1</code>. Для записи нужны сессия <code>tropio_session</code>, разрешённый <code>Origin</code>, <code>X-CSRF-Token</code> и <code>Idempotency-Key</code> в формате UUID. Запросы с телом используют <code>application/json</code>. При неопределённом исходе повтор использует тот же ключ и те же параметры. BFF передаёт <code>Cache-Control: no-store</code> и <code>X-Request-Id</code>. <a href="../contracts/openapi.yaml">OpenAPI GIS MVP</a></p>
+      <p>Контракт BFF <code>0.5.0</code> использует UUID и префикс <code>/api/v1</code>. Для записи нужны сессия <code>tropio_session</code>, разрешённый <code>Origin</code>, <code>X-CSRF-Token</code> и <code>Idempotency-Key</code> в формате UUID. Запросы с телом используют <code>application/json</code>. При неопределённом исходе повтор использует тот же ключ и те же параметры. BFF передаёт <code>Cache-Control: no-store</code> и <code>X-Request-Id</code>. <a href="../contracts/openapi.yaml">OpenAPI GIS MVP</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Операции API приватности POI">
         <table>
           <thead><tr><th scope="col">Ручка</th><th scope="col">Право и результат</th></tr></thead>
