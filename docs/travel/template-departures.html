@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Выезды по шаблону и серии — справочник Tropio</title>
+  <link rel="stylesheet" href="../handbook.css">
+</head>
+<body>
+  <main>
+    <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Турфирмы и продажи</nav>
+    <h1>Выезды по шаблону и серии</h1>
+    <p>Организатор открывает список дат шаблона, просматривает детали конкретного выезда и создаёт один черновик или серию выездов с повторяющимися датами. <a href="../../.agents/docs/tropio_tz_v1.1.md#152-календарь">ТЗ, § 15.2</a></p>
+    <p class="document-note"><strong>Статус.</strong> Сценарии и макеты согласованы в UX-01. Реализация выездов по шаблону и приёмка AT-14 относятся к COM-01. Контракты операций ещё предстоит согласовать. <a href="../../.agents/docs/TODO.md#этап-3--продажи-и-проверенные-партнёры">Бэклог этапа 3</a></p>
+
+    <nav class="document-links" aria-label="На этой странице">
+      <ul>
+        <li><a href="#departures">Список и детали выезда</a></li>
+        <li><a href="#new-departure">Новый выезд</a></li>
+        <li><a href="#series">Серия выездов</a></li>
+        <li><a href="#interface">Состояния интерфейса</a></li>
+        <li><a href="#api">API и открытые вопросы</a></li>
+        <li><a href="#acceptance">Приёмка</a></li>
+      </ul>
+    </nav>
+
+    <section aria-labelledby="departures">
+      <h2 id="departures">Список и детали выезда</h2>
+      <p>Организатор с правом управления существующим шаблоном выбирает дату из списка выездов этого шаблона. У выбранного выезда видны даты, цена за человека, занятые места и вместимость, окно продаж и статус публикации. Отсутствие свободных мест отмечается отдельно от статуса публикации.</p>
+      <p>На десктопе детали открываются рядом со списком. На смартфоне они занимают отдельный экран, с которого можно вернуться к списку дат. Для изменения дат или отмены уже созданного выезда действует отдельный сценарий. <a href="departure-changes.html">Перенос и отмена выезда</a></p>
+      <p>Шаблон содержит повторно используемую программу. Конкретный выезд хранит собственные даты, цену, места и участников. Изменение шаблона применяется к подтверждённому или проданному выезду отдельной операцией с оповещением и аудитом. <a href="../../.agents/docs/tropio_tz_v1.1.md#62-шаблон-и-конкретный-выезд">ТЗ, § 6.2</a></p>
+    </section>
+
+    <section aria-labelledby="new-departure">
+      <h2 id="new-departure">Новый выезд</h2>
+      <ol>
+        <li>В форме «Новый выезд» выбрать в одном календаре один день или диапазон дат, в том числе через смену года.</li>
+        <li>Указать положительное целое число мест, цену за человека и валюту. Допустима нулевая цена.</li>
+        <li>При необходимости задать период продаж. Его последний день должен быть не позже первого дня выезда. Форма отмечает обязательные поля звёздочкой и показывает ошибки у соответствующих полей.</li>
+        <li>Сохранить выезд. Он появляется в списке отдельным черновиком. Публикация выполняется отдельным действием.</li>
+      </ol>
+    </section>
+
+    <section aria-labelledby="series">
+      <h2 id="series">Серия выездов</h2>
+      <ol>
+        <li>Выбрать существующий выезд и период повтора. Даты повторяются каждую неделю через 7 календарных дней или раз в две недели через 14 календарных дней.</li>
+        <li>Просмотреть будущие диапазоны. Кнопка «Ещё дата» добавляет следующую дату. Отдельные даты можно исключить. Если у того же шаблона уже есть выезд на тот же диапазон, совпадение отмечается и пропускается.</li>
+        <li>Создать выезды на выбранные даты. Пока ни одна дата не выбрана, кнопка создания недоступна. Каждый выезд сохраняется как самостоятельный черновик и публикуется отдельным действием.</li>
+      </ol>
+      <p>Черновик наследует цену с валютой и вместимость исходного выезда. Если в исходном выезде задано окно продаж, его начало и конец сдвигаются на столько же календарных дней, сколько даты нового выезда. Состав участников ведётся отдельно для каждого выезда. <a href="../../.agents/docs/tropio_tz_v1.1.md#152-календарь">ТЗ, § 15.2</a></p>
+    </section>
+
+    <section aria-labelledby="interface">
+      <h2 id="interface">Состояния интерфейса</h2>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Макеты списка выездов, нового выезда и серии">
+        <table>
+          <thead><tr><th scope="col">Состояние</th><th scope="col">Десктоп</th><th scope="col">Смартфон</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Список и опубликованный выезд</th><td><a href="../../.agents/images/layouts/desktop/template-departures-initial.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/template-departures-initial.png">Макет</a></td></tr>
+            <tr><th scope="row">Опубликованный выезд без свободных мест</th><td><a href="../../.agents/images/layouts/desktop/template-departures-sold-out.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/template-departures-sold-out.png">Макет</a></td></tr>
+            <tr><th scope="row">Детали черновика</th><td><a href="../../.agents/images/layouts/desktop/template-departures-draft.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/template-departures-draft.png">Макет</a></td></tr>
+            <tr><th scope="row">Пустая форма нового выезда</th><td><a href="../../.agents/images/layouts/desktop/new-departure-form.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/new-departure-form.png">Макет</a></td></tr>
+            <tr><th scope="row">Ошибки обязательных полей</th><td><a href="../../.agents/images/layouts/desktop/new-departure-errors.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/new-departure-errors.png">Макет</a></td></tr>
+            <tr><th scope="row">Диапазон через смену года</th><td><a href="../../.agents/images/layouts/desktop/new-departure-calendar.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/new-departure-calendar.png">Макет</a></td></tr>
+            <tr><th scope="row">Выбор валюты</th><td><a href="../../.agents/images/layouts/desktop/new-departure-currency.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/new-departure-currency.png">Макет</a></td></tr>
+            <tr><th scope="row">Выбор периода продаж</th><td><a href="../../.agents/images/layouts/desktop/new-departure-sales-period.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/new-departure-sales-period.png">Макет</a></td></tr>
+            <tr><th scope="row">Продажи заканчиваются после начала выезда</th><td><a href="../../.agents/images/layouts/desktop/new-departure-sales-error.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/new-departure-sales-error.png">Макет</a></td></tr>
+            <tr><th scope="row">Черновик нового выезда создан</th><td><a href="../../.agents/images/layouts/desktop/new-departure-draft.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/new-departure-draft.png">Макет</a></td></tr>
+            <tr><th scope="row">Серия раз в две недели с совпадающими датами</th><td><a href="../../.agents/images/layouts/desktop/departure-series-conflict.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/departure-series-conflict.png">Макет</a></td></tr>
+            <tr><th scope="row">Еженедельная серия с исключённой датой</th><td><a href="../../.agents/images/layouts/desktop/departure-series-weekly.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/departure-series-weekly.png">Макет</a></td></tr>
+            <tr><th scope="row">Для серии не выбрана ни одна дата</th><td><a href="../../.agents/images/layouts/desktop/departure-series-empty.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/departure-series-empty.png">Макет</a></td></tr>
+            <tr><th scope="row">Отдельные черновики серии созданы</th><td><a href="../../.agents/images/layouts/desktop/departure-series-done.png">Макет</a></td><td><a href="../../.agents/images/layouts/mobile/departure-series-done.png">Макет</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><a href="../../.agents/docs/TODO.md#текущая-работа">Согласования UX-01</a></p>
+    </section>
+
+    <section aria-labelledby="api">
+      <h2 id="api">API и открытые вопросы</h2>
+      <p>В архитектуре этапа 3 Travel владеет шаблоном программы, датами конкретного выезда, публикацией и участием. Commerce связывает шаблон с расписанием и продажами. <a href="../../.agents/docs/microservices.md#21-travel--программа-публикация-и-участие">Границы Travel и Commerce</a> · <a href="../../.agents/docs/er-diagram.md#41-организации-расписания-и-остатки-мест">Модель расписаний</a></p>
+      <p>Операции списка выездов шаблона, создания выезда и серии предстоит описать в COM-01. OpenAPI POC-04 их не содержит. <a href="../contracts/openapi.yaml">OpenAPI GIS MVP</a></p>
+      <ul>
+        <li>Какие пути и форматы запросов и ответов нужны для предпросмотра и создания серии?</li>
+        <li>Как клиент сверяет результат после потери ответа и по каким правилам повторяет команду?</li>
+        <li>Как обработать совпадение диапазона, появившееся после предпросмотра при параллельном создании?</li>
+        <li>Что сохраняется при частичном сбое серии и какую информацию о результате видит организатор?</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="acceptance">
+      <h2 id="acceptance">Приёмка</h2>
+      <p><strong>AT-14 · COM-01.</strong> При реализации создать несколько выездов на разные даты по одному шаблону. Задать им разные цены и подтвердить разных участников. Изменить один выезд и проверить, что цены, участники и настройки остальных выездов сохранились. <a href="../../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">AT-14 в ТЗ</a> · <a href="../../.agents/docs/TODO.md#этап-3--продажи-и-проверенные-партнёры">COM-01</a></p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Кейсы по согласованным сценариям UX-01">
+        <table>
+          <thead><tr><th scope="col">Кейс</th><th scope="col">Что проверить при реализации</th><th scope="col">Ожидаемый результат</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Список и детали</th><td>Открыть опубликованный выезд без свободных мест и затем черновик.</td><td>Детали меняются при выборе выезда. Отметка об отсутствии свободных мест и статус публикации отображаются отдельно. На смартфоне можно вернуться к датам.</td></tr>
+            <tr><th scope="row">Один черновик</th><td>Выбрать диапазон через смену года, указать нулевую цену с валютой и целое число мест больше нуля, оставить период продаж пустым.</td><td>Форма сохраняет отдельный черновик. Для появления в каталоге требуется публикация по соответствующим правилам.</td></tr>
+            <tr><th scope="row">Граница продаж</th><td>Выбрать конец продаж позже первого дня выезда. Затем изменить конец продаж на первый день выезда.</td><td>Сначала видна ошибка у поля. После исправления проверка срока продаж проходит.</td></tr>
+            <tr><th scope="row">Выбор дат серии</th><td>Проверить шаг 7 и 14 дней, добавить следующую дату и исключить одну из дат. Оставить в предпросмотре совпадающий диапазон того же шаблона.</td><td>Совпадение отмечено и пропущено. Исключённая дата тоже не создаёт выезд. Остальные выбранные диапазоны сохраняются отдельными черновиками.</td></tr>
+            <tr><th scope="row">Наследование параметров</th><td>Создать серию из выезда с ценой, валютой, вместимостью и периодом продаж.</td><td>Параметры скопированы, обе границы периода продаж сдвинуты вместе с датами каждого нового выезда.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
