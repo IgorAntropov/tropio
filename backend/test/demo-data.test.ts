@@ -35,7 +35,12 @@ it('rejects repeated trip identifiers or slugs across versions before opening a 
     for (const duplicate of conflicts) {
       const version = { version: 2, organizer: firstVersion.organizer, trips: [duplicate] };
       await writeFile(join(directory, '0002-travel.json'), JSON.stringify(version));
-      await expect(applyLocalDemoData({ identityUrl: url, travelUrl: url, geoUrl: url }, directory))
+      await expect(applyLocalDemoData({
+        identityUrl: url,
+        travelUrl: url,
+        geoUrl: url,
+        socialUrl: url,
+      }, directory))
         .rejects.toThrow(/Повтор UUID или slug/);
     }
     expect(connect).not.toHaveBeenCalled();

@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { UiBrandLogo } from '../kit';
+import {
+  UiBackLink,
+  UiBrandLogo,
+} from '../kit';
 import AuthMapBackdrop from './AuthMapBackdrop.vue';
 
 defineProps<{
@@ -16,9 +19,9 @@ const { t } = useI18n();
 <template>
   <main class="account-surface" :class="{ 'account-surface-auth': auth }">
     <AuthMapBackdrop v-if="auth" class="account-map" />
-    <div class="account-panel">
+    <div class="account-panel" data-scroll-region="account-form">
       <header class="account-panel-header">
-        <NuxtLink
+        <UiBackLink
           v-if="backToLogin"
           :aria-label="t('identity.backToLogin')"
           class="account-back"
@@ -36,7 +39,7 @@ const { t } = useI18n();
           >
             <path d="m13 5-7 7 7 7M6 12h13" />
           </svg>
-        </NuxtLink>
+        </UiBackLink>
         <NuxtLink :aria-label="auth ? t('identity.catalogBrand', { product: t('productName') }) : undefined" class="account-brand" :to="auth ? catalogLink ?? '/catalog' : '/'">
           <UiBrandLogo :alt="auth ? '' : t('productName')" :height="auth ? 72 : 52" />
         </NuxtLink>

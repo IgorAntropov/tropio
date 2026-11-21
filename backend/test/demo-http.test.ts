@@ -25,6 +25,7 @@ import collectionsVersion from '../../fixtures/demo/0004-personal-trips.json' wi
 import travelersVersion from '../../fixtures/demo/0005-personal-travelers.json' with { type: 'json' };
 import journeysVersion from '../../fixtures/demo/0006-personal-journeys.json' with { type: 'json' };
 import avatarsVersion from '../../fixtures/demo/0007-personal-avatars.json' with { type: 'json' };
+import profileVersion from '../../fixtures/demo/0008-personal-profile.json' with { type: 'json' };
 import { ensureLocalDemoAccount } from '../local/demo-account.mts';
 import { applyLocalDemoData } from '../local/demo-data.mjs';
 import { applyTravelDemoVersion } from '../local/travel-demo.js';
@@ -49,6 +50,7 @@ const databases = {
   identityUrl: process.env.TROPIO_IDENTITY_TEST_DATABASE_URL!,
   travelUrl: process.env.TROPIO_TRAVEL_TEST_DATABASE_URL!,
   geoUrl: process.env.TROPIO_GEO_TEST_DATABASE_URL!,
+  socialUrl: process.env.TROPIO_SOCIAL_TEST_DATABASE_URL!,
 };
 let app: NestNodeApplication;
 let base: string;
@@ -103,7 +105,7 @@ beforeAll(async () => {
   app = await createApplication({ logger: false }, { databaseUrl: databases.identityUrl, browserOrigin: origin }, {
     databaseUrl: databases.travelUrl,
     publicationWorker: false,
-  }, { databaseUrl: databases.geoUrl });
+  }, { databaseUrl: databases.geoUrl }, databases.socialUrl);
   await app.listen(0, '127.0.0.1');
   base = (await app.getUrl()) + '/api/v1';
   auth = await session(account);
@@ -403,6 +405,37 @@ it('updates only untouched demo avatars and preserves choices across an interrup
   expect(await readAvatar(account.id)).toEqual(selected);
 }, 120_000);
 
+it('adds confirmed profile facts and two organizer ratings without duplicating them on replay', async () => {
+  const list = async (path: string) => (await read<{ items: Trip[] }>(path, auth)).items.map(row => row.trip_id).sort();
+  const catalog = '/catalog/trips?limit=100';
+  const personal = '/me/trips?limit=100';
+  const [catalogBefore, personalBefore] = await Promise.all([list(catalog), list(personal)]);
+  const filename = '0008-personal-profile.json';
+  await copyFile(new URL('../../fixtures/demo/' + filename, import.meta.url), join(fixtureDirectory, filename));
+  expect(await applyLocalDemoData(databases, fixtureDirectory)).toBe(true);
+  const journey = profileVersion.journeys[0]!;
+  expect(await list(catalog)).toEqual([...catalogBefore, journey.id].sort());
+  expect(await list(personal)).toEqual([...personalBefore, journey.id].sort());
+
+  const overview = await read('/me/overview', auth);
+  expect(overview).toMatchObject({
+    viewer_id: account.id,
+    rating: { average: 4.5, count: 2 },
+    level: { completed: 1 },
+    achievements: expect.arrayContaining([
+      expect.objectContaining({ group: 'travel', progress: 1, earned: [{ code: expect.any(String), threshold: 1 }] }),
+      expect.objectContaining({ group: 'organizing', progress: 1, earned: [{ code: expect.any(String), threshold: 1 }] }),
+    ]),
+  });
+  await applyTravelDemoVersion({ ...databases, travelerId: account.id, startedAt: new Date() }, {
+    version: profileVersion.version,
+    journeys: [],
+    completions: profileVersion.completions.map(fact => fact.stars ? { ...fact, stars: 1 } : fact),
+  });
+  expect(await applyLocalDemoData(databases, fixtureDirectory)).toBe(true);
+  expect(await read('/me/overview', auth)).toEqual(overview);
+}, 120_000);
+
 it('resumes an interrupted new version and rejects changes to its original file', async () => {
   const organizer = { id: randomUUID(), email: 'next-organizer@tropio.test', displayName: 'Следующий организатор' };
   const trip = {
@@ -412,8 +445,8 @@ it('resumes an interrupted new version and rejects changes to its original file'
     owner: 'company',
     status: 'draft',
   };
-  const content = JSON.stringify({ version: 8, organizer, trips: [trip] });
-  const file = join(fixtureDirectory, '0008-add-trip.json');
+  const content = JSON.stringify({ version: 9, organizer, trips: [trip] });
+  const file = join(fixtureDirectory, '0009-add-trip.json');
   await writeFile(file, content);
   const missingGeo = new URL(databases.geoUrl);
   missingGeo.pathname = '/unavailable_demo_' + randomUUID().replaceAll('-', '');
@@ -427,7 +460,7 @@ it('resumes an interrupted new version and rejects changes to its original file'
       { version: 1, applied_at: expect.any(Date) }, { version: 2, applied_at: expect.any(Date) },
       { version: 3, applied_at: expect.any(Date) }, { version: 4, applied_at: expect.any(Date) },
       { version: 5, applied_at: expect.any(Date) }, { version: 6, applied_at: expect.any(Date) }, { version: 7, applied_at: expect.any(Date) },
-      { version: 8, applied_at: null },
+      { version: 8, applied_at: expect.any(Date) }, { version: 9, applied_at: null },
     ]);
     expect((await travel.query('SELECT id FROM travel.trips WHERE owner_user_id = $1', [organizer.id])).rows)
       .toEqual([{ id: trip.id }]);
@@ -435,7 +468,7 @@ it('resumes an interrupted new version and rejects changes to its original file'
     await expect(applyLocalDemoData(databases, fixtureDirectory)).rejects.toThrow(/История локальных демонстрационных данных/);
     await writeFile(file, content);
     await expect(applyLocalDemoData(databases, fixtureDirectory)).resolves.toBe(true);
-    expect((await history()).rows[7]).toEqual({ version: 8, applied_at: expect.any(Date) });
+    expect((await history()).rows[8]).toEqual({ version: 9, applied_at: expect.any(Date) });
     expect((await travel.query('SELECT id FROM travel.trips WHERE owner_user_id = $1', [organizer.id])).rows)
       .toEqual([{ id: trip.id }]);
     expect(await read<{ id: string }>(`/users/${organizer.id}`)).toMatchObject({ id: organizer.id, display_name: organizer.displayName });
@@ -469,7 +502,7 @@ it('resumes before scheduling without reviving removed relationships or undoing 
   };
   const edited = { ...archived, id: randomUUID() };
   const remaining = { ...archived, id: randomUUID() };
-  const version = 9;
+  const version = 10;
   const context = { ...databases, travelerId: account.id, startedAt: new Date() };
   const interrupted = [group, saved, archived, edited];
   const original = TravelService.prototype.updateTrip;
@@ -511,7 +544,7 @@ it('resumes before scheduling without reviving removed relationships or undoing 
       body: JSON.stringify({ trip_revision_id: draft.trip_revision_id, ...(!archive && { title }) }),
     })).status).toBe(200);
   }
-  await writeFile(join(fixtureDirectory, '0009-personal-journeys.json'), JSON.stringify({ version, journeys: [...interrupted, remaining] }));
+  await writeFile(join(fixtureDirectory, '0010-personal-journeys.json'), JSON.stringify({ version, journeys: [...interrupted, remaining] }));
   expect(await applyLocalDemoData(databases, fixtureDirectory)).toBe(true);
   const after = await read<{ items: Entry[] }>(rosterPath, auth);
   expect(after.items).toEqual(items.filter(entry => entry.id !== removed.id && entry.id !== declined.id));

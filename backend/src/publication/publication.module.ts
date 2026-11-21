@@ -13,6 +13,7 @@ export class PublicationModule {
     return {
       module: PublicationModule,
       imports: [identity, travel, geo],
+      exports: [CatalogService],
       controllers: [PublicationController],
       providers: [CatalogService, PublicationWorker, { provide: PUBLICATION_WORKER_ENABLED, useValue: workerEnabled }],
     };

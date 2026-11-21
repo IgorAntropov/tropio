@@ -12,15 +12,19 @@ import { useTripCreation } from '@fsd/features/trip-draft-dialog';
 import {
   editorApi,
   EditorResponseError,
-  identityApi,
-  IdentityResponseError,
   readFailureStatus,
+  tripListBatch,
+  tripListPageSize,
 } from '@fsd/shared/api';
 import type {
   AccountTripCollection,
   AccountTripPage,
   AccountTripStatus,
 } from '@fsd/shared/api';
+import {
+  readListDepth,
+  writeListDepth,
+} from '@fsd/shared/navigation';
 import {
   workspaceMemberKey,
   workspaceReloadNoticeKey,
@@ -71,6 +75,7 @@ const loading = ref(true);
 const loadingMore = ref(false);
 const issue = ref<number>();
 let request: AbortController | undefined;
+let loadedPages = 0;
 
 function update(collection: AccountTripCollection, status: AccountTripStatus, query: string) {
   void router.replace({
@@ -129,46 +134,62 @@ function changedSession() {
 }
 
 async function load(append = false) {
-  if (append && (!result.value?.next_cursor || loadingMore.value)) {
+  const viewer = member.value?.id;
+  if (!viewer || (append && (!result.value?.next_cursor || loadingMore.value))) {
     return;
   }
   request?.abort();
   const controller = new AbortController();
   request = controller;
   const { signal } = controller;
-  const cursor = append ? result.value?.next_cursor : undefined;
+  const path = route.fullPath;
+  const depthToRead = append ? 1 : readListDepth(path, viewer);
+  let cursor = append ? result.value?.next_cursor : undefined;
   const filters = applied.value;
   if (!append) {
     result.value = null;
+    loadedPages = 0;
   }
   issue.value = undefined;
   loading.value = !append;
   loadingMore.value = append;
   try {
-    const page = await editorApi.listAccountTrips({
-      collection: filters.collection,
-      status: filters.status,
-      query: filters.query || undefined,
-      limit: 12,
-      cursor: cursor || undefined,
-    }, signal);
-    const owner = await identityApi.me(signal);
-    signal.throwIfAborted();
-    if (page.viewer_id !== owner.id || (member.value && member.value.id !== owner.id)) {
-      changedSession();
-      return;
+    const items = new Map(result.value?.items.map(trip => [trip.trip_id, trip]));
+    let remaining = depthToRead;
+    while (remaining > 0) {
+      const batch = tripListBatch(remaining);
+      const page = await editorApi.listAccountTrips({
+        collection: filters.collection,
+        status: filters.status,
+        query: filters.query || undefined,
+        limit: batch.limit,
+        cursor: cursor || undefined,
+      }, signal);
+      signal.throwIfAborted();
+      if (page.viewer_id !== viewer || member.value?.id !== viewer) {
+        changedSession();
+        return;
+      }
+      if (cursor && page.next_cursor === cursor) {
+        throw new EditorResponseError(502, null);
+      }
+      for (const trip of page.items) {
+        items.set(trip.trip_id, trip);
+      }
+      result.value = { ...page, items: Array.from(items.values()) };
+      loadedPages += page.next_cursor ? batch.pages : Math.max(1, Math.ceil(page.items.length / tripListPageSize));
+      remaining -= batch.pages;
+      cursor = page.next_cursor;
+      if (!cursor) {
+        break;
+      }
     }
-    const previous = append ? result.value?.items ?? [] : [];
-    const ids = new Set(previous.map(trip => trip.trip_id));
-    if (cursor && page.next_cursor === cursor) {
-      throw new EditorResponseError(502, null);
-    }
-    result.value = { ...page, items: [...previous, ...page.items.filter(trip => !ids.has(trip.trip_id))] };
+    writeListDepth(path, viewer, loadedPages);
   }
   catch (error) {
     if (!signal.aborted) {
-      if ((error instanceof EditorResponseError || error instanceof IdentityResponseError) && error.status === 401) {
-        changedSession();
+      if (error instanceof EditorResponseError && error.code === 'SESSION_REQUIRED' && error.status === 401) {
+        result.value = null;
       }
       else {
         issue.value = readFailureStatus(error);
@@ -238,7 +259,7 @@ function visibilityChanged() {
 onMounted(() => {
   watch([() => applied.value.collection, () => applied.value.status, () => applied.value.query, () => member.value?.id], () => {
     search.value = applied.value.query;
-    if (!document.hidden) {
+    if (member.value && !document.hidden) {
       void load();
     }
   }, { immediate: true });
@@ -261,7 +282,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <WorkspacePage class="account-trips-page">
+  <WorkspacePage class="account-trips-page" :data-scroll-pending="loading || undefined">
     <section :aria-label="t('workspace.trips')" class="account-trips">
       <header ref="toolbar" class="account-trips-toolbar">
         <div class="account-trips-find">
@@ -302,7 +323,12 @@ onBeforeUnmount(() => {
             tag="ul"
             @before-leave="placeLeavingCard"
           >
-            <li v-for="trip in result.items" :key="trip.trip_id" :data-trip="trip.trip_id">
+            <li
+              v-for="trip in result.items"
+              :key="trip.trip_id"
+              :data-scroll-anchor="trip.trip_id"
+              :data-trip="trip.trip_id"
+            >
               <AccountTripCard
                 :member="member"
                 :return-to="route.fullPath"

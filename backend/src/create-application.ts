@@ -11,7 +11,7 @@ import { BffProblemFilter } from './http/bff-problem.js';
 import type { IdentityOptions } from './identity/identity.config.js';
 import type { TravelOptions } from './travel/travel.config.js';
 
-function jsonBodyKind(request: IncomingMessage): 'cover' | 'large' | 'default' | undefined {
+function jsonBodyKind(request: IncomingMessage): 'image' | 'large' | 'default' | undefined {
   const path = request.url?.split('?')[0]?.replace(/\/$/, '') ?? '';
   const contentType = request.headers['content-type']?.split(';')[0]?.trim().toLowerCase();
   if (contentType !== 'application/json') {
@@ -19,8 +19,9 @@ function jsonBodyKind(request: IncomingMessage): 'cover' | 'large' | 'default' |
   }
 
   const method = request.method;
-  if ((method === 'POST' && path === '/api/v1/trips') || (method === 'PATCH' && /^\/api\/v1\/trips\/[^/]+$/.test(path))) {
-    return 'cover';
+  if ((method === 'POST' && path === '/api/v1/trips')
+    || (method === 'PATCH' && (path === '/api/v1/me' || /^\/api\/v1\/trips\/[^/]+$/.test(path)))) {
+    return 'image';
   }
 
   if ((method === 'POST' && /^\/api\/v1\/trips\/[^/]+\/(?:days|publish)$/.test(path))
@@ -40,6 +41,7 @@ export async function createApplication(
   identity: IdentityOptions = {},
   travel: TravelOptions = {},
   geo: GeoOptions = {},
+  socialUrl?: string,
 ) {
   const adapter = new NodeAdapter();
   adapter.setOnRequestHook((request, response, done) => {
@@ -51,7 +53,7 @@ export async function createApplication(
   });
 
   const app = await NestFactory.create<NestNodeApplication>(
-    AppModule.configure(identity, travel, geo),
+    AppModule.configure(identity, travel, geo, socialUrl),
     adapter,
     { ...options, bodyParser: false },
   );
@@ -59,7 +61,7 @@ export async function createApplication(
   app.useBodyParser('json', {
     limit: '3mb',
     inflate: false,
-    type: request => jsonBodyKind(request) === 'cover',
+    type: request => jsonBodyKind(request) === 'image',
   });
   app.useBodyParser('json', {
     limit: '256kb',

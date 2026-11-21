@@ -15,6 +15,7 @@ import {
   readFailureStatus,
 } from '@fsd/shared/api';
 import { accountTripsReturnPath } from '@fsd/shared/session';
+import { UiBackLink } from '@fsd/shared/ui/kit';
 import { SystemErrorState } from '@fsd/shared/ui/page-error';
 import { WorkspacePage } from '@fsd/shared/ui/workspace-page/index';
 import type { TravelDraft } from '@fsd/shared/api';
@@ -96,12 +97,12 @@ onBeforeUnmount(() => request.abort());
         type="button"
         @click="load()"
       >{{ t('catalog.retry') }}</button>
-      <NuxtLink class="tk-button" :to="returnPath">{{ t('workspace.trips') }}</NuxtLink>
+      <UiBackLink class="tk-button" :to="returnPath">{{ t('workspace.trips') }}</UiBackLink>
     </SystemErrorState>
     <div v-else class="workspace-page-body trip-workspace__content">
-      <NuxtLink class="trip-workspace__back" :to="returnPath">
+      <UiBackLink class="trip-workspace__back" :to="returnPath">
         ← {{ t('workspace.trips') }}
-      </NuxtLink>
+      </UiBackLink>
       <header>
         <h1 class="workspace-page-title">{{ draft?.title || t('tripDrafts.programTitle') }}</h1>
         <button

@@ -1,4 +1,5 @@
 export { default as UiAvatar } from './UiAvatar.vue';
+export { default as UiBackLink } from './UiBackLink.vue';
 export { default as UiBrandLogo } from './UiBrandLogo.vue';
 export { default as UiButton } from './UiButton.vue';
 export { default as UiDialog } from './UiDialog.vue';

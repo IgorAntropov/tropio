@@ -9,7 +9,11 @@ import type {
   CatalogQuery,
   PublicTripPage,
 } from '@fsd/shared/api';
-import { readFailureStatus } from '@fsd/shared/api';
+import {
+  readFailureStatus,
+  tripListBatch,
+  tripListPageSize,
+} from '@fsd/shared/api';
 import { usePublicResource } from './use-public-resource';
 
 type CatalogPage = PublicTripPage & { verified: [string, number][]; depth: number; continuationError?: number };
@@ -18,6 +22,7 @@ export function useCatalogPages(
   enabled: () => boolean,
   query: () => CatalogQuery,
   verify: (items: PublicTripPage['items'], signal: AbortSignal) => Promise<[string, number][]>,
+  restoredDepth: () => number = () => 1,
 ) {
   const loadingNext = ref(false);
   const appendError = ref<number>();
@@ -31,9 +36,9 @@ export function useCatalogPages(
     loadingNext.value = false;
   }
 
-  async function fetchPage(params: CatalogQuery, cursor: string | null, signal: AbortSignal) {
+  async function fetchPage(params: CatalogQuery, cursor: string | null, signal: AbortSignal, limit = tripListPageSize) {
     const page = await $fetch<PublicTripPage>('/api/v1/catalog/trips', {
-      query: { ...params, limit: 12, cursor: cursor ?? undefined },
+      query: { ...params, limit, cursor: cursor ?? undefined },
       credentials: 'omit',
       cache: 'no-store',
       retry: 0,
@@ -61,10 +66,14 @@ export function useCatalogPages(
     let cursor: string | null = null;
     let depth = 0;
     let continuationError: number | undefined;
-    for (let index = 0; index < pageCount; index++) {
+    const historyDepth = restoredDepth();
+    const depthToRead = Math.max(pageCount, historyDepth);
+    const restoring = historyDepth > pageCount;
+    while (depth < depthToRead) {
+      const batch = tripListBatch(restoring ? depthToRead - depth : 1);
       let page: PublicTripPage;
       try {
-        page = await fetchPage(params, cursor, signal);
+        page = await fetchPage(params, cursor, signal, batch.limit);
       }
       catch (error) {
         signal.throwIfAborted();
@@ -74,7 +83,7 @@ export function useCatalogPages(
         continuationError = readFailureStatus(error);
         break;
       }
-      depth++;
+      depth += page.next_cursor ? batch.pages : Math.max(1, Math.ceil(page.items.length / tripListPageSize));
       for (const item of page.items) {
         byId.set(item.trip_id, item);
       }

@@ -14,6 +14,7 @@ const props = defineProps<{
   title: string;
   subtitle?: string;
   slide?: boolean;
+  persistent?: boolean;
   size?: 'small' | 'medium' | 'large' | 'xlarge';
   layout?: 'content' | 'compact' | 'landscape' | 'square' | 'confirmation';
 }>();
@@ -67,7 +68,7 @@ function closed() {
     :data-layout="layout ?? 'content'"
     :data-size="size ?? (layout === 'compact' || layout === 'confirmation' ? 'small' : 'medium')"
     :data-visible="visible || undefined"
-    @cancel.self.prevent="open = false"
+    @cancel.self.prevent="!persistent && (open = false)"
     @close="closed"
   >
     <div class="tk-dialog-inner">
@@ -79,6 +80,7 @@ function closed() {
         <button
           aria-label="Закрыть"
           class="tk-button tk-icon-button"
+          :disabled="persistent"
           type="button"
           @click="open = false"
         ><span aria-hidden="true">×</span></button>

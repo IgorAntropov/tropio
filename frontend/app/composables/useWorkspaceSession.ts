@@ -1,16 +1,15 @@
 import type { NuxtApp } from '#app';
+import {
+  identityApi,
+  IdentityResponseError,
+} from '@fsd/shared/api';
 import type { IdentityProfile } from '@fsd/shared/api';
 import {
   getWorkspaceSessionStatus,
   mayCheckWorkspaceSession,
   workspaceConfirmedKey,
-  workspaceMemberKey,
-  workspaceMemberOf,
 } from '@fsd/shared/session';
-import type {
-  WorkspaceMember,
-  WorkspaceSession,
-} from '@fsd/shared/session';
+import type { WorkspaceSession } from '@fsd/shared/session';
 import {
   isNavigationFailure,
   NavigationFailureType,
@@ -69,20 +68,28 @@ export async function verifyWorkspaceSession(
   }
 
   const confirmed = useState<boolean | null>(workspaceConfirmedKey, () => null);
-  const member = import.meta.client ? useState<WorkspaceMember | null>(workspaceMemberKey, () => null) : undefined;
-  const memberBeforeRequest = member?.value;
-  const fetch = useRequestFetch();
   let session: WorkspaceSession | undefined;
-  const profile = await fetch<IdentityProfile>('/api/v1/me', {
-    cache: 'no-store',
-    credentials: 'same-origin',
-    ignoreResponseError: true,
-    retry: 0,
-    signal,
-    onResponse({ response }) {
-      session = getWorkspaceSessionStatus(response.status, response._data);
-    },
-  }).catch(() => undefined);
+  if (import.meta.client) {
+    try {
+      session = getWorkspaceSessionStatus(200, await identityApi.me(signal));
+    }
+    catch (error) {
+      session = error instanceof IdentityResponseError ? getWorkspaceSessionStatus(error.status, error) : 'unavailable';
+    }
+  }
+  else {
+    const fetch = useRequestFetch();
+    await fetch<IdentityProfile>('/api/v1/me', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      ignoreResponseError: true,
+      retry: 0,
+      signal,
+      onResponse({ response }) {
+        session = getWorkspaceSessionStatus(response.status, response._data);
+      },
+    }).catch(() => undefined);
+  }
   if (signal.aborted) {
     return;
   }
@@ -93,12 +100,6 @@ export async function verifyWorkspaceSession(
     return status;
   }
   confirmed.value = status === 'authenticated';
-  if (member && status !== 'authenticated') {
-    member.value = null;
-  }
-  else if (member && member.value === memberBeforeRequest && typeof profile?.display_name === 'string') {
-    member.value = workspaceMemberOf(profile);
-  }
   if (status === 'unavailable') {
     throw createError({
       statusCode: 503,

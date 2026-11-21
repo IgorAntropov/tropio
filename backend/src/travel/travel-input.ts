@@ -1,6 +1,6 @@
 import { BffProblem } from '../http/bff-problem.js';
 import { imageType } from '../http/image-format.js';
-import type { ImageType } from '../http/image-format.js';
+import type { ImageUpload } from '../http/image-upload.js';
 import { uuid } from '../identity/identity-input.js';
 
 export interface EquipmentItem {
@@ -17,10 +17,7 @@ export function admissionMode(value: unknown): AdmissionMode {
   return value;
 }
 
-export interface CoverUpload {
-  content_type: ImageType;
-  data_base64: string;
-}
+export type CoverUpload = ImageUpload;
 
 export interface TripFields {
   cover: CoverUpload | null;

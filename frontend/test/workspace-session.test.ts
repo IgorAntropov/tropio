@@ -21,6 +21,7 @@ import {
 } from '../src/shared/session';
 
 vi.mock('@fsd/shared/session', () => import('../src/shared/session'));
+vi.mock('@fsd/shared/api', () => import('../src/shared/api'));
 afterEach(() => vi.unstubAllGlobals());
 
 describe('workspace sessions', () => {

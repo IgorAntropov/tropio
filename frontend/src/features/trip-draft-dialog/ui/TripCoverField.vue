@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import {
   computed,
-  onBeforeUnmount,
   ref,
   useId,
   useTemplateRef,
+  watch,
 } from 'vue';
 import type { CreateTripDraftRequest } from '@fsd/shared/api';
 import { UiImage } from '@fsd/shared/ui/kit';
-import { coverFileType } from '../cover-file';
+import {
+  imageFileAccept,
+  imagePreview,
+  useImageFile,
+} from '@fsd/shared/image-file';
 
 const props = defineProps<{ existingUrl?: string; disabled: boolean }>();
 const cover = defineModel<CreateTripDraftRequest['cover']>();
@@ -17,31 +21,15 @@ const { t } = useI18n();
 const id = useId();
 const picker = useTemplateRef<HTMLInputElement>('picker');
 const filename = ref('');
-const error = ref('');
-const loading = ref(false);
+const { read, reset: cancel, error, loading } = useImageFile();
+watch([error, loading], () => emit('blocked', !!error.value || loading.value), { flush: 'sync' });
 const custom = computed(() => !!cover.value || (cover.value === undefined && !!props.existingUrl));
 const preview = computed(() => {
   if (cover.value) {
-    return `data:${cover.value.content_type};base64,${cover.value.data_base64}`;
+    return imagePreview(cover.value);
   }
   return cover.value === undefined && props.existingUrl ? props.existingUrl : '/default-trip-cover.webp';
 });
-let generation = 0;
-let reader: FileReader | undefined;
-
-function invalidateRead() {
-  generation++;
-  reader?.abort();
-  reader = undefined;
-}
-
-function cancel() {
-  invalidateRead();
-  loading.value = false;
-  error.value = '';
-  emit('blocked', false);
-}
-
 function restore() {
   cancel();
   filename.value = '';
@@ -56,65 +44,12 @@ async function select(event: Event) {
     return;
   }
 
-  cancel();
-  const selected = generation;
-  emit('blocked', true);
-  if (file.size > 2 * 1024 * 1024) {
-    error.value = t('tripDrafts.cover.size');
-    return;
-  }
-
-  loading.value = true;
-  try {
-    const type = coverFileType(await file.arrayBuffer());
-    if (selected !== generation) {
-      return;
-    }
-    if (type === 'animated') {
-      error.value = t('tripDrafts.cover.animated');
-      return;
-    }
-    if (!type || (file.type && file.type !== type)) {
-      error.value = t('tripDrafts.cover.format');
-      return;
-    }
-    const data = await new Promise<string>((resolve, reject) => {
-      reader = new FileReader();
-      reader.onload = () => resolve(String(reader?.result));
-      reader.onerror = reader.onabort = () => reject(new Error('Image read failed'));
-      reader.readAsDataURL(file);
-    });
-    if (selected !== generation) {
-      return;
-    }
-    const encoded = data.slice(data.indexOf(',') + 1);
-    const image = new Image();
-    image.src = `data:${type};base64,${encoded}`;
-    await image.decode();
-    if (selected === generation) {
-      if (image.naturalHeight * image.naturalWidth > 40_000_000) {
-        error.value = t('tripDrafts.cover.dimensions');
-        return;
-      }
-      filename.value = file.name;
-      cover.value = { content_type: type, data_base64: encoded };
-      emit('blocked', false);
-    }
-  }
-  catch {
-    if (selected === generation) {
-      error.value = t('tripDrafts.cover.error');
-    }
-  }
-  finally {
-    if (selected === generation) {
-      reader = undefined;
-      loading.value = false;
-    }
+  const image = await read(file);
+  if (image) {
+    filename.value = file.name;
+    cover.value = image;
   }
 }
-
-onBeforeUnmount(invalidateRead);
 </script>
 
 <template>
@@ -152,7 +87,7 @@ onBeforeUnmount(invalidateRead);
       </button>
       <input
         ref="picker"
-        accept="image/jpeg,image/png,image/webp"
+        :accept="imageFileAccept"
         :disabled="disabled"
         hidden
         name="cover"
@@ -161,7 +96,7 @@ onBeforeUnmount(invalidateRead);
       >
     </div>
     <div class="trip-cover-meta">
-      <span :id="id + '-hint'" class="tk-field-hint">{{ filename || t('tripDrafts.cover.hint') }}</span>
+      <span :id="id + '-hint'" class="tk-field-hint">{{ filename || t('imageFile.hint') }}</span>
       <button
         v-if="error || loading"
         class="tk-button tk-button-text"
@@ -177,8 +112,8 @@ onBeforeUnmount(invalidateRead);
         @click="restore"
       >{{ t('tripDrafts.cover.restore') }}</button>
     </div>
-    <span v-if="loading" class="tk-field-hint" role="status">{{ t('tripDrafts.cover.reading') }}</span>
-    <span v-if="error" class="tk-field-error" role="alert">{{ error }}</span>
+    <span v-if="loading" class="tk-field-hint" role="status">{{ t('imageFile.reading') }}</span>
+    <span v-if="error" class="tk-field-error" role="alert">{{ t(error) }}</span>
   </section>
 </template>
 

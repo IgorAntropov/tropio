@@ -6,6 +6,7 @@ import {
   watch,
 } from 'vue';
 import {
+  UiBackLink,
   UiSegmented,
   UiSelect,
   UiStatus,
@@ -199,14 +200,14 @@ watch(() => props.readOnly && !props.viewingLocal, (restricted) => {
   <main class="route-editor" :data-view="view">
     <header class="editor-header">
       <div class="editor-page-title">
-        <NuxtLink
+        <UiBackLink
           v-if="backTo"
           :aria-label="backLabel ?? t('back')"
           class="tk-button tk-icon-button editor-back"
           :to="backTo"
         >
           <span aria-hidden="true">←</span>
-        </NuxtLink>
+        </UiBackLink>
         <div>
           <p>{{ dayLabel }}</p>
           <h1>{{ title }}</h1>
@@ -360,7 +361,7 @@ watch(() => props.readOnly && !props.viewingLocal, (restricted) => {
             >›</button>
           </nav>
         </header>
-        <div class="editor-scheme-body">
+        <div class="editor-scheme-body" :data-scroll-pending="loading" data-scroll-region="route-scheme">
           <p v-if="loading" class="editor-scheme-empty">{{ t('loading') }}</p>
           <EditorTimeline
             v-else-if="draft.points.length"

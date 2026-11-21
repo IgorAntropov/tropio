@@ -17,7 +17,7 @@ import { composeSql } from './compose-sql.mjs';
 import { applyMigrations } from './migrate.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const services = ['identity', 'travel', 'geo'];
+const services = ['identity', 'travel', 'geo', 'social'];
 
 function postgresEndpoint() {
   const result = spawnSync('docker', ['compose', 'port', 'postgres', '5432'], {
@@ -104,7 +104,7 @@ async function testService(service) {
 async function runLocal(command) {
   const seedOnly = command === 'demo-data';
   const configured = services.map(service => process.env[`TROPIO_${service.toUpperCase()}_DATABASE_URL`]).filter(Boolean);
-  const skipped = 'Демонстрационные данные пропущены: базы Identity, Travel, Geo, BFF и адрес сайта должны быть локальными.';
+  const skipped = 'Демонстрационные данные пропущены: базы Identity, Travel, Geo, Social, BFF и адрес сайта должны быть локальными.';
   if (seedOnly && !allowLocalDemoData(configured)) {
     warn(skipped);
     return 1;
@@ -117,6 +117,7 @@ async function runLocal(command) {
       identityUrl: env.TROPIO_IDENTITY_DATABASE_URL,
       travelUrl: env.TROPIO_TRAVEL_DATABASE_URL,
       geoUrl: env.TROPIO_GEO_DATABASE_URL,
+      socialUrl: env.TROPIO_SOCIAL_DATABASE_URL,
     });
     if (!seeded) {
       warn(skipped);

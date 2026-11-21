@@ -1,18 +1,22 @@
 <script setup lang="ts">
+import { LogoutConfirmation } from '@fsd/features/confirm-logout';
 import { UiBrandLogo } from '@fsd/shared/ui/kit';
+import '@fsd/shared/ui/kit/kit.css';
 import { useDemoAccount } from './composables/useDemoAccount';
 
 const { t, locale } = useI18n();
 const route = useRoute();
 const { displayName, signedIn, signOut } = useDemoAccount();
 const mounted = ref(false);
+const confirmingLogout = ref(false);
 onMounted(() => {
   mounted.value = true;
 });
 
 async function logout() {
+  confirmingLogout.value = false;
+  await navigateTo('/', { replace: true });
   signOut();
-  await navigateTo('/');
 }
 
 useSeoMeta({ robots: 'noindex' });
@@ -28,11 +32,17 @@ useHead(() => ({
       <nav :aria-label="t('identity.navigation')" class="demo-account">
         <span>{{ mounted && signedIn ? displayName : t('demo.label') }}</span>
         <NuxtLink v-if="mounted && signedIn" to="/trips/">{{ t('workspace.trips') }}</NuxtLink>
-        <button v-if="mounted && signedIn" type="button" @click="logout">{{ t('identity.logout') }}</button>
+        <button
+          v-if="mounted && signedIn"
+          aria-haspopup="dialog"
+          type="button"
+          @click="confirmingLogout = true"
+        >{{ t('identity.logout') }}</button>
         <NuxtLink v-else to="/login/">{{ t('identity.login.submit') }}</NuxtLink>
       </nav>
     </header>
     <NuxtPage />
+    <LogoutConfirmation v-model="confirmingLogout" @confirm="logout" />
   </div>
 </template>
 

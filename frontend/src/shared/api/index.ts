@@ -57,13 +57,24 @@ export {
   IdentityResponseError,
 } from './identity';
 export type {
+  AccountOverview,
   IdentityProfile,
   PublicIdentityProfile,
+  PublicProfileOverview,
+  VisitingProfile,
   SystemAvatar,
 } from './identity';
 export { useIdentityAction } from './use-identity-action';
+export {
+  browserSession,
+  sessionEvents,
+} from './session-store';
 export {
   canRetryRead,
   readFailureStatus,
 } from './read-failure';
 export { isResourceId } from './resource-id';
+export {
+  tripListBatch,
+  tripListPageSize,
+} from './trip-list-batch';

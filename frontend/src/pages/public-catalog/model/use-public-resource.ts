@@ -5,7 +5,7 @@ import {
 } from 'vue';
 import { readFailureStatus } from '@fsd/shared/api';
 
-export function usePublicResource<T>(key: string, load: (signal: AbortSignal) => Promise<T>) {
+export function usePublicResource<T>(key: string, load: (signal: AbortSignal) => Promise<T>, options: { live?: boolean } = {}) {
   const hidden = ref(false);
   const resource = useAsyncData(key, async (_app, { signal }) => {
     try {
@@ -41,11 +41,13 @@ export function usePublicResource<T>(key: string, load: (signal: AbortSignal) =>
   };
 
   onMounted(() => {
-    window.addEventListener('focus', check);
     window.addEventListener('pagehide', suspend);
     window.addEventListener('pageshow', show);
-    document.addEventListener('visibilitychange', visibility);
-    timer = setInterval(check, 30_000);
+    if (options.live !== false) {
+      window.addEventListener('focus', check);
+      document.addEventListener('visibilitychange', visibility);
+      timer = setInterval(check, 30_000);
+    }
   });
   onBeforeUnmount(() => {
     clearInterval(timer);

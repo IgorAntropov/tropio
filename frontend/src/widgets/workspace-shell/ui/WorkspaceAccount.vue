@@ -1,25 +1,27 @@
 <script setup lang="ts">
+import { LogoutConfirmation } from '@fsd/features/confirm-logout';
 import {
   identityApi,
+  IdentityResponseError,
   useIdentityAction,
 } from '@fsd/shared/api';
 import {
   guestHome,
-  workspaceConfirmedKey,
   workspaceMemberKey,
 } from '@fsd/shared/session';
 import type { WorkspaceMember } from '@fsd/shared/session';
 import { UiAvatar } from '@fsd/shared/ui/kit';
+import WorkspaceAccountRating from './WorkspaceAccountRating.vue';
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const member = useState<WorkspaceMember | null>(workspaceMemberKey, () => null);
-const confirmed = useState(workspaceConfirmedKey, () => false);
 const menu = ref<HTMLElement>();
 const trigger = ref<HTMLButtonElement>();
 const expanded = ref(false);
-const { pending, message, problem, reset, run } = useIdentityAction();
+const confirmingLogout = ref(false);
+const { pending, message, reset, run } = useIdentityAction();
 
 function closeFromOutside(event: Event) {
   if (expanded.value && event.target instanceof Node && !menu.value?.contains(event.target)) {
@@ -44,22 +46,33 @@ function toggle() {
   }
 }
 
+function requestLogout() {
+  expanded.value = false;
+  reset();
+  trigger.value?.focus({ preventScroll: true });
+  confirmingLogout.value = true;
+}
+
 async function logout() {
-  const signedOut = await run(async (signal) => {
-    const current = await identityApi.me(signal);
-    await identityApi.logout(current.csrf_token, signal);
-  }, () => {
-    expanded.value = false;
-  });
-  if (signedOut || (problem.value?.status === 401 && problem.value.code === 'SESSION_REQUIRED')) {
-    member.value = null;
-    confirmed.value = false;
+  await run(async (signal) => {
+    try {
+      const current = await identityApi.me(signal);
+      await identityApi.logout(current.csrf_token, signal);
+    }
+    catch (error) {
+      if (!(error instanceof IdentityResponseError && error.status === 401 && error.code === 'SESSION_REQUIRED')) {
+        throw error;
+      }
+    }
     await router.replace(guestHome);
-  }
+  }, () => {
+    confirmingLogout.value = false;
+  });
 }
 
 watch(() => route.path, () => {
   expanded.value = false;
+  confirmingLogout.value = false;
   reset();
 });
 
@@ -104,7 +117,7 @@ onBeforeUnmount(() => {
     <div v-show="expanded" id="workspace-account-panel" class="workspace-account-panel">
       <div class="workspace-account-summary">
         <strong>{{ member?.display_name || t('identity.loading') }}</strong>
-        <span class="workspace-account-rating">{{ t('workspace.ratingUnavailable') }}</span>
+        <WorkspaceAccountRating v-if="member" :active="expanded" />
       </div>
       <NuxtLink class="workspace-account-action" to="/profile" @click="expanded = false">
         <svg
@@ -119,10 +132,10 @@ onBeforeUnmount(() => {
         {{ t('workspace.profile') }}
       </NuxtLink>
       <button
+        aria-haspopup="dialog"
         class="workspace-account-action"
-        :disabled="pending"
         type="button"
-        @click="logout"
+        @click="requestLogout"
       >
         <svg
           aria-hidden="true"
@@ -135,9 +148,14 @@ onBeforeUnmount(() => {
         >
           <path d="M10 4H5v16h5m3-13 5 5-5 5m-4-5h9" />
         </svg>
-        {{ t(pending ? 'identity.working' : 'identity.logout') }}
+        {{ t('identity.logout') }}
       </button>
-      <p v-if="message" class="workspace-account-error" role="alert">{{ t(message) }}</p>
     </div>
+    <LogoutConfirmation
+      v-model="confirmingLogout"
+      :error="message ? t(message) : undefined"
+      :pending="pending"
+      @confirm="logout"
+    />
   </div>
 </template>

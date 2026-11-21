@@ -3,7 +3,7 @@ import pg from 'pg';
 import type { PoolClient } from 'pg';
 import { BffProblem } from '../http/bff-problem.js';
 
-type RuntimeRole = 'tropio_identity_runtime' | 'tropio_travel_runtime' | 'tropio_geo_runtime';
+type RuntimeRole = 'tropio_identity_runtime' | 'tropio_travel_runtime' | 'tropio_geo_runtime' | 'tropio_social_runtime';
 
 export class ServiceDatabase implements OnModuleDestroy {
   private readonly pool?: pg.Pool;

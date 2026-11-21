@@ -20,6 +20,10 @@ import {
 } from '@fsd/shared/api';
 import { RouteMap } from '@fsd/shared/map';
 import type { MapSelection } from '@fsd/shared/map';
+import {
+  readListDepth,
+  writeListDepth,
+} from '@fsd/shared/navigation';
 import { workspaceMemberKey } from '@fsd/shared/session';
 import type { WorkspaceMember } from '@fsd/shared/session';
 import { UiDateRange } from '@fsd/shared/ui/date-range';
@@ -234,7 +238,13 @@ const { value: catalogPage, status, pending, clear, refresh, ready, loadingNext,
   () => catalogVisited.value,
   () => pageQuery.value,
   verifyWithdrawn,
+  () => readListDepth(route.fullPath, 'catalog'),
 );
+watch([() => route.fullPath, () => catalogPage.value?.depth], ([path, depth]) => {
+  if (route.path === '/catalog' && depth) {
+    writeListDepth(path, 'catalog', depth);
+  }
+}, { flush: 'post' });
 watchEffect(() => {
   if (mobile.value && mode.value === 'map' && !expandedId.value && !pending.value && !nextError.value
     && catalogPage.value?.depth === 1 && catalogPage.value.next_cursor) {
@@ -510,6 +520,8 @@ if (import.meta.server) {
           v-if="catalogVisited"
           ref="board"
           class="catalog-board"
+          :data-scroll-pending="pending || undefined"
+          :data-scroll-region="mode === 'list' ? 'catalog-list' : undefined"
           :inert="!!expandedId || detailLeaving"
           @click.capture="remember"
         >
@@ -521,12 +533,18 @@ if (import.meta.server) {
           /></div>
           <p v-if="showNearbyNotice && mode === 'list'" class="catalog-location">{{ t('catalog.nearbyActive') }}</p>
           <template v-if="results && (results.items.length || results.next_cursor)">
-            <aside ref="sidebar" :aria-label="t('catalog.list')" class="catalog-results">
+            <aside
+              ref="sidebar"
+              :aria-label="t('catalog.list')"
+              class="catalog-results"
+              :data-scroll-region="mode === 'list' ? undefined : 'catalog-list'"
+            >
               <div class="catalog-rows">
                 <div
                   v-for="trip in results.items"
                   :key="trip.trip_id"
                   class="catalog-row"
+                  :data-scroll-anchor="trip.trip_id"
                   :data-trip="trip.trip_id"
                 >
                   <TripCard

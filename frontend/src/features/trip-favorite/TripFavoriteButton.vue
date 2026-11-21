@@ -53,9 +53,8 @@ async function favorite() {
       return;
     }
     const next = await editorApi.setTripFavorite(props.tripId, !props.saved, { csrf: profile.csrf_token, signal });
-    const current = await identityApi.me(signal);
     signal.throwIfAborted();
-    if (next.viewer_id !== owner || current.id !== owner || member.value?.id !== owner) {
+    if (next.viewer_id !== owner || member.value?.id !== owner) {
       reloadSession();
       return;
     }
@@ -116,10 +115,11 @@ onBeforeUnmount(() => request?.abort());
 </template>
 
 <style scoped>
-.trip-favorite { position: relative; z-index: 2; }
+.trip-favorite { position: absolute; z-index: 2; inset-block-start: 0; inset-inline-end: 0; }
 .trip-favorite .trip-favorite-control { display: grid; place-items: center; inline-size: var(--tk-target); block-size: var(--tk-target); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--tk-success); }
-.trip-favorite svg { display: block; inline-size: 1rem; block-size: 1rem; }
+.trip-favorite svg { display: block; inline-size: 1rem; block-size: 1rem; filter: drop-shadow(0 0 1px white) drop-shadow(0 1px 1px rgb(255 255 255 / 85%)); }
 .trip-favorite-control[aria-pressed="true"] svg { fill: currentColor; }
+.trip-favorite-control:hover:not(:disabled) { background: transparent; }
 .trip-favorite-control:hover:not(:disabled) svg { transform: scale(1.1); }
-.trip-favorite p { position: absolute; z-index: 1; inset-inline-end: 0; min-inline-size: 10rem; max-inline-size: 13rem; margin: 0; padding: var(--tk-space-2); border: 1px solid var(--tk-line); border-radius: var(--tk-radius); background: var(--tk-surface); }
+.trip-favorite p { position: absolute; z-index: 1; inset-inline-start: 0; min-inline-size: 10rem; max-inline-size: 13rem; margin: 0; padding: var(--tk-space-2); border: 1px solid var(--tk-line); border-radius: var(--tk-radius); background: var(--tk-surface); }
 </style>

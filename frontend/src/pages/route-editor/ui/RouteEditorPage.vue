@@ -32,7 +32,10 @@ import {
 } from '@fsd/features/edit-route';
 import type { EditSelection } from '@fsd/features/edit-route';
 import { useCreatedTripDay } from '@fsd/features/trip-draft-dialog';
-import { UiDialog } from '@fsd/shared/ui/kit';
+import {
+  UiBackLink,
+  UiDialog,
+} from '@fsd/shared/ui/kit';
 import { SystemErrorState } from '@fsd/shared/ui/page-error';
 import '@fsd/shared/ui/kit/kit.css';
 
@@ -484,11 +487,11 @@ onBeforeUnmount(() => {
         type="button"
         @click="load"
       >{{ t('catalog.retry') }}</button>
-      <NuxtLink v-if="loaded" class="tk-button" :to="backTo">{{ fromMap ? t('workspace.backToMap') : t('tripDrafts.programTitle') }}</NuxtLink>
-      <NuxtLink v-else class="tk-button" to="/trips">{{ t('workspace.trips') }}</NuxtLink>
+      <UiBackLink v-if="loaded" class="tk-button" :to="backTo">{{ fromMap ? t('workspace.backToMap') : t('tripDrafts.programTitle') }}</UiBackLink>
+      <UiBackLink v-else class="tk-button" to="/trips">{{ t('workspace.trips') }}</UiBackLink>
     </SystemErrorState>
     <section v-else class="route-loading__panel">
-      <NuxtLink :to="backTo">{{ fromMap ? '← ' + t('workspace.backToMap') : '← К программе путешествия' }}</NuxtLink>
+      <UiBackLink :to="backTo">{{ fromMap ? '← ' + t('workspace.backToMap') : '← К программе путешествия' }}</UiBackLink>
       <h1>{{ loaded?.title || 'Редактор маршрута' }}</h1>
       <p v-if="loadIssue" role="alert">{{ loadIssue }}</p>
       <p v-if="loading" role="status">Загружаем маршрут…</p>

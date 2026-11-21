@@ -9,12 +9,13 @@ BEGIN
         RAISE EXCEPTION 'PostGIS geometry is unavailable';
     END IF;
 
-    FOREACH service IN ARRAY ARRAY['identity', 'travel', 'geo'] LOOP
+    FOREACH service IN ARRAY ARRAY['identity', 'travel', 'geo', 'social'] LOOP
         runtime := format('tropio_%s_runtime', service);
         domain_table := CASE service
             WHEN 'identity' THEN 'users'
             WHEN 'travel' THEN 'trips'
-            ELSE 'route_geometries'
+            WHEN 'geo' THEN 'route_geometries'
+            ELSE 'organizer_ratings'
         END;
 
         IF NOT has_schema_privilege(runtime, service, 'USAGE')
@@ -26,7 +27,7 @@ BEGIN
             RAISE EXCEPTION 'Unexpected domain or migration grants for %', runtime;
         END IF;
 
-        FOREACH other_service IN ARRAY ARRAY['identity', 'travel', 'geo'] LOOP
+        FOREACH other_service IN ARRAY ARRAY['identity', 'travel', 'geo', 'social'] LOOP
             IF service <> other_service AND (
                 has_schema_privilege(runtime, other_service, 'USAGE')
                 OR has_schema_privilege(format('tropio_%s_owner', service), other_service, 'USAGE')
@@ -52,7 +53,7 @@ BEGIN
         JOIN pg_namespace AS child_schema ON child_schema.oid = child.relnamespace
         JOIN pg_class AS parent ON parent.oid = constraint_row.confrelid
         WHERE constraint_row.contype = 'f'
-            AND child_schema.nspname IN ('identity', 'travel', 'geo')
+            AND child_schema.nspname IN ('identity', 'travel', 'geo', 'social')
             AND child.relnamespace <> parent.relnamespace
     ) THEN
         RAISE EXCEPTION 'A domain foreign key crosses service schemas';

@@ -29,6 +29,7 @@ interface DemoDatabases {
   identityUrl: string;
   travelUrl: string;
   geoUrl: string;
+  socialUrl: string;
 }
 
 interface AppliedVersion {
@@ -47,6 +48,9 @@ function matchesDemoFile(filename: string, data: DemoVersion) {
       && data.travelers.every(user => user.id && user.email?.endsWith('.test') && user.displayName?.trim());
   }
   if ('journeys' in data) {
+    if ('completions' in data) {
+      return filename.endsWith('-personal-profile.json') && Array.isArray(data.journeys) && Array.isArray(data.completions);
+    }
     return filename.endsWith('-personal-journeys.json') && Array.isArray(data.journeys);
   }
   if ('personalEquipment' in data) {
@@ -69,6 +73,7 @@ function readDemoVersions(directory: string) {
   const ids = new Set<string>();
   const slugs = new Set<string>();
   const users = new Set([demoAccount.id]);
+  const completed = new Map<string, { ownerId: string; confirmed?: string[] }>();
   return files.map((filename, index) => {
     const bytes = readFileSync(join(directory, filename));
     const data = JSON.parse(bytes.toString('utf8')) as DemoVersion;
@@ -106,6 +111,19 @@ function readDemoVersions(directory: string) {
           throw new Error(`Некорректный пример личного путешествия: ${journey.id}`);
         }
         ids.add(id);
+        if (journey.lifecycle === 'completed') {
+          completed.set(id, journey);
+        }
+      }
+      const completions = new Set<string>();
+      for (const { tripId, participantId, stars } of data.completions ?? []) {
+        const key = tripId + '/' + participantId;
+        const trip = completed.get(tripId);
+        if (!trip || (trip.ownerId !== participantId && !trip.confirmed?.includes(participantId)) || completions.has(key)
+          || (stars !== undefined && (trip.ownerId === participantId || !Number.isInteger(stars) || stars < 1 || stars > 5))) {
+          throw new Error(`Некорректное подтверждение участия в демопоездке: ${key}`);
+        }
+        completions.add(key);
       }
     }
     if ('accountTrips' in data) {

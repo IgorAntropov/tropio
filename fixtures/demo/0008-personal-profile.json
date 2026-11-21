@@ -1,0 +1,41 @@
+{
+  "version": 8,
+  "journeys": [
+    {
+      "id": "ad134321-8415-48d6-9b03-2a9329d73b27",
+      "ownerId": "9bd97585-f99b-4a95-a93f-b28d6ffac261",
+      "title": "По тропе к Синему утёсу",
+      "description": "Прошли от лесной опушки к обрыву над Томью и вернулись по береговой тропе.",
+      "startsInDays": -20,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "foot",
+      "freeCapacity": 4,
+      "admissionMode": "open",
+      "lifecycle": "completed",
+      "stops": [
+        { "name": "Кедровая опушка", "lon": 84.976, "lat": 56.313 },
+        { "name": "Вид на Томь", "lon": 84.965, "lat": 56.327 }
+      ],
+      "confirmed": [
+        "faa4369b-7d54-52e9-94c8-0721ab8224c9",
+        "408ebed2-9c44-557a-a019-e227cb9f0d47"
+      ]
+    }
+  ],
+  "completions": [
+    {
+      "tripId": "8a34324f-8b01-50f7-adb4-9fd0067667b7",
+      "participantId": "9bd97585-f99b-4a95-a93f-b28d6ffac261"
+    },
+    {
+      "tripId": "ad134321-8415-48d6-9b03-2a9329d73b27",
+      "participantId": "faa4369b-7d54-52e9-94c8-0721ab8224c9",
+      "stars": 5
+    },
+    {
+      "tripId": "ad134321-8415-48d6-9b03-2a9329d73b27",
+      "participantId": "408ebed2-9c44-557a-a019-e227cb9f0d47",
+      "stars": 4
+    }
+  ]
+}

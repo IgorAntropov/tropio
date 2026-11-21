@@ -289,9 +289,7 @@ body:has(.workspace-shell) {
 }
 
 .workspace-account-summary {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  display: grid;
   gap: 8px;
   margin-block-end: 4px;
   padding: 10px 10px 12px;
@@ -301,12 +299,6 @@ body:has(.workspace-shell) {
 .workspace-account-summary strong {
   min-inline-size: 0;
   overflow-wrap: anywhere;
-}
-
-.workspace-account-rating {
-  color: var(--tk-muted);
-  font-size: var(--tk-text-sm);
-  white-space: nowrap;
 }
 
 .workspace-account-action {
@@ -334,13 +326,6 @@ body:has(.workspace-shell) {
 .workspace-account-action:disabled {
   opacity: .6;
   cursor: wait;
-}
-
-.workspace-account-error {
-  margin: 4px 10px 8px;
-  color: var(--tk-danger);
-  font-size: var(--tk-text-sm);
-  overflow-wrap: anywhere;
 }
 
 @media (min-width: 768px) and (max-width: 1039px) {

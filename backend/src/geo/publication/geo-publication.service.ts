@@ -6,6 +6,7 @@ import type { PoolClient } from 'pg';
 import { BffProblem } from '../../http/bff-problem.js';
 import { GeoDatabase } from '../geo-database.js';
 import {
+  countMappedTrips,
   heldSummaries,
   lockBatch,
   manifestHash,
@@ -26,6 +27,10 @@ export type { GeoManifest } from './publication-store.js';
 @Injectable()
 export class GeoPublicationService {
   constructor(@Inject(GeoDatabase) private readonly database: GeoDatabase) {}
+
+  countMappedTrips(routes: { route_id: string; trip_id: string }[]) {
+    return this.snapshot(client => countMappedTrips(client, routes));
+  }
 
   async prepare(manifest: GeoManifest) {
     const { operationId, tripId, routes, poiIds } = manifest;

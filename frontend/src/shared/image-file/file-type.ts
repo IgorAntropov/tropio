@@ -2,7 +2,7 @@ function fourCC(bytes: Uint8Array, offset: number) {
   return String.fromCharCode(...bytes.subarray(offset, offset + 4));
 }
 
-export function coverFileType(buffer: ArrayBuffer) {
+export function imageFileType(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
     return 'image/jpeg';

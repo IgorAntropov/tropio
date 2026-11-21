@@ -136,7 +136,7 @@ async function start(databaseUrl: string, identityUrl: string, travelUrl: string
             } });
           },
         },
-  });
+  }, process.env.TROPIO_SOCIAL_TEST_DATABASE_URL);
   await app.listen(0, '127.0.0.1');
   const result = { app, origin: await app.getUrl() };
   servers.push(result);

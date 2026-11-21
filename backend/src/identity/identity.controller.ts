@@ -10,6 +10,7 @@ import {
   Post,
   Req,
   Res,
+  StreamableFile,
 } from '@nestjs/common';
 import type {
   NodeRequest,
@@ -209,5 +210,11 @@ export class IdentityController {
   @Get('users/:id')
   getPublicProfile(@Param('id') id: string) {
     return this.identity.getPublicProfile(uuid(id));
+  }
+
+  @Get('users/:id/avatars/:avatarId')
+  async avatarImage(@Param('id') id: string, @Param('avatarId') avatarId: string) {
+    const bytes = await this.identity.avatarImage(uuid(id), uuid(avatarId));
+    return new StreamableFile(bytes, { type: 'image/webp', length: bytes.length });
   }
 }

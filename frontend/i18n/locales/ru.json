@@ -148,6 +148,83 @@
       "cancelled": "Отменено"
     }
   },
+  "profileOverview": {
+    "profileError": "Не удалось загрузить профиль",
+    "overviewError": "Не удалось загрузить статистику и достижения",
+    "ratingError": "Рейтинг недоступен",
+    "rating": "Рейтинг организатора",
+    "ratingValue": "{value} из 5",
+    "noRatings": "Пока нет оценок",
+    "votes": {
+      "one": "{count} оценка",
+      "few": "{count} оценки",
+      "many": "{count} оценок",
+      "other": "{count} оценки"
+    },
+    "trips": "Путешествия",
+    "publicTrips": "Опубликовано",
+    "tripCounts": {
+      "created": "Создано тобой",
+      "planned": "Запланировано",
+      "in_progress": "В пути",
+      "completed": "Завершено",
+      "archived": "В архиве"
+    },
+    "achievements": "Достижения",
+    "achievementGroups": "Группы достижений",
+    "noAwards": "У тебя пока нет достижений",
+    "noPublicAwards": "Пока нет публичных достижений",
+    "noGroupAwards": "В этой группе пока нет достижений",
+    "level": "Уровень путешественника",
+    "levelProgress": "Прогресс до следующего уровня",
+    "toNextLevel": {
+      "one": "До следующего уровня ещё {count} поездка",
+      "few": "До следующего уровня ещё {count} поездки",
+      "many": "До следующего уровня ещё {count} поездок",
+      "other": "До следующего уровня ещё {count} поездки"
+    },
+    "maxLevel": "Достигнут высший уровень",
+    "nextGrade": "Следующее достижение",
+    "earned": "Получено",
+    "levels": {
+      "novice": "Новичок",
+      "seeker": "Искатель",
+      "traveler": "Путешественник",
+      "seasoned": "Бывалый",
+      "pro": "Профи",
+      "expert": "Эксперт"
+    },
+    "groups": {
+      "travel": "Путешествия",
+      "friends": "Друзья",
+      "cartography": "Картография",
+      "organizing": "Организация"
+    },
+    "criteria": {
+      "travel": "Поездки с подтверждённым завершением · {count}",
+      "friends": "Взаимные друзья · {count}",
+      "cartography": "Свои поездки с сохранённым маршрутом · {count}",
+      "organizing": "Проведённые поездки с участниками, подтвердившими завершение · {count}"
+    },
+    "grades": {
+      "first_trip": "Первое путешествие",
+      "on_the_road_1": "В дороге I",
+      "on_the_road_2": "В дороге II",
+      "on_the_road_3": "В дороге III",
+      "on_the_road_4": "В дороге IV",
+      "first_friend": "Первый друг",
+      "sociable": "Общительный",
+      "life_of_the_party": "Душа компании",
+      "cartographer_1": "Картограф I",
+      "cartographer_2": "Картограф II",
+      "cartographer_3": "Картограф III",
+      "cartographer_4": "Картограф IV",
+      "guide_1": "Проводник I",
+      "guide_2": "Проводник II",
+      "guide_3": "Проводник III",
+      "guide_4": "Проводник IV"
+    }
+  },
   "accountTrips": {
     "search": "Найти поездку",
     "collections": {
@@ -286,6 +363,15 @@
     "apiAvailable": "API работает",
     "apiUnavailable": "API недоступен"
   },
+  "imageFile": {
+    "hint": "JPEG, PNG или WebP до 2 МБ",
+    "format": "Выбери изображение в формате JPEG, PNG или WebP.",
+    "animated": "Выбери неподвижное изображение в формате JPEG, PNG или WebP.",
+    "size": "Выбери файл размером до 2 МБ.",
+    "dimensions": "Выбери изображение до 40 мегапикселей.",
+    "error": "Не удалось прочитать изображение. Выбери другой файл.",
+    "reading": "Открываем изображение…"
+  },
   "tripDrafts": {
     "programTitle": "Программа путешествия",
     "status": {
@@ -304,15 +390,8 @@
       "default": "Системная обложка путешествия",
       "replace": "Заменить обложку",
       "choose": "Выбрать обложку",
-      "hint": "JPEG, PNG или WebP до 2 МБ",
       "restore": "Вернуть системную обложку",
-      "format": "Выбери изображение в формате JPEG, PNG или WebP.",
-      "animated": "Выбери неподвижное изображение в формате JPEG, PNG или WebP.",
-      "size": "Выбери файл размером до 2 МБ.",
-      "dimensions": "Выбери изображение до 40 мегапикселей.",
-      "error": "Не удалось прочитать изображение. Выбери другой файл.",
-      "unavailable": "Не удалось загрузить обложку.",
-      "reading": "Открываем изображение…"
+      "unavailable": "Не удалось загрузить обложку."
     },
     "gear": {
       "title": "Что взять с собой",
@@ -444,7 +523,6 @@
     "tripsCompact": "Поездки",
     "profile": "Профиль",
     "accountMenu": "Меню профиля",
-    "ratingUnavailable": "Рейтинг —",
     "collapseSidebar": "Свернуть боковую панель",
     "collapseSidebarShort": "Свернуть",
     "expandSidebar": "Развернуть боковую панель",
@@ -481,6 +559,9 @@
     "cancel": "Отменить",
     "retry": "Повторить",
     "logout": "Выйти",
+    "confirmLogout": "Выйти из аккаунта?",
+    "logoutHint": "Чтобы открыть свои путешествия, потребуется снова войти.",
+    "stay": "Остаться",
     "login": {
       "title": "Вход по почте",
       "submit": "Войти"
@@ -529,16 +610,17 @@
       "invalidText": "Удали недопустимые символы.",
       "bio": "Обо мне",
       "bioMaxError": "В описании может быть до 1000 символов.",
-      "preview": "Предпросмотр профиля",
       "changeAvatar": "Сменить аватар",
+      "closeAvatarPicker": "Закрыть выбор аватара",
+      "uploadAvatar": "Загрузить фото",
+      "replaceAvatar": "Заменить фото",
+      "customPhoto": "Своё фото",
+      "removePhoto": "Удалить фото «{name}»",
+      "photoRemovalPending": "Фото будет удалено, когда ты сохранишь изменения.",
       "avatarTitle": "Аватар профиля",
       "currentAvatar": "Текущий аватар",
-      "avatarPreview": "Предпросмотр аватара",
-      "avatars": "Аватары «@:{'productName'}»",
       "avatarChoice": "Аватар {number}",
-      "noAvatars": "Системные аватары сейчас недоступны.",
       "saved": "Профиль сохранён",
-      "avatarSaved": "Аватар сохранён",
       "link": "Мой профиль"
     },
     "errors": {

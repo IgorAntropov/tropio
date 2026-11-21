@@ -5,6 +5,7 @@ import {
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import type { NestNodeApplication } from '@nestjs/platform-node';
+import sharp from 'sharp';
 import {
   afterAll,
   beforeAll,
@@ -59,6 +60,7 @@ const problemType = 'application/problem+json';
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const contract = parse(readFileSync(new URL('../../docs/contracts/openapi.yaml', import.meta.url), 'utf8')) as Contract;
 const publicProfilePath = Object.keys(contract.paths).find(path => path.startsWith('/users/{')) ?? '/users/{userId}';
+const avatarImagePath = '/users/{id}/avatars/{avatarId}';
 const operations: Operation[] = [
   ...['register', 'resend-verification', 'verify-email', 'login', 'refresh', 'logout',
     'request-password-reset', 'reset-password'].map(name => ({
@@ -70,6 +72,7 @@ const operations: Operation[] = [
   { path: '/me/avatar', method: 'PATCH' },
   { path: '/avatar-assets', method: 'GET' },
   { path: publicProfilePath, method: 'GET' },
+  { path: avatarImagePath, method: 'GET' },
 ];
 const verifiedPairs = new Set<string>();
 const mail: Mail[] = [];
@@ -196,7 +199,8 @@ async function expectProblem(response: Response, operation: Operation, status: n
 }
 
 function problem(path: string, data: RequestData, status: number, code: string, target = server) {
-  const declaredPath = path.startsWith('/users/') ? publicProfilePath : path;
+  const userPath = path.includes('/avatars/') ? avatarImagePath : publicProfilePath;
+  const declaredPath = path.startsWith('/users/') ? userPath : path;
   return send(path, data, target).then(response => expectProblem(response, {
     path: declaredPath,
     method: data.method ?? 'GET',
@@ -295,7 +299,7 @@ function requestFor(operation: Operation, session: Awaited<ReturnType<typeof acc
 }
 
 function examplePath(operation: Operation, userId: string) {
-  return operation.path.replace(/\{[^}]+\}/, userId);
+  return operation.path.replace(/\{[^}]+\}/g, userId);
 }
 
 describe('BFF Identity HTTP contract', () => {
@@ -459,6 +463,102 @@ describe('BFF Identity HTTP contract', () => {
     });
     expect(cleared.status).toBe(200);
     expect(await cleared.json()).toEqual({ ...updated, bio: null });
+  });
+
+  it('saves text and a sanitized personal avatar atomically and revokes superseded images', async () => {
+    const { cookie, profile: original } = await accountSession();
+    const owner = original.id;
+    const options = await activeAvatars();
+    const image = await sharp({ create: {
+      width: 33,
+      height: 16,
+      channels: 3,
+      background: 'tomato',
+    } })
+      .jpeg().withMetadata({ orientation: 6 }).toBuffer();
+    const upload = { content_type: 'image/jpeg', data_base64: image.toString('base64') };
+    const update = (body: object) => send('/me', {
+      method: 'PATCH',
+      cookie,
+      csrf: original.csrf_token,
+      body,
+    });
+    const readPath = (avatar: Avatar) => avatar.url.slice('/api/v1'.length);
+    const result = await update({ display_name: 'Фотограф', bio: 'По тропе', avatar: upload });
+    expect(result.status).toBe(200);
+    const saved = await result.json() as Me;
+    expect(saved).toMatchObject({ display_name: 'Фотограф', bio: 'По тропе', avatar: { id: expect.stringMatching(uuid) } });
+    const first = saved.avatar!;
+    expect(first.url).toBe(`/api/v1/users/${owner}/avatars/${first.id}`);
+    expect(await (await send(`/users/${owner}`)).json()).toMatchObject({ avatar: first });
+    const media = await send(readPath(first));
+    expect(media.status).toBe(200);
+    expect(media.headers.get('content-type')).toMatch(/^image\/webp/);
+    expect(media.headers.get('cache-control')).toContain('no-store');
+    const metadata = await sharp(Buffer.from(await media.arrayBuffer())).metadata();
+    expect(metadata).toMatchObject({ width: 256, height: 256, format: 'webp' });
+    expect(metadata.exif).toBeUndefined();
+    expect(metadata.orientation).toBeUndefined();
+    expect(await (await update({ avatar: upload })).json()).toEqual(saved);
+    expect(await activeAvatars()).toEqual(options);
+    await problem(`/users/${randomUUID()}/avatars/${first.id}`, {}, 404, 'NOT_FOUND');
+
+    for (const avatar of [{ content_type: 'image/png', data_base64: upload.data_base64 }, { ...upload, data_base64: image.subarray(0, -8).toString('base64') },
+      { ...upload, avatar_id: options[0]!.id }, { ...upload, data_base64: Buffer.alloc(2097153).toString('base64') }]) {
+      await expectProblem(await update({ display_name: 'Ошибка', avatar }), { path: '/me', method: 'PATCH' }, 400, 'INVALID_REQUEST');
+    }
+    await expectProblem(await update({ bio: null, avatar: { avatar_id: randomUUID() } }), { path: '/me', method: 'PATCH' }, 422, 'AVATAR_UNAVAILABLE');
+    expect(await (await send('/me', { cookie })).json()).toEqual(saved);
+
+    const next = await sharp({ create: {
+      width: 256,
+      height: 256,
+      channels: 3,
+      background: 'teal',
+    } }).png().toBuffer();
+    const other = (await (await update({ avatar: { content_type: 'image/png', data_base64: next.toString('base64') } })).json() as Me).avatar!;
+    expect(other.id).not.toBe(first.id);
+    await problem(readPath(first), {}, 404, 'NOT_FOUND');
+    expect((await send(readPath(other))).status).toBe(200);
+    expect(await (await update({ avatar: { remove_custom_id: first.id } })).json()).toMatchObject({ avatar: other });
+    await expectProblem(await update({ avatar: { remove_custom_id: other.id, avatar_id: options[0]!.id } }), { path: '/me', method: 'PATCH' }, 400, 'INVALID_REQUEST');
+    const removed = await update({ display_name: 'В пути', avatar: { remove_custom_id: other.id.toUpperCase() } });
+    expect(await removed.json()).toMatchObject({ display_name: 'В пути', avatar: options[0] });
+    await problem(readPath(other), {}, 404, 'NOT_FOUND');
+    expect(await (await update({ avatar: { remove_custom_id: other.id } })).json()).toMatchObject({ avatar: options[0] });
+    const reuploaded = (await (await update({ display_name: 'Фотограф', avatar: upload })).json() as Me).avatar!;
+    const restored = await update({ avatar: { avatar_id: options[0]!.id } });
+    expect(await restored.json()).toMatchObject({ display_name: 'Фотограф', bio: 'По тропе', avatar: options[0] });
+    await problem(readPath(reuploaded), {}, 404, 'NOT_FOUND');
+  });
+
+  it('hides the selected avatar when its owner is blocked or unverified', async () => {
+    const { cookie, profile } = await accountSession();
+    const image = await sharp({ create: {
+      width: 16,
+      height: 16,
+      channels: 3,
+      background: 'navy',
+    } }).webp().toBuffer();
+    const response = await send('/me', {
+      method: 'PATCH',
+      cookie,
+      csrf: profile.csrf_token,
+      body: { avatar: { content_type: 'image/webp', data_base64: image.toString('base64') } },
+    });
+    expect(response.status).toBe(200);
+    const { avatar } = await response.json() as Me;
+    const path = avatar!.url.slice('/api/v1'.length);
+    const database = new ServiceDatabase(databaseUrl, 'tropio_identity_runtime');
+    try {
+      await database.transaction(client => client.query('UPDATE identity.users SET status = \'blocked\' WHERE id = $1', [profile.id]));
+      await problem(path, {}, 404, 'NOT_FOUND');
+      await database.transaction(client => client.query('UPDATE identity.users SET status = \'active\', email_verified_at = NULL WHERE id = $1', [profile.id]));
+      await problem(path, {}, 404, 'NOT_FOUND');
+    }
+    finally {
+      await database.onModuleDestroy();
+    }
   });
 
   it('returns a neutral response for repeat registration and resends only to the initiating browser', async () => {

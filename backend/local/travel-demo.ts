@@ -8,8 +8,10 @@ import { IdentityService } from '../src/identity/identity.service.js';
 import { CatalogService } from '../src/publication/catalog.service.js';
 import { publishInput } from '../src/publication/publication-input.js';
 import { PublicationWorker } from '../src/publication/publication-worker.js';
+import { ProfileSocial } from '../src/social/profile-social.js';
 import { parsePersonalEquipment } from '../src/travel/equipment/equipment-input.js';
 import { EquipmentLibrary } from '../src/travel/equipment/equipment-library.service.js';
+import { ProfileTrips } from '../src/travel/profile-trips.js';
 import { PublicCatalog } from '../src/travel/public-catalog.js';
 import { PublicationService } from '../src/travel/publication.service.js';
 import { TravelDatabase } from '../src/travel/travel-database.js';
@@ -102,6 +104,7 @@ interface Journey {
 interface JourneysVersion {
   version: number;
   journeys: Journey[];
+  completions?: { tripId: string; participantId: string; stars?: number }[];
 }
 
 export type DemoVersion = EquipmentVersion | TravelVersion | AccountTripsVersion | TravelersVersion | JourneysVersion | AvatarsVersion;
@@ -110,6 +113,7 @@ interface DemoContext {
   identityUrl: string;
   travelUrl: string;
   geoUrl: string;
+  socialUrl: string;
   travelerId: string;
   startedAt: Date;
 }
@@ -184,9 +188,9 @@ async function seedPersonalEquipment(library: EquipmentLibrary, editor: TravelEd
   }
 }
 
-async function unlessTripChanged(operation: Promise<unknown>, skip: BffProblem['code'][]) {
+async function unlessTripChanged<T>(operation: Promise<T>, skip: BffProblem['code'][]) {
   try {
-    await operation;
+    return await operation;
   }
   catch (error) {
     if (!(error instanceof BffProblem) || !skip.includes(error.code)) {
@@ -377,6 +381,7 @@ export async function applyTravelDemoVersion(context: DemoContext, version: Excl
     { databaseUrl: context.identityUrl },
     { databaseUrl: context.travelUrl, publicationWorker: false },
     { databaseUrl: context.geoUrl, providers: { demManifestPath: '' } },
+    context.socialUrl,
   ), { logger: false, abortOnError: false });
   try {
     const identity = application.get(IdentityService);
@@ -419,6 +424,12 @@ export async function applyTravelDemoVersion(context: DemoContext, version: Excl
     if ('journeys' in version) {
       for (const journey of version.journeys) {
         await seedJourney(application, seedTrip, journey, context, version.version, owner);
+      }
+      for (const { tripId, participantId, stars } of version.completions ?? []) {
+        const fact = await unlessTripChanged(application.get(ProfileTrips).confirmCompletion(owner(participantId), tripId), ['NOT_FOUND']);
+        if (fact && stars !== undefined) {
+          await application.get(ProfileSocial).rateOrganizer(fact, stars);
+        }
       }
       return;
     }

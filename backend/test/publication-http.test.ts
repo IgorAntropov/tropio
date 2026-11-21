@@ -8,6 +8,13 @@ import {
   vi,
 } from 'vitest';
 import { GeoPublicationService } from '../src/geo/publication/geo-publication.service.js';
+import { IdentityService } from '../src/identity/identity.service.js';
+import {
+  ProfileSocial,
+  SocialDatabase,
+} from '../src/social/profile-social.js';
+import { ProfileTrips } from '../src/travel/profile-trips.js';
+import { recordLifecycle } from '../src/travel/trip-lifecycle.js';
 import { TravelDatabase } from '../src/travel/travel-database.js';
 import { TripApplications } from '../src/travel/trip-applications.js';
 import {
@@ -109,6 +116,265 @@ async function publish(path: string, body: ReturnType<typeof manifest>, key = ra
 }
 
 describe('GIS-06 through the BFF', () => {
+  it('counts visible personal trips separately from confirmed finishes, retained grades and organizer reviews', async () => {
+    const path = '/me/overview';
+    type Overview = {
+      viewer_id: string;
+      trips: { created: number; planned: number; in_progress: number; completed: number; archived: number };
+      rating: { average: number | null; count: number };
+      level: { code: string; completed: number; next_at: number | null };
+      achievements: { group: string; progress: number; earned: { code: string; threshold: number }[] }[];
+    };
+    const overview = async (viewer: typeof owner) => json<Overview>(await send('GET', path, viewer), 200);
+    const publicOverview = async (id: string) => json<Omit<Overview, 'viewer_id'>>(await send('GET', '/users/' + id + '/overview'), 200);
+    const blank = await actor();
+    const empty = await overview(blank);
+    expect(empty).toMatchObject({
+      viewer_id: blank.id,
+      trips: {
+        created: 0,
+        planned: 0,
+        in_progress: 0,
+        completed: 0,
+        archived: 0,
+      },
+      rating: { average: null, count: 0 },
+      level: { code: 'novice', completed: 0, next_at: 3 },
+    });
+    expect(empty.achievements).toHaveLength(4);
+    expect(empty.achievements.every(group => group.progress === 0 && !group.earned.length)).toBe(true);
+    expect((await send('GET', path)).status).toBe(401);
+
+    const guest = await actor();
+    const place = await createPoi(owner, 'global');
+    const placeRevision = await approve(place);
+    const journey = await prepareTrip(place.poi_id);
+    const { draft, route } = journey;
+    const id = draft.trip_id;
+    const profileTrips = server.app.get(ProfileTrips);
+    const travelDb = server.app.get(TravelDatabase);
+    const social = server.app.get(ProfileSocial);
+    const editor = (userId: string) => ({ userId, confirmSession: async () => {} });
+    const starting = await overview(owner);
+    expect(starting.achievements.find(group => group.group === 'cartography')).toMatchObject({
+      progress: 1,
+      earned: [{ code: 'cartographer_1', threshold: 1 }],
+    });
+    const unpublished = await publicOverview(owner.id);
+    expect(unpublished.trips.created).toBe(0);
+    expect(unpublished.achievements.find(group => group.group === 'cartography')?.earned).toEqual([]);
+
+    const future = await json<Draft>(await send('PATCH', journey.path, owner, {
+      trip_revision_id: draft.trip_revision_id,
+      start_date: '2200-02-01',
+      end_date: '2200-02-02',
+      admission_mode: 'request',
+    }), 200);
+    await publish(journey.path, manifest(future, route));
+    await json(await send('PUT', '/me/favorites/' + id, guest, { saved: true }), 200);
+    await json(await send('POST', journey.path + '/applications', guest), 200);
+    expect((await overview(guest)).trips.planned).toBe(0);
+    const initial = await json<Draft>(await send('GET', journey.path + '/draft', owner), 200);
+    const open = await json<Draft>(await send('PATCH', journey.path, owner, { trip_revision_id: initial.trip_revision_id, admission_mode: 'open' }), 200);
+    await publish(journey.path, manifest(open, route));
+    for (const traveler of [blank, guest]) {
+      await json(await send('POST', journey.path + '/applications', traveler, { admission_mode: 'open' }), 200);
+      expect((await overview(traveler)).trips).toMatchObject({ created: 0, planned: 1, completed: 0 });
+    }
+    await expect(profileTrips.confirmCompletion(editor(blank.id), id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    const current = await json<Draft>(await send('GET', journey.path + '/draft', owner), 200);
+    await recordLifecycle(travelDb, editor(owner.id), id, randomUUID(), current.trip_revision_id, 'completed');
+    const finished = await overview(blank);
+    expect(finished.trips).toMatchObject({ planned: 0, completed: 1 });
+    expect(finished.level.completed).toBe(0);
+
+    const [one, replay] = await Promise.all([profileTrips.confirmCompletion(editor(blank.id), id), profileTrips.confirmCompletion(editor(blank.id), id)]);
+    expect(replay).toEqual(one);
+    await social.rateOrganizer(one, 4);
+    await social.rateOrganizer(replay, 5);
+    const two = await profileTrips.confirmCompletion(editor(guest.id), id);
+    await social.rateOrganizer(two, 5);
+    await expect(social.rateOrganizer({ ...two, participant_id: owner.id }, 1)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    const organizer = await overview(owner);
+    expect(organizer.rating).toEqual({ average: 4.5, count: 2 });
+    expect(organizer.achievements.find(group => group.group === 'organizing')).toMatchObject({ progress: 1, earned: [{ code: 'guide_1', threshold: 1 }] });
+    expect(organizer.level.completed).toBe(0);
+    const publicOwner = await publicOverview(owner.id);
+    expect(publicOwner).not.toHaveProperty('viewer_id');
+    expect(publicOwner).toMatchObject({
+      trips: { created: 1, completed: 1, archived: 0 },
+      rating: { average: 4.5, count: 2 },
+      achievements: expect.arrayContaining([
+        expect.objectContaining({ group: 'cartography', progress: 1 }),
+        expect.objectContaining({ group: 'organizing', progress: 1 }),
+      ]),
+    });
+    expect((await publicOverview(blank.id)).trips.completed).toBe(0);
+
+    await json(await send('PATCH', '/pois/' + place.poi_id + '/visibility', owner, {
+      poi_revision_id: placeRevision.poi_revision_id,
+      visibility: 'private',
+    }), 200);
+    const personal = await overview(blank);
+    expect(personal.trips.completed).toBe(0);
+    expect(personal.level.completed).toBe(1);
+    expect(personal.achievements.find(group => group.group === 'travel')).toMatchObject({ progress: 1, earned: [{ code: 'first_trip', threshold: 1 }] });
+    const withdrawn = await publicOverview(owner.id);
+    expect(withdrawn).toMatchObject({ trips: { created: 0, completed: 0 }, rating: { average: null, count: 0 } });
+    expect(withdrawn.achievements.every(group => !group.earned.length && !group.progress)).toBe(true);
+
+    const socialDb = server.app.get(SocialDatabase);
+    await socialDb.transaction(async (client) => {
+      const ids = Array.from({ length: 20 }, () => randomUUID());
+      await client.query(`INSERT INTO social.friendships(first_user_id,second_user_id)
+        SELECT least($1::uuid, friend), greatest($1::uuid, friend) FROM unnest($2::uuid[]) friend`, [guest.id, ids]);
+      await client.query(`UPDATE social.friendships SET ended_at = clock_timestamp() WHERE (first_user_id,second_user_id)
+        = (least($1::uuid,$2::uuid), greatest($1::uuid,$2::uuid))`, [guest.id, ids[0]]);
+    });
+    expect((await overview(guest)).achievements.find(group => group.group === 'friends')).toMatchObject({
+      progress: 19,
+      earned: [{ code: 'first_friend', threshold: 1 }, { code: 'sociable', threshold: 20 }],
+    });
+    expect((await publicOverview(guest.id)).achievements.some(group => group.group === 'friends')).toBe(false);
+  }, 30_000);
+
+  it('returns only visitor-visible sections and rejects unavailable profile identities', async () => {
+    const traveler = await actor();
+    const path = '/users/' + traveler.id + '/overview';
+    expect((await send('GET', '/users/' + randomUUID() + '/overview')).status).toBe(404);
+    expect((await send('GET', '/users/missing/overview')).status).toBe(400);
+    await identityPool.query(
+      `INSERT INTO identity.user_preferences (user_id, privacy_settings) VALUES ($1, $2)
+       ON CONFLICT (user_id) DO UPDATE SET privacy_settings = EXCLUDED.privacy_settings`,
+      [traveler.id, JSON.stringify({ trips: 'friends', achievements: 'private' })],
+    );
+    const hidden = {
+      trips: null,
+      rating: { average: null, count: 0 },
+      level: null,
+      achievements: null,
+    };
+    expect(await json(await send('GET', path), 200)).toEqual(hidden);
+    expect(await json(await send('GET', path, traveler), 200)).toEqual(hidden);
+    await identityPool.query('UPDATE identity.users SET status = \'blocked\' WHERE id = $1', [traveler.id]);
+    expect((await send('GET', path)).status).toBe(404);
+    await identityPool.query('UPDATE identity.users SET status = \'active\', email_verified_at = NULL WHERE id = $1', [traveler.id]);
+    expect((await send('GET', path)).status).toBe(404);
+  });
+
+  it('checks the visiting session, current friendship and section audiences before returning a profile', async () => {
+    const traveler = await actor();
+    const stranger = await actor();
+    await trip(traveler);
+    const bio = 'По выходным хожу в горы';
+    await json(await send('PATCH', '/me', traveler, { bio }), 200);
+    const path = '/me/visiting/' + traveler.id;
+    const userPath = '/users/' + traveler.id;
+    await identityPool.query(
+      'INSERT INTO identity.user_preferences (user_id, privacy_settings) VALUES ($1, $2)',
+      [traveler.id, JSON.stringify({ bio: 'friends', trips: 'friends', achievements: 'private' })],
+    );
+    expect((await send('GET', path)).status).toBe(401);
+    expect((await send('GET', '/me/visiting/' + randomUUID(), stranger)).status).toBe(404);
+    const view = async (viewer: typeof owner) => json(await send('GET', path, viewer), 200);
+    expect(await view(traveler)).toMatchObject({
+      viewer_id: traveler.id,
+      profile: { bio },
+      overview: { trips: { created: 1 }, level: { code: 'novice' }, achievements: expect.any(Array) },
+    });
+    const restricted = {
+      viewer_id: stranger.id,
+      profile: { bio: null },
+      overview: { trips: null, achievements: null, level: null },
+    };
+    expect(await view(stranger)).toMatchObject(restricted);
+    const social = server.app.get(SocialDatabase);
+    const { rows: [friendship] } = await social.transaction(client => client.query<{ id: string }>(
+      `INSERT INTO social.friendships (first_user_id, second_user_id)
+       VALUES (least($1::uuid,$2::uuid), greatest($1::uuid,$2::uuid)) RETURNING id`, [traveler.id, stranger.id],
+    ));
+    expect(await json(await send('GET', userPath, stranger), 200)).toMatchObject({ bio: null });
+    expect(await json(await send('GET', userPath + '/overview', stranger), 200)).toMatchObject({ trips: null, achievements: null });
+    const response = await send('GET', path, stranger);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('vary')).toBe('Cookie');
+    expect(await json(response, 200)).toMatchObject({
+      viewer_id: stranger.id,
+      profile: { bio },
+      overview: { trips: { created: 0 }, level: null, achievements: null },
+    });
+    const identity = server.app.get(IdentityService);
+    const load = identity.getVisitingProfile.bind(identity);
+    const spy = vi.spyOn(identity, 'getVisitingProfile').mockImplementation(async (id, audience) => {
+      const result = await load(id, audience);
+      if (id === traveler.id && audience === 'friends') {
+        await social.transaction(client => client.query('UPDATE social.friendships SET ended_at = now() WHERE id = $1', [friendship!.id]));
+      }
+      return result;
+    });
+    try {
+      expect(await view(stranger)).toMatchObject(restricted);
+    }
+    finally {
+      spy.mockRestore();
+    }
+    expect(await view(stranger)).toMatchObject(restricted);
+    await identityPool.query('UPDATE identity.users SET status = \'blocked\' WHERE id = $1', [traveler.id]);
+    expect((await send('GET', path, stranger)).status).toBe(404);
+    await identityPool.query('UPDATE identity.users SET status = \'blocked\' WHERE id = $1', [stranger.id]);
+    expect((await send('GET', path, stranger)).status).toBe(401);
+  });
+
+  it('AT-22 counts ten private journeys once across route revisions', async () => {
+    const traveler = await actor();
+    let lastRoute: Route | undefined;
+    for (let i = 0; i < 10; i++) {
+      const created = await trip(traveler);
+      lastRoute = await json<Route>(await send('PUT', routePath(created), traveler, draftBody([positions[0], positions[1]], ['foot'])), 200);
+    }
+    await json(await send('PUT', '/routes/' + lastRoute!.route_id, traveler, draftBody([positions[0], positions[2]], ['foot'], lastRoute!.route_revision_id)), 200);
+    await trip(traveler);
+    const expected = {
+      group: 'cartography',
+      progress: 10,
+      earned: [{ code: 'cartographer_1', threshold: 1 }, { code: 'cartographer_2', threshold: 10 }],
+      next: { code: 'cartographer_3', threshold: 50 },
+    };
+    type Data = { achievements: typeof expected[] };
+    const results = await Promise.all([1, 2].map(async () => json<Data>(await send('GET', '/me/overview', traveler), 200)));
+    expect(results.map(data => data.achievements.find(group => group.group === 'cartography'))).toEqual([expected, expected]);
+  }, 30_000);
+
+  it('AT-24 preserves both independent finishes and one expert grade after simultaneous confirmations', async () => {
+    const traveler = await actor();
+    const db = server.app.get(TravelDatabase);
+    const confirmations = server.app.get(ProfileTrips);
+    const editor = { userId: traveler.id, confirmSession: async () => {} };
+    const ids = Array.from({ length: 100 }, () => randomUUID());
+    await db.transaction(async (client) => {
+      await client.query(`INSERT INTO travel.trips (id, owner_user_id, created_by_user_id, title, lifecycle)
+        SELECT id, $2, $2, 'Тестовое завершение', 'completed' FROM unnest($1::uuid[]) id`, [ids, traveler.id]);
+      await client.query(`INSERT INTO travel.trip_participants(trip_id,user_id) SELECT id,$2 FROM unnest($1::uuid[]) id`, [ids.slice(0, 98), traveler.id]);
+      await client.query(`INSERT INTO travel.trip_completions(trip_id,participant_id,participant_entry_id,organizer_id)
+        SELECT trip_id,user_id,id,user_id FROM travel.trip_participants WHERE user_id = $1`, [traveler.id]);
+    });
+    const before = await json<{ level: { completed: number } }>(await send('GET', '/me/overview', traveler), 200);
+    expect(before.level).toMatchObject({ code: 'pro', completed: 98, next_at: 100 });
+    await Promise.all([ids[98]!, ids[99]!, ids[99]!].map(id => confirmations.confirmCompletion(editor, id)));
+    const reads = await Promise.all([1, 2].map(async () => json<{ level: { code: string }; achievements: { group: string; earned: { code: string }[] }[] }>(
+      await send('GET', '/me/overview', traveler), 200,
+    )));
+    for (const data of reads) {
+      expect(data.level).toEqual({ code: 'expert', completed: 100, next_at: null });
+      expect(data.achievements.find(group => group.group === 'travel')?.earned.filter(grade => grade.code === 'on_the_road_4')).toHaveLength(1);
+    }
+    const social = server.app.get(SocialDatabase);
+    const awards = await social.transaction(client => client.query(
+      'SELECT code FROM social.earned_grades WHERE user_id = $1 AND code = \'on_the_road_4\'', [traveler.id],
+    ));
+    expect(awards.rowCount).toBe(1);
+  }, 30_000);
+
   it('AT-17 serves a single pinned snapshot until explicit republication, even after a retry', async () => {
     const { draft, path, card, route } = await prepareTrip(undefined, positions[0], undefined, 'Легко', 'bicycle');
     const firstDraft = await json<Page>(await send('GET', '/me/trips?query=' + draft.trip_id + '&status=draft', owner), 200);

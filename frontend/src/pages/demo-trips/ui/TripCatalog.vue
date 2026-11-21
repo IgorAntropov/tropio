@@ -15,30 +15,30 @@ const { baseURL } = useRuntimeConfig().app;
     <h1>{{ t(personal ? 'workspace.trips' : 'demo.catalog.title') }}</h1>
     <p v-if="!personal" class="demo-summary">{{ t('demo.catalog.summary') }}</p>
     <ul class="trip-list">
-      <li v-for="trip in personal ? myDemoTrips : demoTrips" :key="trip.id">
-        <NuxtLink
-          class="trip-link"
-          :to="personal ? { path: '/trips/', query: { trip: trip.id } } : `/trips/${trip.slug}/`"
+      <li v-for="trip in personal ? myDemoTrips : demoTrips" :key="trip.id" class="trip-row">
+        <img
+          alt=""
+          class="trip-cover"
+          height="112"
+          loading="lazy"
+          :src="baseURL + 'default-trip-cover.webp'"
+          width="112"
         >
-          <img
-            alt=""
-            class="trip-cover"
-            height="112"
-            loading="lazy"
-            :src="baseURL + 'default-trip-cover.webp'"
-            width="112"
-          >
-          <div class="trip-copy">
-            <span>{{ trip.region }}</span>
-            <strong class="trip-title" :title="trip.title">{{ trip.title }}</strong>
-            <span class="trip-organizer" :title="trip.organizerName">{{ trip.organizerName }}</span>
-            <span class="trip-summary">{{ trip.summary }}</span>
-            <span>{{ n(trip.distanceKm, 'distance') }}</span>
-          </div>
-          <TripFacts :trip="{ ...trip.facts, difficulty: t('demo.difficulty.' + trip.difficulty) }">
-            <template #dateNote><span>{{ t('tripDrafts.status.' + trip.status) }}</span></template>
-          </TripFacts>
-        </NuxtLink>
+        <div class="trip-copy">
+          <span>{{ trip.region }}</span>
+          <strong class="trip-title" :title="trip.title">
+            <NuxtLink
+              class="trip-link"
+              :to="personal ? { path: '/trips/', query: { trip: trip.id } } : `/trips/${trip.slug}/`"
+            >{{ trip.title }}</NuxtLink>
+          </strong>
+          <span class="trip-organizer" :title="trip.organizerName" @click.stop>{{ trip.organizerName }}</span>
+          <span class="trip-summary">{{ trip.summary }}</span>
+          <span>{{ n(trip.distanceKm, 'distance') }}</span>
+        </div>
+        <TripFacts :trip="{ ...trip.facts, difficulty: t('demo.difficulty.' + trip.difficulty) }">
+          <template #dateNote><span>{{ t('tripDrafts.status.' + trip.status) }}</span></template>
+        </TripFacts>
       </li>
     </ul>
   </main>
@@ -52,17 +52,31 @@ const { baseURL } = useRuntimeConfig().app;
   border-top: 1px solid var(--line);
 }
 
-.trip-link {
+.trip-row {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(12rem, .6fr);
   align-items: center;
   gap: 1.25rem;
   padding: 1rem .25rem;
   border-bottom: 1px solid var(--line);
+}
+
+.trip-link {
   text-decoration: none;
 }
 
-.trip-link:hover {
+.trip-link::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+}
+
+.trip-link:focus-visible::after {
+  outline: 2px solid var(--focus);
+}
+
+.trip-row:has(.trip-link:hover) {
   background: #e7f0e7;
 }
 
@@ -75,14 +89,14 @@ const { baseURL } = useRuntimeConfig().app;
 }
 
 .trip-copy,
-.trip-link :deep(.trip-facts-date-column),
-.trip-link :deep(.trip-facts-values) {
+.trip-row :deep(.trip-facts-date-column),
+.trip-row :deep(.trip-facts-values) {
   display: grid;
   gap: .2rem;
 }
 
 .trip-copy,
-.trip-link :deep(.trip-facts) {
+.trip-row :deep(.trip-facts) {
   color: var(--muted);
   font-size: .875rem;
   line-height: 1.4;
@@ -101,6 +115,12 @@ const { baseURL } = useRuntimeConfig().app;
   white-space: nowrap;
 }
 
+.trip-organizer {
+  position: relative;
+  justify-self: start;
+  max-inline-size: 100%;
+}
+
 .trip-summary {
   display: -webkit-box;
   overflow: hidden;
@@ -108,28 +128,28 @@ const { baseURL } = useRuntimeConfig().app;
   -webkit-line-clamp: 3;
 }
 
-.trip-link :deep(.trip-facts) {
+.trip-row :deep(.trip-facts) {
   display: grid;
   gap: .35rem;
 }
 
-.trip-link :deep(.trip-facts-values) {
+.trip-row :deep(.trip-facts-values) {
   display: flex;
   flex-wrap: wrap;
   gap: .2rem .75rem;
 }
 
-.trip-link :deep(.material-symbols-rounded) {
+.trip-row :deep(.material-symbols-rounded) {
   vertical-align: -.1em;
 }
 
 @media (max-width: 40rem) {
-  .trip-link {
+  .trip-row {
     grid-template-columns: auto minmax(0, 1fr);
     gap: .65rem 1rem;
   }
 
-  .trip-link :deep(.trip-facts) {
+  .trip-row :deep(.trip-facts) {
     grid-column: 1 / -1;
   }
 }

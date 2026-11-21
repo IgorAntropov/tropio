@@ -17,6 +17,7 @@ const identityRoutes = new Set([
 ]);
 
 const editorRoutes = new Set([
+  'GET me/overview',
   'GET me/trips',
   'GET me/equipment',
   'POST me/equipment',
@@ -30,6 +31,7 @@ const editorRoutes = new Set([
 ]);
 
 const editorPaths = [
+  /^GET me\/visiting\/[^/]+$/,
   /^GET trips\/[^/]+\/roster$/,
   /^PUT trips\/[^/]+\/roster\/[^/]+$/,
   /^(GET|PUT) me\/favorites\/[^/]+$/,
@@ -52,7 +54,7 @@ const identityCookies = ['tropio_session', 'tropio_registration'];
 const editorCookies = ['tropio_session'];
 
 function bodyLimit(methodPath: string) {
-  if (methodPath === 'POST trips' || /^PATCH trips\/[^/]+$/.test(methodPath)) {
+  if (methodPath === 'POST trips' || methodPath === 'PATCH me' || /^PATCH trips\/[^/]+$/.test(methodPath)) {
     return 3 * 1024 * 1024;
   }
   return /^POST trips\/[^/]+\/publish$/.test(methodPath) || /^PUT (?:days\/[^/]+\/route|routes\/[^/]+)$/.test(methodPath)
@@ -119,15 +121,18 @@ export default defineEventHandler(async (event) => {
   const requestId = incomingId && /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(incomingId) ? incomingId : randomUUID();
   const methodPath = `${method} ${path}`;
   const participation = methodPath === 'GET catalog/participation';
-  const account = path === 'me/trips' || path.startsWith('me/favorites/') || /^trips\/[^/]+\/roster(?:\/|$)/.test(path);
+  const account = path === 'me/overview' || path === 'me/trips' || path.startsWith('me/visiting/') || path.startsWith('me/favorites/') || /^trips\/[^/]+\/roster(?:\/|$)/.test(path);
   if (account) {
     setResponseHeader(event, 'cache-control', 'private, no-store');
   }
   if (participation || account) {
     setResponseHeader(event, 'vary', 'Cookie');
   }
-  const identity = identityRoutes.has(methodPath) || /^GET users\/[^/]+$/.test(methodPath);
+  const avatarImage = /^GET users\/[^/]+\/avatars\/[^/]+$/.test(methodPath);
+  const publicProfile = /^GET users\/[^/]+(?:\/overview)?$/.test(methodPath);
+  const identity = identityRoutes.has(methodPath) || avatarImage || publicProfile;
   const catalog = methodPath === 'GET catalog/filter-options' || /^GET catalog\/trips(?:\/[^/]+(?:\/covers\/[^/]+)?)?$/.test(methodPath);
+  const publicRead = catalog || avatarImage || publicProfile;
   if (!identity && !catalog && !editorRoutes.has(methodPath) && !editorPaths.some(pattern => pattern.test(methodPath))) {
     return problem(event, requestId, 404, 'NOT_FOUND', 'Not found');
   }
@@ -137,10 +142,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig(event);
-  const media = mediaPath.test(path);
+  const media = avatarImage || mediaPath.test(path);
   const accept = media ? imageTypes.join(', ') : 'application/json';
   const headers = new Headers({ 'accept': `${accept}, application/problem+json`, 'x-request-id': requestId });
-  const allowedHeaders = catalog || participation ? [] : ['content-type', 'origin', 'x-csrf-token', ...(!identity ? ['idempotency-key'] : [])];
+  const allowedHeaders = publicRead || participation ? [] : ['content-type', 'origin', 'x-csrf-token', ...(!identity ? ['idempotency-key'] : [])];
   for (const name of allowedHeaders) {
     const value = getRequestHeader(event, name);
     if (value) {
@@ -148,7 +153,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const cookieNames = catalog ? [] : identity ? identityCookies : editorCookies;
+  const cookieNames = publicRead ? [] : identity ? identityCookies : editorCookies;
   const cookies = cookieNames.flatMap((name) => {
     const value = getCookie(event, name);
     return value && /^[\w.-]{1,256}$/.test(value) ? [`${name}=${value}`] : [];
@@ -212,7 +217,7 @@ export default defineEventHandler(async (event) => {
       setResponseHeader(event, 'retry-after', Number(retryAfter));
     }
 
-    if (identity) {
+    if (identity && !publicRead) {
       for (const cookie of response.headers.getSetCookie()) {
         if (identityCookies.some(name => cookie.startsWith(`${name}=`))) {
           appendResponseHeader(event, 'set-cookie', cookie);

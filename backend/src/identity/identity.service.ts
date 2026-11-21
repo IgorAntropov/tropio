@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import type { PoolClient } from 'pg';
 import { BffProblem } from '../http/bff-problem.js';
+import { readImageUpload } from '../http/image-upload.js';
+import type { ImageUpload } from '../http/image-upload.js';
 import {
   csrfToken,
   hashPassword,
@@ -37,6 +39,7 @@ interface ProfileRow {
   bio: string | null;
   avatar_id: string | null;
   object_key: string | null;
+  custom_avatar_id: string | null;
 }
 
 interface SessionRow extends ProfileRow {
@@ -64,11 +67,13 @@ function avatar(row: AvatarRow): { id: string; url: string } | null {
 }
 
 function profile(row: ProfileRow) {
+  const selected = row.avatar_id && row.object_key ? avatar({ id: row.avatar_id, object_key: row.object_key }) : null;
+  const custom = row.custom_avatar_id ? { id: row.custom_avatar_id, url: `/api/v1/users/${row.id}/avatars/${row.custom_avatar_id}` } : null;
   return {
     id: row.id,
     display_name: row.display_name,
     bio: row.bio,
-    avatar: row.avatar_id && row.object_key ? avatar({ id: row.avatar_id, object_key: row.object_key }) : null,
+    avatar: custom ?? selected,
   };
 }
 
@@ -78,13 +83,24 @@ function privateProfile(row: ProfileRow, token: string) {
   return { ...profile(row), csrf_token: csrfToken(token) };
 }
 
+async function avatarWebp(upload: ImageUpload) {
+  const { image } = await readImageUpload(upload);
+  try {
+    return await image.autoOrient().resize(256, 256, { fit: 'cover' }).webp({ quality: 85 }).toBuffer();
+  }
+  catch {
+    throw new BffProblem('INVALID_REQUEST');
+  }
+}
+
 async function loadSession(client: PoolClient, token: string): Promise<SessionRow> {
   const { rows: [session] } = await client.query<SessionRow>(
-    `SELECT u.id, u.display_name, u.bio, a.id AS avatar_id, a.object_key,
+    `SELECT u.id, u.display_name, u.bio, a.id AS avatar_id, a.object_key, custom.id AS custom_avatar_id,
             s.id AS session_id, s.expires_at
      FROM identity.sessions s
      JOIN identity.users u ON u.id = s.user_id
      LEFT JOIN identity.avatar_assets a ON a.id = u.avatar_asset_id
+     LEFT JOIN identity.custom_avatars custom ON custom.user_id = u.id AND custom.id::text = u.custom_avatar_object_key
      WHERE s.refresh_token_hash = $1 AND s.revoked_at IS NULL
        AND s.expires_at > clock_timestamp() AND u.status = 'active' AND u.email_verified_at IS NOT NULL`,
     [tokenHash(token)],
@@ -352,37 +368,76 @@ export class IdentityService {
   }
 
   async patchProfile(token: string, patch: ProfilePatch) {
+    const selection = patch.avatar;
+    let image: Buffer | undefined;
+    if (selection && 'data_base64' in selection) {
+      await this.authenticate(token);
+      image = await avatarWebp(selection);
+    }
     return this.mutateSession(token, async (client, session) => {
+      let customId: string | null = null;
+      let systemId: string | null = null;
+      let changeAvatar = !!selection;
+      if (selection && 'remove_custom_id' in selection) {
+        changeAvatar = session.custom_avatar_id === selection.remove_custom_id;
+        if (changeAvatar) {
+          await client.query('DELETE FROM identity.custom_avatars WHERE user_id = $1 AND id = $2', [session.id, selection.remove_custom_id]);
+          const { rows: [fallback] } = await client.query<{ id: string }>(
+            `SELECT a.id FROM identity.avatar_assets a JOIN identity.avatar_collections c ON c.id = a.collection_id
+             WHERE a.active AND c.status = 'active' ORDER BY a.object_key, a.id LIMIT 1 FOR SHARE OF a, c`,
+          );
+          systemId = fallback?.id ?? null;
+        }
+      }
+      else if (selection && 'avatar_id' in selection) {
+        systemId = selection.avatar_id;
+        const { rowCount } = await client.query(
+          `SELECT a.id FROM identity.avatar_assets a JOIN identity.avatar_collections c ON c.id = a.collection_id
+           WHERE a.id = $1 AND a.active AND c.status = 'active' FOR SHARE OF a, c`, [systemId],
+        );
+        if (!rowCount) {
+          throw new BffProblem('AVATAR_UNAVAILABLE');
+        }
+        await client.query('DELETE FROM identity.custom_avatars WHERE user_id = $1', [session.id]);
+      }
+      else if (image) {
+        const { rows: [stored] } = await client.query<{ id: string }>(
+          `INSERT INTO identity.custom_avatars AS current (user_id, image_webp) VALUES ($1, $2)
+           ON CONFLICT (user_id) DO UPDATE SET image_webp = EXCLUDED.image_webp,
+               id = CASE WHEN current.image_webp = EXCLUDED.image_webp THEN current.id ELSE EXCLUDED.id END
+           RETURNING id`, [session.id, image],
+        );
+        customId = stored!.id;
+      }
       await client.query(
-        `UPDATE identity.users
-         SET display_name = COALESCE($2, display_name),
-             bio = CASE WHEN $3::boolean THEN $4 ELSE bio END, updated_at = clock_timestamp()
+        `UPDATE identity.users SET display_name = COALESCE($2, display_name),
+             bio = CASE WHEN $3::boolean THEN $4 ELSE bio END,
+             avatar_asset_id = CASE WHEN $5::boolean THEN $6::uuid ELSE avatar_asset_id END,
+             custom_avatar_object_key = CASE WHEN $5::boolean THEN $7 ELSE custom_avatar_object_key END,
+             updated_at = clock_timestamp()
          WHERE id = $1`,
-        [session.id, patch.displayName ?? null, patch.bio !== undefined, patch.bio ?? null],
+        [session.id, patch.displayName ?? null, patch.bio !== undefined, patch.bio ?? null, changeAvatar, systemId, customId],
       );
       return privateProfile(await loadSession(client, token), token);
     });
   }
 
-  async chooseAvatar(token: string, avatarId: string) {
-    return this.mutateSession(token, async (client, session) => {
-      const { rowCount } = await client.query(
-        `SELECT a.id FROM identity.avatar_assets a
-         JOIN identity.avatar_collections c ON c.id = a.collection_id
-         WHERE a.id = $1 AND a.active AND c.status = 'active'
-         FOR SHARE OF a, c`,
-        [avatarId],
+  chooseAvatar(token: string, avatarId: string) {
+    return this.patchProfile(token, { avatar: { avatar_id: avatarId } });
+  }
+
+  async avatarImage(userId: string, avatarId: string) {
+    return this.database.transaction(async (client) => {
+      const { rows: [avatar] } = await client.query<{ image_webp: Buffer }>(
+        `SELECT a.image_webp FROM identity.custom_avatars a
+         JOIN identity.users u ON u.id = a.user_id AND u.custom_avatar_object_key = a.id::text
+         WHERE u.id = $1 AND a.id = $2 AND u.status = 'active' AND u.email_verified_at IS NOT NULL`,
+        [userId, avatarId],
       );
-      if (!rowCount) {
-        throw new BffProblem('AVATAR_UNAVAILABLE');
+      if (!avatar) {
+        throw new BffProblem('NOT_FOUND');
       }
-      await client.query(
-        `UPDATE identity.users SET avatar_asset_id = $2, custom_avatar_object_key = NULL,
-             updated_at = clock_timestamp()
-         WHERE id = $1`,
-        [session.id, avatarId],
-      );
-      return privateProfile(await loadSession(client, token), token);
+      return avatar.image_webp;
     });
   }
 
@@ -419,36 +474,44 @@ export class IdentityService {
     });
   }
 
-  private async publicProfiles(ids: string[]) {
+  private async visibleProfiles(ids: string[], audience: 'public' | 'friends' | 'owner') {
     if (!ids.length) {
       return [];
     }
     return this.database.transaction(async (client) => {
-      const { rows } = await client.query<ProfileRow>(
+      const allowed = audience === 'friends' ? ['public', 'friends'] : ['public'];
+      const { rows } = await client.query<ProfileRow & { trips: boolean; achievements: boolean }>(
         `SELECT u.id, u.display_name,
-                CASE WHEN p.privacy_settings->>'bio' = 'public' THEN u.bio END AS bio,
-                a.id AS avatar_id, a.object_key
+                CASE WHEN $3::boolean OR p.privacy_settings->>'bio' = ANY($2::text[]) THEN u.bio END AS bio,
+                $3 OR COALESCE(p.privacy_settings->>'trips', 'public') = ANY($2) AS trips,
+                $3 OR COALESCE(p.privacy_settings->>'achievements', 'public') = ANY($2) AS achievements,
+                a.id AS avatar_id, a.object_key, custom.id AS custom_avatar_id
          FROM identity.users u
          LEFT JOIN identity.avatar_assets a ON a.id = u.avatar_asset_id
+         LEFT JOIN identity.custom_avatars custom ON custom.user_id = u.id AND custom.id::text = u.custom_avatar_object_key
          LEFT JOIN identity.user_preferences p ON p.user_id = u.id
          WHERE u.id = ANY($1::uuid[]) AND u.status = 'active' AND u.email_verified_at IS NOT NULL`,
-        [ids],
+        [ids, allowed, audience === 'owner'],
       );
-      return rows.map(profile);
+      return rows.map(row => ({ profile: profile(row), trips: row.trips, achievements: row.achievements }));
     });
   }
 
-  async getPublicProfile(id: string) {
-    const [user] = await this.publicProfiles([id]);
+  async getVisitingProfile(id: string, audience: 'public' | 'friends' | 'owner') {
+    const [user] = await this.visibleProfiles([id], audience);
     if (!user) {
       throw new BffProblem('NOT_FOUND');
     }
     return user;
   }
 
+  async getPublicProfile(id: string) {
+    return (await this.getVisitingProfile(id, 'public')).profile;
+  }
+
   async publicOrganizers(ids: string[]): Promise<Map<string, PublicOrganizer>> {
-    const users = await this.publicProfiles(ids);
-    return new Map(users.map(({ id, display_name, avatar }) => [id, { id, display_name, avatar }]));
+    const users = await this.visibleProfiles(ids, 'public');
+    return new Map(users.map(({ profile: { id, display_name, avatar } }) => [id, { id, display_name, avatar }]));
   }
 
   async requestPasswordReset(email: string): Promise<void> {

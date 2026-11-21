@@ -80,6 +80,22 @@ export class PublicCatalog {
     });
   }
 
+  organizerCandidates(ownerId: string, after: string | null, limit: number) {
+    type ProfileCandidate = Candidate & { authored: boolean; finished: boolean; guided: boolean };
+    return this.database.transaction(async (client) => {
+      const { rows } = await client.query<ProfileCandidate>(
+        `SELECT candidate.*, details.created_by_user_id = $1 AS authored,
+           EXISTS (SELECT FROM travel.trip_completions WHERE trip_id = candidate."tripId" AND participant_id = $1) AS finished,
+           EXISTS (SELECT FROM travel.trip_completions WHERE trip_id = candidate."tripId" AND organizer_id = $1 AND participant_id <> $1) AS guided
+         FROM (${candidateQuery()} AND t.owner_user_id = $1 AND ($2::uuid IS NULL OR t.id > $2)
+           ORDER BY t.id LIMIT $3) candidate
+         JOIN travel.trips details ON details.id = candidate."tripId" ORDER BY details.id`,
+        [ownerId, after, limit],
+      );
+      return rows;
+    });
+  }
+
   cover(candidate: Candidate, coverId: string) {
     return this.database.transaction(async (client) => {
       const { rows: [image] } = await client.query<TripCoverFile>(
@@ -142,12 +158,14 @@ export class PublicCatalog {
     });
   }
 
-  confirm(candidates: Candidate[]) {
+  confirm(candidates: Candidate[], participantId?: string) {
     return this.database.transaction(async (client) => {
-      const { rows } = await client.query<{ id: string; ownerId: string; publication_id: string; access_generation: string }>(
-        `SELECT id, owner_user_id AS "ownerId", publication_id, access_generation FROM travel.trips
-         WHERE id = ANY($1::uuid[]) AND visibility = 'public' AND archived_at IS NULL AND publication_id IS NOT NULL`,
-        [candidates.map(candidate => candidate.tripId)],
+      const { rows } = await client.query<{ id: string; ownerId: string; publication_id: string; access_generation: string; current_lifecycle: Candidate['current_lifecycle'] }>(
+        `SELECT id, owner_user_id AS "ownerId", publication_id, access_generation, lifecycle AS current_lifecycle FROM travel.trips t
+         WHERE id = ANY($1::uuid[]) AND visibility = 'public' AND archived_at IS NULL AND publication_id IS NOT NULL
+           AND ($2::uuid IS NULL OR EXISTS (SELECT FROM travel.trip_participants p
+             WHERE p.trip_id = t.id AND p.user_id = $2 AND p.status = 'confirmed'))`,
+        [candidates.map(candidate => candidate.tripId), participantId ?? null],
       );
       return new Map(rows.map(row => [row.id, row]));
     });

@@ -2,6 +2,11 @@ import type {
   components,
   operations,
 } from './openapi';
+import {
+  browserSession,
+  reportSessionFailure,
+  sessionEvents,
+} from './session-store';
 
 type Schemas = components['schemas'];
 type Operation = keyof operations;
@@ -107,6 +112,7 @@ async function call<T>(path: string, options: {
   key?: string;
   signal?: AbortSignal;
   credentials?: RequestCredentials;
+  changesOverview?: boolean | ((result: T) => boolean);
 } = {}): Promise<T> {
   const { body, csrf, key, method = 'GET', signal } = options;
   const headers = new Headers({ accept: 'application/json, application/problem+json' });
@@ -120,6 +126,8 @@ async function call<T>(path: string, options: {
     headers.set('idempotency-key', key);
   }
 
+  const revision = browserSession?.revision();
+  const accountId = browserSession?.profile.value?.id;
   const response = await fetch(`/api/v1${path}`, {
     method,
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -131,9 +139,25 @@ async function call<T>(path: string, options: {
   if (!response.ok) {
     const problem: unknown = await response.json().catch(() => null);
     signal?.throwIfAborted();
-    throw new EditorResponseError(response.status, problem, response.headers.get('x-request-id') ?? undefined);
+    const error = new EditorResponseError(response.status, problem, response.headers.get('x-request-id') ?? undefined);
+    reportSessionFailure(error.status, error.code, revision);
+    throw error;
   }
-  return response.status === 204 ? undefined as T : await response.json() as T;
+  const result = response.status === 204 ? undefined as T : await response.json() as T;
+  const changed = options.changesOverview;
+  if (accountId === browserSession?.profile.value?.id && (changed === true || (typeof changed === 'function' && changed(result)))) {
+    sessionEvents.dispatchEvent(new Event('overview-changed'));
+  }
+  return result;
+}
+
+function published(result: PublicationOperation) {
+  return result.status === 'succeeded';
+}
+
+function mappedRoute(route: ReadableRouteDraft) {
+  return route.tracks.length > 0 && route.points.length === route.tracks.length + 1
+    && route.tracks.every(track => track.status === 'ready' && track.distance_m > 0);
 }
 
 export const editorApi = {
@@ -148,6 +172,7 @@ export const editorApi = {
       ...options,
       method: 'POST',
       body: { admission_mode: mode },
+      changesOverview: result => result.status === 'joined',
     }),
   listAccountTrips: (query: AccountTripQuery, signal: AbortSignal) =>
     call<AccountTripPage>(queryPath('/me/trips', query), { signal }),
@@ -161,25 +186,50 @@ export const editorApi = {
   createEquipment: (body: Input<'createPersonalEquipment'>, command: EditorCommand) =>
     call<EquipmentLibraryItem>('/me/equipment', { ...command, method: 'POST', body }),
   createTrip: (body: CreateTripDraftRequest, command: EditorCommand) =>
-    call<TravelDraft>('/trips', { ...command, method: 'POST', body }),
+    call<TravelDraft>('/trips', {
+      ...command,
+      method: 'POST',
+      body,
+      changesOverview: true,
+    }),
   getTrip: (tripId: string, signal?: AbortSignal) =>
     call<TravelDraft>(`/trips/${encodeURIComponent(tripId)}/draft`, { signal }),
   getPublicTrip: (tripId: string, signal?: AbortSignal) =>
     call<PublicTrip>(`/catalog/trips/${encodeURIComponent(tripId)}`, { signal, credentials: 'omit' }),
   updateTrip: (tripId: string, body: UpdateTripDraftRequest, command: EditorCommand) =>
-    call<TravelDraft>(`/trips/${encodeURIComponent(tripId)}`, { ...command, method: 'PATCH', body }),
+    call<TravelDraft>(`/trips/${encodeURIComponent(tripId)}`, {
+      ...command,
+      method: 'PATCH',
+      body,
+      changesOverview: body.visibility === 'private',
+    }),
   publishTrip: (tripId: string, body: PublishCommand, command: EditorCommand) =>
-    call<PublicationOperation>(`/trips/${encodeURIComponent(tripId)}/publish`, { ...command, method: 'POST', body }),
+    call<PublicationOperation>(`/trips/${encodeURIComponent(tripId)}/publish`, {
+      ...command,
+      method: 'POST',
+      body,
+      changesOverview: published,
+    }),
   getPublicationOperation: (tripId: string, operationId: string, signal?: AbortSignal) =>
-    call<PublicationOperation>(`/trips/${encodeURIComponent(tripId)}/publication-operations/${encodeURIComponent(operationId)}`, { signal }),
+    call<PublicationOperation>(`/trips/${encodeURIComponent(tripId)}/publication-operations/${encodeURIComponent(operationId)}`, { signal, changesOverview: published }),
   unpublishTrip: (tripId: string, body: UnpublishCommand, command: EditorCommand) =>
-    call<Output<'unpublishTrip'>>(`/trips/${encodeURIComponent(tripId)}/unpublish`, { ...command, method: 'POST', body }),
+    call<Output<'unpublishTrip'>>(`/trips/${encodeURIComponent(tripId)}/unpublish`, {
+      ...command,
+      method: 'POST',
+      body,
+      changesOverview: !!body.publication_id,
+    }),
   ensureDayRoute: (dayId: string, body: EnsureTripDayRouteRequest, command: EditorCommand) =>
     call<TravelDraft>(`/days/${encodeURIComponent(dayId)}/route`, { ...command, method: 'PUT', body }),
   getRoute: (routeId: string, signal?: AbortSignal) =>
     call<RouteDraft>(`/routes/${encodeURIComponent(routeId)}`, { signal }),
   replaceRoute: (routeId: string, body: ReplaceRouteDraft, command: EditorCommand) =>
-    call<ReadableRouteDraft>(`/routes/${encodeURIComponent(routeId)}`, { ...command, method: 'PUT', body }),
+    call<ReadableRouteDraft>(`/routes/${encodeURIComponent(routeId)}`, {
+      ...command,
+      method: 'PUT',
+      body,
+      changesOverview: mappedRoute,
+    }),
   preview: (body: RouteTrackPreviewRequest, options: EditorRequest) =>
     call<RouteTrackPreview>('/routing/calculate', { ...options, method: 'POST', body }),
   splitTrack: (trackId: string, body: SplitCommand, command: EditorCommand) =>

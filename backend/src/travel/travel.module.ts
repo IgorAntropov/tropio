@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AccountTrips } from './account-trips.js';
 import { EquipmentLibraryController } from './equipment/equipment-library.controller.js';
 import { EquipmentLibrary } from './equipment/equipment-library.service.js';
+import { ProfileTrips } from './profile-trips.js';
 import { PublicCatalog } from './public-catalog.js';
 import { PublicationService } from './publication.service.js';
 import { TravelDatabase } from './travel-database.js';
@@ -29,10 +30,11 @@ export class TravelModule {
         EquipmentLibrary,
         TravelService,
         PublicationService,
+        ProfileTrips,
         PublicCatalog,
         TripApplications,
       ],
-      exports: [AccountTrips, TravelService, PublicationService, PublicCatalog, TripApplications],
+      exports: [AccountTrips, ProfileTrips, TravelService, PublicationService, PublicCatalog, TripApplications],
     };
   }
 }

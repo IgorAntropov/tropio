@@ -6,10 +6,10 @@ import {
 import { SessionCheck } from '@fsd/shared/ui/session-check';
 import { WorkspaceShell } from '@fsd/widgets/workspace-shell';
 
-const route = useRoute();
+const route = useRouter().currentRoute;
 const sessionConfirmed = useState<boolean | null>(workspaceConfirmedKey, () => null);
 const reloadNotice = useState<string | null>(workspaceReloadNoticeKey, () => null);
-const immersive = computed(() => route.meta.workspaceImmersive === true);
+const immersive = computed(() => route.value.meta.workspaceImmersive === true);
 </script>
 
 <template>

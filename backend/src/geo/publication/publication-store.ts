@@ -56,6 +56,39 @@ function dependenciesAllowed(visibility: string) {
 )`;
 }
 
+const routeTopologyJoins = `CROSS JOIN LATERAL (
+       SELECT count(*) AS count, max(p.position) AS last
+       FROM geo.route_points p WHERE (p.route_id, p.route_version) = (v.route_id, v.version)
+     ) points
+     CROSS JOIN LATERAL (
+       SELECT count(*) AS count, bool_and(t.status = 'ready' AND t.distance_m > 0
+         AND a.position = t.position AND z.position = t.position + 1
+         AND public.ST_Equals(public.ST_StartPoint(t.geom), a.geom)
+         AND public.ST_Equals(public.ST_EndPoint(t.geom), z.geom)) AS connected
+       FROM geo.tracks t
+       JOIN geo.route_points a ON (a.route_id, a.route_version, a.point_id) = (t.route_id, t.route_version, t.start_point_id)
+       JOIN geo.route_points z ON (z.route_id, z.route_version, z.point_id) = (t.route_id, t.route_version, t.end_point_id)
+       WHERE (t.route_id, t.route_version) = (v.route_id, v.version)
+     ) tracks`;
+
+const validTopology = `(v.status = 'ready' AND points.count >= 2 AND points.last = points.count - 1
+         AND tracks.count = points.count - 1 AND tracks.connected)`;
+
+export async function countMappedTrips(client: PoolClient, routes: { route_id: string; trip_id: string }[]) {
+  if (!routes.length) {
+    return 0;
+  }
+  const { rows: [result] } = await client.query<{ total: number }>(
+    `SELECT count(DISTINCT owned.trip_id)::int AS total
+     FROM jsonb_to_recordset($1::jsonb) AS owned(route_id uuid, trip_id uuid)
+     WHERE EXISTS (SELECT FROM geo.route_geometry_versions v
+       ${routeTopologyJoins}
+       WHERE v.route_id = owned.route_id AND v.sealed AND v.distance_m > 0 AND ${validTopology})`,
+    [JSON.stringify(routes)],
+  );
+  return result!.total;
+}
+
 export async function retainRoutes(client: PoolClient, manifest: GeoManifest) {
   const routeIds = manifest.routes.map(route => route.route_id);
   await client.query('SELECT route_id FROM geo.route_geometries WHERE route_id = ANY($1::uuid[]) ORDER BY route_id FOR SHARE', [routeIds]);
@@ -69,25 +102,11 @@ export async function retainRoutes(client: PoolClient, manifest: GeoManifest) {
   );
   const { rows } = await client.query<{ route_id: string; revision_id: string; ready: boolean; allowed: boolean }>(
     `SELECT v.route_id, v.revision_id,
-       (v.status = 'ready' AND points.count >= 2 AND points.last = points.count - 1
-         AND tracks.count = points.count - 1 AND tracks.connected) AS ready,
+       ${validTopology} AS ready,
        ${dependenciesAllowed(publicRevision)} AS allowed
      FROM geo.route_geometries g
      JOIN geo.route_geometry_versions v ON (v.route_id, v.version) = (g.route_id, g.head_version) AND v.sealed
-     CROSS JOIN LATERAL (
-       SELECT count(*) AS count, max(p.position) AS last
-       FROM geo.route_points p WHERE (p.route_id, p.route_version) = (v.route_id, v.version)
-     ) points
-     CROSS JOIN LATERAL (
-       SELECT count(*) AS count, bool_and(t.status = 'ready' AND t.distance_m > 0
-         AND a.position = t.position AND z.position = t.position + 1
-         AND public.ST_Equals(public.ST_StartPoint(t.geom), a.geom)
-         AND public.ST_Equals(public.ST_EndPoint(t.geom), z.geom)) AS connected
-       FROM geo.tracks t
-       JOIN geo.route_points a ON (a.route_id, a.route_version, a.point_id) = (t.route_id, t.route_version, t.start_point_id)
-       JOIN geo.route_points z ON (z.route_id, z.route_version, z.point_id) = (t.route_id, t.route_version, t.end_point_id)
-       WHERE (t.route_id, t.route_version) = (v.route_id, v.version)
-     ) tracks
+     ${routeTopologyJoins}
      WHERE g.route_id = ANY($1::uuid[])`,
     [routeIds],
   );

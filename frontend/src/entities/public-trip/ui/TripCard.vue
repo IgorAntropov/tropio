@@ -18,7 +18,10 @@ const { t } = useI18n();
 
 <template>
   <article class="catalog-card" :class="{ 'catalog-card--active': active, 'catalog-card-expanded': expanded }">
-    <div class="catalog-cover"><img alt="" loading="lazy" :src="publicTripCover(trip)"></div>
+    <div class="catalog-cover">
+      <img alt="" loading="lazy" :src="publicTripCover(trip)">
+      <slot name="favorite" />
+    </div>
     <header v-if="expanded" class="catalog-expanded-title">
       <h1>{{ trip.title }}</h1>
       <UiButton
@@ -49,7 +52,6 @@ const { t } = useI18n();
     >{{ trip.title }}</NuxtLink></h3>
     <TripFacts :trip="trip">
       <template #dateNote>
-        <slot name="favorite" />
         <span class="catalog-trip-status">{{ t('catalog.lifecycle.' + trip.lifecycle) }}</span>
       </template>
       <template #routeMetrics><TripRouteMetrics :count="trip.route_count" :distance="trip.total_distance_m" /></template>

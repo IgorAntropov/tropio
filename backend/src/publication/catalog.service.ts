@@ -301,7 +301,65 @@ export class CatalogService {
     return { viewer_id: userId, items: page, next_cursor: items.length > input.limit ? page.at(-1)!.trip_id : null };
   }
 
-  private async visibleCandidates<T extends Candidate>(load: () => Promise<T[]>) {
+  async joinedTripCounts(userId: string) {
+    const counts = { planned: 0, in_progress: 0, completed: 0 };
+    let cursor: string | null = null;
+    const size = 100;
+    do {
+      const input: AccountTripFilter = {
+        collection: 'joined',
+        status: 'all',
+        query: '',
+        limit: size,
+        cursor,
+      };
+      const page = await this.visibleCandidates(() => this.account.candidates(userId, input, cursor, size), { participantId: userId });
+      for (const { candidate } of page.visible) {
+        if (candidate.current_lifecycle !== 'cancelled') {
+          counts[candidate.current_lifecycle]++;
+        }
+      }
+      cursor = page.candidates.length === size ? page.candidates.at(-1)!.tripId : null;
+    } while (cursor);
+    return counts;
+  }
+
+  async publicProfileFacts(organizerId: string) {
+    const trips = {
+      created: 0,
+      planned: 0,
+      in_progress: 0,
+      completed: 0,
+      archived: 0,
+    };
+    const progress = { cartography: 0, organizing: 0, travel: 0 };
+    const visibleIds: string[] = [];
+    let cursor: string | null = null;
+    const limit = 100;
+    do {
+      const page = await this.visibleCandidates(() => this.travel.organizerCandidates(organizerId, cursor, limit));
+      for (const { candidate, summary } of page.visible) {
+        visibleIds.push(candidate.tripId);
+        trips.created++;
+        if (candidate.current_lifecycle !== 'cancelled') {
+          trips[candidate.current_lifecycle]++;
+        }
+        if (candidate.authored && summary.total_distance_m > 0) {
+          progress.cartography++;
+        }
+        if (candidate.guided) {
+          progress.organizing++;
+        }
+        if (candidate.finished) {
+          progress.travel++;
+        }
+      }
+      cursor = page.candidates.length === limit ? page.candidates.at(-1)!.tripId : null;
+    } while (cursor);
+    return { trips, progress, visibleIds };
+  }
+
+  private async visibleCandidates<T extends Candidate>(load: () => Promise<T[]>, options: { participantId?: string } = {}) {
     for (let attempt = 0; attempt < 2; attempt++) {
       const candidates = await load();
       if (!candidates.length) {
@@ -312,11 +370,11 @@ export class CatalogService {
         throw new BffProblem('DEPENDENCY_UNAVAILABLE');
       }
       const owners = new Set(candidates.filter((_, index) => summaries[index]).map(item => item.ownerId));
-      const organizers = await this.identity.publicOrganizers([...owners]);
-      const confirmed = await this.travel.confirm(candidates);
+      const organizers = options.participantId ? new Map<string, PublicOrganizer>() : await this.identity.publicOrganizers([...owners]);
+      const confirmed = await this.travel.confirm(candidates, options.participantId);
       if (candidates.some((item) => {
         const current = confirmed.get(item.tripId);
-        return current && !matches(item, current);
+        return current && (!matches(item, current) || item.current_lifecycle !== current.current_lifecycle);
       })) {
         continue;
       }

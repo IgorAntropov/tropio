@@ -4,16 +4,17 @@ export interface components {
             id: components["schemas"]["Uuid"];
             display_name: string;
             bio: string | null;
-            avatar: components["schemas"]["SystemAvatar"] | null;
+            avatar: components["schemas"]["ProfileAvatar"] | null;
             csrf_token: string;
         };
         PublicIdentityProfile: {
             id: components["schemas"]["Uuid"];
             display_name: string;
             bio: string | null;
-            avatar: components["schemas"]["SystemAvatar"] | null;
+            avatar: components["schemas"]["ProfileAvatar"] | null;
         };
-        SystemAvatar: {
+        SystemAvatar: components["schemas"]["ProfileAvatar"];
+        ProfileAvatar: {
             id: components["schemas"]["Uuid"];
             url: string;
         };
@@ -42,6 +43,13 @@ export interface components {
         UpdateIdentityProfileRequest: {
             display_name?: string;
             bio?: string | null;
+            avatar?: components["schemas"]["SelectIdentityAvatarRequest"] | components["schemas"]["RemoveCustomAvatarRequest"] | {
+                content_type: "image/jpeg" | "image/png" | "image/webp";
+                data_base64: string;
+            };
+        };
+        RemoveCustomAvatarRequest: {
+            remove_custom_id: components["schemas"]["Uuid"];
         };
         SelectIdentityAvatarRequest: {
             avatar_id: components["schemas"]["Uuid"];
@@ -383,7 +391,7 @@ export interface components {
         PublicOrganizer: {
             id: components["schemas"]["Uuid"];
             display_name: string;
-            avatar: components["schemas"]["SystemAvatar"] | null;
+            avatar: components["schemas"]["ProfileAvatar"] | null;
         };
         TripRoster: {
             viewer_id: components["schemas"]["Uuid"];
@@ -401,6 +409,50 @@ export interface components {
         TripFavoriteState: {
             viewer_id: components["schemas"]["Uuid"];
             saved: boolean;
+        };
+        AccountOverview: {
+            viewer_id: components["schemas"]["Uuid"];
+            trips: components["schemas"]["ProfileTripCounts"];
+            rating: components["schemas"]["OrganizerRating"];
+            level: components["schemas"]["TravelerLevel"];
+            achievements: components["schemas"]["ProfileAchievementGroups"];
+        };
+        VisitingProfile: {
+            viewer_id: components["schemas"]["Uuid"];
+            profile: components["schemas"]["PublicIdentityProfile"];
+            overview: components["schemas"]["PublicProfileOverview"];
+        };
+        PublicProfileOverview: {
+            trips: components["schemas"]["ProfileTripCounts"] | null;
+            rating: components["schemas"]["OrganizerRating"];
+            level: components["schemas"]["TravelerLevel"] | null;
+            achievements: components["schemas"]["ProfileAchievementGroups"] | null;
+        };
+        ProfileTripCounts: {
+            created: number;
+            planned: number;
+            in_progress: number;
+            completed: number;
+            archived: number;
+        };
+        OrganizerRating: {
+            average: number | null;
+            count: number;
+        };
+        TravelerLevel: {
+            code: "novice" | "seeker" | "traveler" | "seasoned" | "pro" | "expert";
+            completed: number;
+            next_at: number | null;
+        };
+        ProfileAchievementGroups: {
+            group: "travel" | "friends" | "cartography" | "organizing";
+            progress: number;
+            earned: components["schemas"]["AccountAchievementGrade"][];
+            next: components["schemas"]["AccountAchievementGrade"] | null;
+        }[];
+        AccountAchievementGrade: {
+            code: "first_trip" | "on_the_road_1" | "on_the_road_2" | "on_the_road_3" | "on_the_road_4" | "first_friend" | "sociable" | "life_of_the_party" | "cartographer_1" | "cartographer_2" | "cartographer_3" | "cartographer_4" | "guide_1" | "guide_2" | "guide_3" | "guide_4";
+            threshold: number;
         };
         AccountTripPage: {
             viewer_id: components["schemas"]["Uuid"];
@@ -816,6 +868,50 @@ export interface components {
                 };
             };
         };
+        IdentityInvalidRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"] & {
+                    status?: 400;
+                    code?: "INVALID_REQUEST";
+                };
+            };
+        };
+        IdentitySessionRequired: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"] & {
+                    status?: 401;
+                    code?: "SESSION_REQUIRED";
+                };
+            };
+        };
+        IdentityNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"] & {
+                    status?: 404;
+                    code?: "NOT_FOUND";
+                };
+            };
+        };
+        IdentityUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"] & {
+                    status?: 503;
+                    code?: "DEPENDENCY_UNAVAILABLE";
+                };
+            };
+        };
     };
     parameters: {
         IdentityOrigin: string;
@@ -936,6 +1032,76 @@ export interface operations {
             400: components["responses"]["TravelInvalidRequest"];
             401: components["responses"]["TravelSessionRequired"];
             503: components["responses"]["TravelUnavailable"];
+        };
+    };
+    getAccountOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountOverview"];
+                };
+            };
+            401: components["responses"]["TravelSessionRequired"];
+            503: components["responses"]["TravelUnavailable"];
+        };
+    };
+    getPublicProfileOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProfileOverview"];
+                };
+            };
+            400: components["responses"]["IdentityInvalidRequest"];
+            404: components["responses"]["IdentityNotFound"];
+            503: components["responses"]["IdentityUnavailable"];
+        };
+    };
+    getVisitingProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitingProfile"];
+                };
+            };
+            400: components["responses"]["IdentityInvalidRequest"];
+            401: components["responses"]["IdentitySessionRequired"];
+            404: components["responses"]["IdentityNotFound"];
+            503: components["responses"]["IdentityUnavailable"];
         };
     };
     getTripFavorite: {

@@ -21,7 +21,7 @@ const model = defineModel<string>({ required: true });
         type="radio"
         :value="option.value"
       >
-      <span>{{ option.label }}</span>
+      <span>{{ option.label }}<slot name="suffix" :value="option.value" /></span>
     </label>
   </fieldset>
 </template>

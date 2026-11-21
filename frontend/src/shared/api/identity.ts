@@ -1,8 +1,16 @@
 import type { components } from './openapi';
+import {
+  browserSession,
+  reportSessionFailure,
+  sessionEvents,
+} from './session-store';
 
 type Schemas = components['schemas'];
 
 export type IdentityProfile = Schemas['IdentityProfile'];
+export type AccountOverview = Schemas['AccountOverview'];
+export type PublicProfileOverview = Schemas['PublicProfileOverview'];
+export type VisitingProfile = Schemas['VisitingProfile'];
 export type PublicIdentityProfile = Schemas['PublicIdentityProfile'];
 export type SystemAvatar = Schemas['SystemAvatar'];
 
@@ -45,6 +53,7 @@ async function call<T>(path: string, options: {
     headers.set('x-csrf-token', options.csrf);
   }
 
+  const revision = browserSession?.revision();
   const response = await fetch(`/api/v1${path}`, {
     method: options.method ?? 'GET',
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -59,6 +68,8 @@ async function call<T>(path: string, options: {
       && 'code' in problem && typeof problem.code === 'string'
       ? problem.code
       : '';
+    options.signal?.throwIfAborted();
+    reportSessionFailure(response.status, code, revision);
     throw new IdentityResponseError(response.status, code);
   }
   return response.status === 202 || response.status === 204
@@ -66,9 +77,34 @@ async function call<T>(path: string, options: {
     : await response.json() as T;
 }
 
+function readMe(signal: AbortSignal) {
+  return call<IdentityProfile>('/me', { signal });
+}
+
+async function saveProfile(path: '/me' | '/me/avatar', body: Schemas['UpdateIdentityProfileRequest'] | Schemas['SelectIdentityAvatarRequest'], csrf: string, signal: AbortSignal) {
+  const revision = browserSession?.revision();
+  const result = await call<IdentityProfile>(path, {
+    method: 'PATCH',
+    body,
+    csrf,
+    signal,
+  });
+  if (browserSession && browserSession.revision() === revision) {
+    browserSession.replace(result);
+    sessionEvents.dispatchEvent(new Event('profile-updated'));
+  }
+  return result;
+}
+
 export const identityApi = {
-  login: (body: Schemas['LoginIdentityRequest'], signal: AbortSignal) =>
-    call<IdentityProfile>('/auth/login', { method: 'POST', body, signal }),
+  async login(body: Schemas['LoginIdentityRequest'], signal: AbortSignal) {
+    const result = await call<IdentityProfile>('/auth/login', { method: 'POST', body, signal });
+    browserSession?.replace(result);
+    if (browserSession) {
+      sessionEvents.dispatchEvent(new Event('changed'));
+    }
+    return result;
+  },
   register: (body: Schemas['RegisterIdentityRequest'], signal: AbortSignal) =>
     call<undefined>('/auth/register', { method: 'POST', body, signal }),
   resendVerification: (body: Schemas['IdentityEmailRequest'], signal: AbortSignal) =>
@@ -77,24 +113,28 @@ export const identityApi = {
     call<undefined>('/auth/verify-email', { method: 'POST', body, signal }),
   requestPasswordReset: (body: Schemas['IdentityEmailRequest'], signal: AbortSignal) =>
     call<undefined>('/auth/request-password-reset', { method: 'POST', body, signal }),
-  resetPassword: (body: Schemas['ResetIdentityPasswordRequest'], signal: AbortSignal) =>
-    call<undefined>('/auth/reset-password', { method: 'POST', body, signal }),
-  me: (signal: AbortSignal) => call<IdentityProfile>('/me', { signal }),
+  async resetPassword(body: Schemas['ResetIdentityPasswordRequest'], signal: AbortSignal) {
+    await call<undefined>('/auth/reset-password', { method: 'POST', body, signal });
+    if (browserSession) {
+      browserSession.replace(undefined);
+      sessionEvents.dispatchEvent(new Event('changed'));
+    }
+  },
+  me: (signal: AbortSignal) => browserSession
+    ? browserSession.read(readMe, signal, () => new IdentityResponseError(401, 'SESSION_REQUIRED'))
+    : readMe(signal),
+  overview: (signal: AbortSignal) => call<AccountOverview>('/me/overview', { signal }),
+  visitingProfile: (id: string, signal: AbortSignal) => call<VisitingProfile>('/me/visiting/' + encodeURIComponent(id), { signal }),
   updateProfile: (body: Schemas['UpdateIdentityProfileRequest'], csrf: string, signal: AbortSignal) =>
-    call<IdentityProfile>('/me', {
-      method: 'PATCH',
-      body,
-      csrf,
-      signal,
-    }),
+    saveProfile('/me', body, csrf, signal),
   avatarAssets: (signal: AbortSignal) => call<Schemas['SystemAvatarList']>('/avatar-assets', { signal }),
   selectAvatar: (body: Schemas['SelectIdentityAvatarRequest'], csrf: string, signal: AbortSignal) =>
-    call<IdentityProfile>('/me/avatar', {
-      method: 'PATCH',
-      body,
-      csrf,
-      signal,
-    }),
-  logout: (csrf: string, signal: AbortSignal) =>
-    call<undefined>('/auth/logout', { method: 'POST', csrf, signal }),
+    saveProfile('/me/avatar', body, csrf, signal),
+  async logout(csrf: string, signal: AbortSignal) {
+    await call<undefined>('/auth/logout', { method: 'POST', csrf, signal });
+    browserSession?.replace(null);
+    if (browserSession) {
+      sessionEvents.dispatchEvent(new Event('changed'));
+    }
+  },
 };

@@ -72,7 +72,6 @@ const count = computed(() => props.trip.free_capacity === null
       <span class="account-card-status" :data-status="status">{{ t('accountTrips.badge.' + status) }}</span>
       <TripFavoriteButton
         v-if="!trip.is_owner && trip.saved"
-        class="account-card-favorite"
         :saved="trip.saved"
         :title="trip.title"
         :trip-id="trip.trip_id"
@@ -128,6 +127,7 @@ const count = computed(() => props.trip.free_capacity === null
 .account-card:focus-within { border-color: var(--tk-focus); }
 .account-card-cover { position: relative; aspect-ratio: var(--account-cover-ratio); border-start-start-radius: inherit; border-start-end-radius: inherit; background: var(--tk-raised); }
 .account-card-cover > .tk-image { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; }
+.account-card-cover :deep(.trip-favorite p) { inset-inline: auto 0; }
 .account-cover-fallback { inline-size: 100%; block-size: 100%; object-fit: cover; }
 .account-card-status { --status-dot: #86e3ce; position: absolute; inset-block-end: var(--tk-space-2); inset-inline-end: var(--tk-space-2); display: inline-flex; align-items: center; gap: .4rem; padding: .24rem .6rem; border: 1px solid rgb(255 255 255 / 48%); border-radius: 2rem; background: rgb(18 44 45 / 76%); backdrop-filter: blur(var(--tk-glass-blur)); color: white; box-shadow: 0 1px 4px rgb(0 0 0 / 17%); font-size: .735rem; font-weight: 650; line-height: 1.3; }
 .account-card-status::before { inline-size: .4rem; block-size: .4rem; border-radius: 50%; background: var(--status-dot); content: ''; }
@@ -135,8 +135,6 @@ const count = computed(() => props.trip.free_capacity === null
 .account-card-status[data-status="in_progress"] { --status-dot: #bdeb9a; }
 .account-card-status:is([data-status="completed"], [data-status="archived"]) { --status-dot: #c8d3d7; }
 .account-card-status[data-status="cancelled"] { --status-dot: #ffad9e; }
-.account-card-favorite { position: absolute; inset: 0 0 auto auto; }
-.account-card-favorite :deep(svg) { filter: drop-shadow(0 0 1px white) drop-shadow(0 1px 1px rgb(255 255 255 / 85%)); }
 .account-card-body { display: flex; flex: 1; flex-direction: column; min-inline-size: 0; padding: var(--tk-space-3) var(--tk-space-3) 0; }
 .account-card h2 { display: -webkit-box; overflow: hidden; margin: 0; font-size: 1.03rem; line-height: 1.3; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .account-card h2 a { color: inherit; text-decoration: none; }
@@ -155,7 +153,7 @@ const count = computed(() => props.trip.free_capacity === null
 .account-card-facts > * { display: inline-flex; align-items: center; gap: .25rem; }
 .account-card-facts svg { flex: none; width: .9rem; height: .9rem; stroke: var(--tk-accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 .account-card-facts a { position: relative; z-index: 1; align-self: stretch; color: var(--tk-accent); text-decoration: none; }
-.account-card-facts a:hover, .account-card-meta a:hover { text-decoration: underline; }
+.account-card-facts a:hover { text-decoration: underline; }
 .account-card-facts a { min-inline-size: var(--tk-target); }
 .account-card-requests { justify-content: center; font-weight: 650; }
 .account-card-requests::before { position: absolute; z-index: -1; inset: 50% .35rem auto; height: 1.35rem; transform: translateY(-50%); border-radius: 1rem; background: var(--tk-selected); content: ''; }

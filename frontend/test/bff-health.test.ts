@@ -122,6 +122,12 @@ const upstream = createServer(async (request, response) => {
     response.writeHead(204).end();
     return;
   }
+  if (request.method === 'GET' && (request.url === '/api/v1/me/overview' || request.url === `/api/v1/me/visiting/${routeId}`)) {
+    forwarded = request.headers;
+    response.writeHead(200, { 'content-type': 'application/json' })
+      .end(JSON.stringify({ viewer_id: dayId }));
+    return;
+  }
   if (request.url === '/api/v1/me/trips?collection=favorites&query=river' || request.url === `/api/v1/me/favorites/${routeId}`) {
     forwarded = request.headers;
     forwardedBody = (await Array.fromAsync(request)).map(chunk => chunk.toString()).join('');
@@ -168,6 +174,7 @@ const upstream = createServer(async (request, response) => {
     return;
   }
   if (request.url === `/api/v1/pois/${routeId}/media/${revision}`
+    || request.url === `/api/v1/users/${routeId}/avatars/${dayId}`
     || request.url === `/api/v1/catalog/trips/${routeId}/covers/${dayId}`
     || request.url === `/api/v1/trips/${routeId}/covers/${dayId}`) {
     forwarded = request.headers;
@@ -198,6 +205,9 @@ const upstream = createServer(async (request, response) => {
     return;
   }
   if (request.url === '/api/v1/me' && request.headers.cookie === 'tropio_session=workspace-active') {
+    if (request.method === 'PATCH') {
+      forwardedBody = (await Array.fromAsync(request)).map(chunk => chunk.toString()).join('');
+    }
     response.writeHead(200, { 'content-type': 'application/json', 'x-request-id': requestId })
       .end(JSON.stringify({
         id: routeId,
@@ -452,6 +462,16 @@ it('maps an unavailable Identity upstream to a correlated 503 Problem', async ()
   }
 });
 
+it('keeps the visitor overview independent of the signed-in viewer', async () => {
+  const response = await fetch('/api/v1/users/%3Fbad-id/overview', {
+    headers: { 'cookie': 'tropio_session=workspace-active', 'x-csrf-token': 'local-token' },
+  });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: 'INVALID_REQUEST' });
+  expect(forwarded.cookie).toBeUndefined();
+  expect(forwarded['x-csrf-token']).toBeUndefined();
+});
+
 it('passes Travel pagination and only the session cookie', async () => {
   const response = await fetch('/api/v1/trips?cursor=a&limit=20', {
     headers: { cookie: 'tropio_session=current; tropio_registration=pending; ignored=value' },
@@ -503,9 +523,10 @@ it('serves POI images without modifying the bytes or enabling caching', async ()
 });
 
 it.each([
+  [`/api/v1/users/${routeId}/avatars/${dayId}`, undefined],
   [`/api/v1/catalog/trips/${routeId}/covers/${dayId}`, undefined],
   [`/api/v1/trips/${routeId}/covers/${dayId}`, 'tropio_session=active'],
-])('proxies the cover bytes and scopes credentials at %s', async (path, cookie) => {
+])('proxies image bytes and scopes credentials at %s', async (path, cookie) => {
   const response = await fetch(path!, { headers: { cookie: 'tropio_session=active; ignored=other' } });
   expect(response.status).toBe(200);
   expect(response.headers.get('cache-control')).toBe('no-store');
@@ -513,6 +534,17 @@ it.each([
   expect(response.headers.get('content-type')).toBe('image/png');
   expect(new Uint8Array(await response.arrayBuffer())).toEqual(picture);
   expect(forwarded.cookie).toBe(cookie);
+});
+
+it('forwards an avatar upload with profile edits above the ordinary form size', async () => {
+  const body = JSON.stringify({ display_name: 'Анна', avatar: { content_type: 'image/png', data_base64: 'a'.repeat(16 * 1024) } });
+  const response = await fetch('/api/v1/me', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', 'cookie': 'tropio_session=workspace-active', 'x-csrf-token': 'workspace-csrf-fixture' },
+    body,
+  });
+  expect(response.status).toBe(200);
+  expect(forwardedBody).toBe(body);
 });
 
 it('rejects undeclared editor operations and encoded route separators', async () => {
@@ -724,6 +756,17 @@ it('forwards the archive command through the public Nuxt origin', async () => {
   expect(await result.json()).toEqual({ trip_revision_id: revision, publication_id: null });
   expect(forwarded.cookie).toBe('tropio_session=workspace-active');
   expect(forwarded['idempotency-key']).toBe(requestId);
+});
+
+it.each(['/api/v1/me/overview', `/api/v1/me/visiting/${routeId}`])('forwards only the session cookie for %s', async (path) => {
+  const response = await fetch(path, {
+    headers: { cookie: 'tropio_session=current; tropio_registration=other; ignored=ignored' },
+  });
+  expect(response.status).toBe(200);
+  expect((await response.json()).viewer_id).toBe(dayId);
+  expect(response.headers.get('cache-control')).toContain('private, no-store');
+  expect(response.headers.get('vary')?.toLowerCase()).toContain('cookie');
+  expect(forwarded.cookie).toBe('tropio_session=current');
 });
 
 it('proxies personal trip searches and favorite reads and writes without shared caching', async () => {

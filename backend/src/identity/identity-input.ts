@@ -1,4 +1,6 @@
 import { BffProblem } from '../http/bff-problem.js';
+import { imageType } from '../http/image-format.js';
+import type { ImageUpload } from '../http/image-upload.js';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -74,16 +76,33 @@ export function resetInput(value: unknown) {
 export interface ProfilePatch {
   displayName?: string;
   bio?: string | null;
+  avatar?: { avatar_id: string } | { remove_custom_id: string } | ImageUpload;
 }
 
 export function profileInput(value: unknown): ProfilePatch {
-  const input = fields(value, ['display_name', 'bio']);
+  const input = fields(value, ['display_name', 'bio', 'avatar']);
   const patch: ProfilePatch = {};
   if (Object.hasOwn(input, 'display_name')) {
     patch.displayName = string(string(input.display_name, 1, 80).trim(), 1, 80);
   }
   if (Object.hasOwn(input, 'bio')) {
     patch.bio = input.bio === null ? null : string(input.bio, 0, 1000).trim() || null;
+  }
+  if (Object.hasOwn(input, 'avatar')) {
+    const selection = fields(input.avatar, ['avatar_id', 'content_type', 'data_base64', 'remove_custom_id']);
+    if (Object.hasOwn(selection, 'remove_custom_id')) {
+      patch.avatar = { remove_custom_id: uuid(fields(selection, ['remove_custom_id']).remove_custom_id).toLowerCase() };
+    }
+    else if (Object.hasOwn(selection, 'avatar_id')) {
+      patch.avatar = { avatar_id: avatarInput(selection) };
+    }
+    else {
+      const type = imageType(selection.content_type);
+      if (!type || typeof selection.data_base64 !== 'string') {
+        throw new BffProblem('INVALID_REQUEST');
+      }
+      patch.avatar = { content_type: type, data_base64: selection.data_base64 };
+    }
   }
   return patch;
 }

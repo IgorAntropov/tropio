@@ -10,7 +10,10 @@ import type {
   PublicTrip,
   PublicTripSummary,
 } from '@fsd/shared/api';
-import { UiButton } from '@fsd/shared/ui/kit';
+import {
+  UiBackLink,
+  UiButton,
+} from '@fsd/shared/ui/kit';
 import { catalogQuery } from '../model/use-catalog-screens';
 import PublicReadIssue from './PublicReadIssue.vue';
 
@@ -46,7 +49,12 @@ watch(() => [props.trip?.trip_id, props.pending, props.status], focusDetails, { 
 
 <template>
   <section :aria-label="card?.title ?? t('catalog.short')" class="catalog-expanded" :class="{ 'catalog-expanded-unavailable': status && status !== 200 }">
-    <div ref="panel" class="catalog-expanded-card">
+    <div
+      ref="panel"
+      class="catalog-expanded-card"
+      :data-scroll-pending="pending || undefined"
+      data-scroll-region="catalog-detail"
+    >
       <TripCard
         v-if="card"
         expanded
@@ -108,7 +116,7 @@ watch(() => [props.trip?.trip_id, props.pending, props.status], focusDetails, { 
           @retry="emit('retry')"
         >
           <template #returnToCatalog>
-            <NuxtLink class="tk-button" :to="{ path: '/catalog', query: catalogQuery(route.query) }">{{ t('catalog.open') }}</NuxtLink>
+            <UiBackLink class="tk-button" :to="{ path: '/catalog', query: catalogQuery(route.query) }">{{ t('catalog.open') }}</UiBackLink>
           </template>
         </PublicReadIssue>
       </div>

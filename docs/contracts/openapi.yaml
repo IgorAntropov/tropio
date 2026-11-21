@@ -267,7 +267,8 @@ paths:
     patch:
       operationId: updateMyIdentityProfile
       tags: [Identity]
-      summary: Изменить имя и описание собственного профиля
+      summary: Изменить имя, описание и аватар собственного профиля
+      description: Переданные поля сохраняются одной транзакцией. Для аватара можно выбрать активный системный UUID или загрузить однокадровое изображение до 2 МиБ и 40 мегапикселей. Identity учитывает ориентацию, обрезает изображение по центру до квадрата и сохраняет WebP 256 × 256 без исходных метаданных. При замене прежний адрес фото перестаёт действовать. Команда avatar.remove_custom_id принимает UUID своего снимка. При совпадении с текущим фото Identity удаляет снимок и устанавливает первый активный системный аватар или null при пустой коллекции. Повтор команды с прежним UUID возвращает текущий профиль и сохраняет выбранный позднее аватар.
       security:
         - session: []
           csrf: []
@@ -292,6 +293,8 @@ paths:
           $ref: '#/components/responses/IdentitySessionRequired'
         '403':
           $ref: '#/components/responses/IdentityCsrfRejected'
+        '422':
+          $ref: '#/components/responses/IdentityAvatarUnavailable'
         '503':
           $ref: '#/components/responses/IdentityUnavailable'
   /me/equipment:
@@ -418,6 +421,78 @@ paths:
           $ref: '#/components/responses/IdentityNotFound'
         '503':
           $ref: '#/components/responses/IdentityUnavailable'
+  /users/{id}/overview:
+    get:
+      operationId: getPublicProfileOverview
+      tags: [Identity]
+      summary: Прочитать доступные посетителю показатели профиля
+      description: Анонимная проекция по действующим публичным поездкам организатора. Доступность поездки и её маршрутов проверяют Travel и Geo. Скрытая группа полей возвращается как null. Отзывы учитываются по выездам, доступным посетителю.
+      security: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {$ref: '#/components/schemas/Uuid'}}
+      responses:
+        '200':
+          description: Публичные показатели активного пользователя с подтверждённой почтой.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PublicProfileOverview'}
+        '400': {$ref: '#/components/responses/IdentityInvalidRequest'}
+        '404': {$ref: '#/components/responses/IdentityNotFound'}
+        '503': {$ref: '#/components/responses/IdentityUnavailable'}
+  /users/{id}/avatars/{avatarId}:
+    get:
+      operationId: getUserAvatarImage
+      tags: [Identity]
+      summary: Получить текущее фото доступного профиля
+      description: Identity проверяет, что аккаунт активен, почта подтверждена, а UUID соответствует выбранному фото. Для скрытого, отсутствующего и заменённого изображения возвращается 404.
+      security: []
+      parameters:
+        - {name: id, in: path, required: true, schema: {$ref: '#/components/schemas/Uuid'}}
+        - {name: avatarId, in: path, required: true, schema: {$ref: '#/components/schemas/Uuid'}}
+      responses:
+        '200':
+          description: Квадратный аватар в формате WebP.
+          content:
+            image/webp:
+              schema: {type: string, format: binary}
+        '400':
+          $ref: '#/components/responses/IdentityInvalidRequest'
+        '404':
+          $ref: '#/components/responses/IdentityNotFound'
+        '503':
+          $ref: '#/components/responses/IdentityUnavailable'
+  /me/visiting/{id}:
+    get:
+      operationId: getVisitingProfile
+      tags: [Identity]
+      summary: Посмотреть профиль с учётом отношений с текущим зрителем
+      description: Требует действующую сессию. Поля с аудиторией друзей видны при действующей взаимной связи. Закрытые источники поездок и достижений посторонним и друзьям не выдаются. Владелец получает собственные данные.
+      parameters:
+        - {name: id, in: path, required: true, schema: {$ref: '#/components/schemas/Uuid'}}
+      responses:
+        '200':
+          description: Доступные зрителю поля и показатели профиля.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VisitingProfile'}
+        '400': {$ref: '#/components/responses/IdentityInvalidRequest'}
+        '401': {$ref: '#/components/responses/IdentitySessionRequired'}
+        '404': {$ref: '#/components/responses/IdentityNotFound'}
+        '503': {$ref: '#/components/responses/IdentityUnavailable'}
+  /me/overview:
+    get:
+      operationId: getAccountOverview
+      tags: [Identity]
+      summary: Прочитать статистику, рейтинг, уровень и достижения своего профиля
+      description: Требует текущую сессию. Подтверждение личного завершения учитывается отдельно от статуса завершённой поездки. Доступ к чужой поездке проверяется перед учётом в статистике.
+      responses:
+        '200':
+          description: Личная сводка текущего пользователя.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccountOverview'}
+        '401': {$ref: '#/components/responses/TravelSessionRequired'}
+        '503': {$ref: '#/components/responses/TravelUnavailable'}
   /me/trips:
     get:
       operationId: listAccountTrips
@@ -2290,7 +2365,7 @@ components:
         bio: {type: [string, 'null']}
         avatar:
           anyOf:
-            - $ref: '#/components/schemas/SystemAvatar'
+            - $ref: '#/components/schemas/ProfileAvatar'
             - type: 'null'
         csrf_token: {type: string, minLength: 1}
     PublicIdentityProfile:
@@ -2303,9 +2378,11 @@ components:
         bio: {type: [string, 'null']}
         avatar:
           anyOf:
-            - $ref: '#/components/schemas/SystemAvatar'
+            - $ref: '#/components/schemas/ProfileAvatar'
             - type: 'null'
     SystemAvatar:
+      $ref: '#/components/schemas/ProfileAvatar'
+    ProfileAvatar:
       type: object
       additionalProperties: false
       required: [id, url]
@@ -2361,6 +2438,22 @@ components:
       properties:
         display_name: {type: string, minLength: 1, maxLength: 80}
         bio: {type: [string, 'null'], maxLength: 1000}
+        avatar:
+          oneOf:
+            - $ref: '#/components/schemas/SelectIdentityAvatarRequest'
+            - $ref: '#/components/schemas/RemoveCustomAvatarRequest'
+            - type: object
+              additionalProperties: false
+              required: [content_type, data_base64]
+              properties:
+                content_type: {type: string, enum: [image/jpeg, image/png, image/webp]}
+                data_base64: {type: string, minLength: 4, maxLength: 2796204, contentEncoding: base64}
+    RemoveCustomAvatarRequest:
+      type: object
+      additionalProperties: false
+      required: [remove_custom_id]
+      properties:
+        remove_custom_id: {$ref: '#/components/schemas/Uuid'}
     SelectIdentityAvatarRequest:
       type: object
       additionalProperties: false
@@ -3042,7 +3135,7 @@ components:
         display_name: {type: string}
         avatar:
           anyOf:
-            - $ref: '#/components/schemas/SystemAvatar'
+            - $ref: '#/components/schemas/ProfileAvatar'
             - type: 'null'
     TripRoster:
       type: object
@@ -3075,6 +3168,89 @@ components:
       properties:
         viewer_id: {$ref: '#/components/schemas/Uuid'}
         saved: {type: boolean}
+    AccountOverview:
+      type: object
+      additionalProperties: false
+      required: [viewer_id, trips, rating, level, achievements]
+      properties:
+        viewer_id: {$ref: '#/components/schemas/Uuid'}
+        trips: {$ref: '#/components/schemas/ProfileTripCounts'}
+        rating: {$ref: '#/components/schemas/OrganizerRating'}
+        level: {$ref: '#/components/schemas/TravelerLevel'}
+        achievements: {$ref: '#/components/schemas/ProfileAchievementGroups'}
+    VisitingProfile:
+      type: object
+      additionalProperties: false
+      required: [viewer_id, profile, overview]
+      properties:
+        viewer_id: {$ref: '#/components/schemas/Uuid'}
+        profile: {$ref: '#/components/schemas/PublicIdentityProfile'}
+        overview: {$ref: '#/components/schemas/PublicProfileOverview'}
+    PublicProfileOverview:
+      type: object
+      additionalProperties: false
+      required: [trips, rating, level, achievements]
+      properties:
+        trips:
+          anyOf:
+            - $ref: '#/components/schemas/ProfileTripCounts'
+            - type: 'null'
+        rating: {$ref: '#/components/schemas/OrganizerRating'}
+        level:
+          anyOf:
+            - $ref: '#/components/schemas/TravelerLevel'
+            - type: 'null'
+        achievements:
+          anyOf:
+            - $ref: '#/components/schemas/ProfileAchievementGroups'
+            - type: 'null'
+    ProfileTripCounts:
+      type: object
+      description: В личном профиле учитываются собственные поездки и доступные поездки с подтверждённым участием. В публичном профиле учитываются только доступные публикации организатора, значение archived всегда равно нулю.
+      additionalProperties: false
+      required: [created, planned, in_progress, completed, archived]
+      properties:
+        created: {type: integer, minimum: 0}
+        planned: {type: integer, minimum: 0}
+        in_progress: {type: integer, minimum: 0}
+        completed: {type: integer, minimum: 0}
+        archived: {type: integer, minimum: 0}
+    OrganizerRating:
+      type: object
+      additionalProperties: false
+      required: [average, count]
+      properties:
+        average: {type: [number, 'null'], minimum: 1, maximum: 5, description: Средняя оценка организатора. При отсутствии оценок возвращается null.}
+        count: {type: integer, minimum: 0}
+    TravelerLevel:
+      type: object
+      additionalProperties: false
+      required: [code, completed, next_at]
+      properties:
+        code: {type: string, enum: [novice, seeker, traveler, seasoned, pro, expert]}
+        completed: {type: integer, minimum: 0, description: Число уникальных выездов с подтверждением участника.}
+        next_at: {type: [integer, 'null'], minimum: 1}
+    ProfileAchievementGroups:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        required: [group, progress, earned, next]
+        properties:
+          group: {type: string, enum: [travel, friends, cartography, organizing]}
+          progress: {type: integer, minimum: 0}
+          earned: {type: array, items: {$ref: '#/components/schemas/AccountAchievementGrade'}}
+          next:
+            anyOf:
+              - {$ref: '#/components/schemas/AccountAchievementGrade'}
+              - {type: 'null'}
+    AccountAchievementGrade:
+      type: object
+      additionalProperties: false
+      required: [code, threshold]
+      properties:
+        code: {type: string, enum: [first_trip, on_the_road_1, on_the_road_2, on_the_road_3, on_the_road_4, first_friend, sociable, life_of_the_party, cartographer_1, cartographer_2, cartographer_3, cartographer_4, guide_1, guide_2, guide_3, guide_4]}
+        threshold: {type: integer, minimum: 1}
     AccountTripPage:
       type: object
       additionalProperties: false

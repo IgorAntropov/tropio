@@ -12,10 +12,10 @@ import {
 import { composeSql } from './compose-sql.mjs';
 
 export const migrationDirectory = fileURLToPath(new URL('./', import.meta.url));
-export const migrationOwners = ['platform', 'identity', 'travel', 'geo'];
+export const migrationOwners = ['platform', 'identity', 'travel', 'geo', 'social'];
 
-function readMigrations(directory) {
-  return migrationOwners.flatMap((owner) => {
+function readMigrations(directory, owners) {
+  return owners.flatMap((owner) => {
     const ownerDirectory = join(directory, owner);
     const files = readdirSync(ownerDirectory).filter(name => name.endsWith('.sql')).sort();
     if (files.length === 0) {
@@ -67,8 +67,8 @@ VALUES ${manifestRow(migration)};
 `;
 }
 
-export function applyMigrations({ database, directory = migrationDirectory } = {}) {
-  const migrations = readMigrations(directory);
+export function applyMigrations({ database, directory = migrationDirectory, owners = migrationOwners } = {}) {
+  const migrations = readMigrations(directory, owners);
   const manifest = migrations.map(manifestRow).join(',\n');
   const sql = `
 SET LOCAL client_min_messages = warning;

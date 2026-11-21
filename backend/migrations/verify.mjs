@@ -61,16 +61,23 @@ inTestDatabase((database, sql) => {
 
 inTestDatabase((database, sql) => {
   sql('CREATE EXTENSION postgis WITH SCHEMA public;');
+  const previousOwners = migrationOwners.filter(owner => owner !== 'social');
   const beforeCovers = mkdtempSync(join(tmpdir(), 'tropio-travel-upgrade-'));
   try {
-    for (const owner of migrationOwners) {
+    for (const owner of previousOwners) {
       cpSync(join(migrationDirectory, owner), join(beforeCovers, owner), {
         recursive: true,
-        filter: entry => owner !== 'travel' || !entry.endsWith('.sql') || Number(basename(entry).slice(0, 4)) <= 8,
+        filter: entry => !entry.endsWith('.sql') || ((owner !== 'platform' || basename(entry).startsWith('0001_'))
+          && (owner !== 'travel' || Number(basename(entry).slice(0, 4)) <= 8)
+          && (owner !== 'identity' || Number(basename(entry).slice(0, 4)) <= 2)),
       });
     }
-    applyMigrations({ database, directory: beforeCovers });
+    applyMigrations({ database, directory: beforeCovers, owners: previousOwners });
     sql(`
+SET LOCAL ROLE tropio_identity_runtime;
+INSERT INTO identity.users (email_normalized, display_name, avatar_asset_id)
+SELECT 'avatar-upgrade@example.test', 'Avatar upgrade fixture', id FROM identity.avatar_assets ORDER BY id LIMIT 1;
+RESET ROLE;
 SET LOCAL ROLE tropio_travel_runtime;
 WITH old_trip AS (
   INSERT INTO travel.trips (owner_user_id, created_by_user_id, title)
@@ -82,7 +89,7 @@ SELECT id, 1, 'Термос', true FROM old_trip;
     for (const file of readdirSync(join(migrationDirectory, 'travel')).filter(name => /^00(09|10)_/.test(name))) {
       cpSync(join(migrationDirectory, 'travel', file), join(beforeCovers, 'travel', file));
     }
-    applyMigrations({ database, directory: beforeCovers });
+    applyMigrations({ database, directory: beforeCovers, owners: previousOwners });
     sql(`
 SET LOCAL ROLE tropio_travel_runtime;
 WITH existing AS (
@@ -94,7 +101,7 @@ SELECT owner_user_id, gen_random_uuid(), label, jsonb_build_object('id', id, 'la
 `);
     const oldFolders = '0011_personal_equipment_groups.sql';
     cpSync(join(migrationDirectory, 'travel', oldFolders), join(beforeCovers, 'travel', oldFolders));
-    applyMigrations({ database, directory: beforeCovers });
+    applyMigrations({ database, directory: beforeCovers, owners: previousOwners });
     sql(`
 SET LOCAL ROLE tropio_travel_runtime;
 INSERT INTO travel.trip_applications (trip_id, applicant_user_id)
@@ -102,7 +109,7 @@ SELECT id, gen_random_uuid() FROM travel.trips WHERE title = 'Travel upgrade fix
 `);
     const oldFavorites = '0012_trip_favorites.sql';
     cpSync(join(migrationDirectory, 'travel', oldFavorites), join(beforeCovers, 'travel', oldFavorites));
-    applyMigrations({ database, directory: beforeCovers });
+    applyMigrations({ database, directory: beforeCovers, owners: previousOwners });
     sql(`
 SET LOCAL ROLE tropio_travel_runtime;
 INSERT INTO travel.trip_favorites (trip_id, user_id)
@@ -117,6 +124,11 @@ UNION ALL SELECT trip_id, applicant_user_id FROM travel.trip_applications;
   sql(`
 DO $fixture$
 BEGIN
+    IF NOT EXISTS (SELECT FROM identity.users u JOIN identity.avatar_assets a ON a.id = u.avatar_asset_id
+                   WHERE u.email_normalized = 'avatar-upgrade@example.test' AND u.custom_avatar_object_key IS NULL)
+        OR EXISTS (SELECT FROM identity.custom_avatars) THEN
+        RAISE EXCEPTION 'Existing system avatar changed during upgrade';
+    END IF;
     IF EXISTS (SELECT FROM travel.trip_favorites f JOIN travel.trips t ON t.id = f.trip_id WHERE f.user_id = t.owner_user_id)
        OR NOT EXISTS (SELECT FROM travel.trip_favorites f JOIN travel.trip_applications a ON (a.trip_id, a.applicant_user_id) = (f.trip_id, f.user_id))
        OR NOT EXISTS (

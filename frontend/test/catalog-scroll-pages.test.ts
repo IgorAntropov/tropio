@@ -30,6 +30,30 @@ vi.mock('../src/pages/public-catalog/model/use-public-resource', () => ({
 
 afterEach(() => vi.unstubAllGlobals());
 
+it('rebuilds a returning list from currently visible trips and continues after the restored prefix', async () => {
+  const scope = effectScope();
+  const request = vi.fn();
+  vi.stubGlobal('$fetch', request);
+  try {
+    const items = Array.from({ length: 24 }, (_, index) => ({ trip_id: 'visible-' + index }));
+    request.mockResolvedValueOnce({ items, next_cursor: 'after-restoration' });
+    const pages = scope.run(() => useCatalogPages(() => true, () => ({ q: 'лес' }), async () => [], () => 2))!;
+    await pages.refresh();
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]![1].query).toEqual({ q: 'лес', limit: 24, cursor: undefined });
+    expect(pages.value.value?.items).toEqual(items);
+    expect(pages.value.value?.depth).toBe(2);
+
+    request.mockResolvedValueOnce({ items: [{ trip_id: 'new' }], next_cursor: null });
+    await pages.more();
+    expect(request.mock.calls[1]![1].query).toEqual({ q: 'лес', limit: 12, cursor: 'after-restoration' });
+    expect(pages.value.value?.items.at(-1)).toEqual({ trip_id: 'new' });
+  }
+  finally {
+    scope.stop();
+  }
+});
+
 it('appends only the next cursor and keeps the verified prefix when rechecking later pages fails', async () => {
   const fetch = vi.fn();
   vi.stubGlobal('$fetch', fetch);

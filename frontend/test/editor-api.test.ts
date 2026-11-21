@@ -4,7 +4,10 @@ import {
   it,
   vi,
 } from 'vitest';
-import { editorApi } from '../src/shared/api';
+import {
+  editorApi,
+  sessionEvents,
+} from '../src/shared/api';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -46,4 +49,56 @@ it('preserves network failures and sends the POI bounding box as one form parame
   const url = new URL(String(request.mock.calls[0]?.[0]), 'http://localhost');
   expect(url.pathname).toBe('/api/v1/pois');
   expect([...url.searchParams]).toEqual([['scope', 'trip'], ['trip_id', uuid], ['bbox', '84,56,85,57']]);
+});
+
+it('invalidates the overview only for confirmed changes to its trip counts', async () => {
+  const changed = vi.fn();
+  sessionEvents.addEventListener('overview-changed', changed);
+  const request = vi.fn<typeof fetch>();
+  vi.stubGlobal('fetch', request);
+  const command = { csrf: 'csrf', key: uuid };
+  try {
+    request.mockResolvedValueOnce(Response.json({}, { status: 409 }));
+    await expect(editorApi.createTrip({ title: 'Тропа' }, command)).rejects.toMatchObject({ status: 409 });
+    request.mockResolvedValueOnce(Response.json({ status: 'pending' }));
+    await editorApi.requestTripParticipation(uuid, 'request', command);
+    request.mockResolvedValueOnce(Response.json({ status: 'pending' }));
+    await editorApi.getPublicationOperation(uuid, uuid);
+    request.mockResolvedValueOnce(Response.json({ saved: true }));
+    await editorApi.setTripFavorite(uuid, true, command);
+    expect(changed).not.toHaveBeenCalled();
+    request.mockResolvedValueOnce(Response.json({ trip_id: uuid }, { status: 201 }));
+    await editorApi.createTrip({ title: 'Тропа' }, command);
+    request.mockResolvedValueOnce(Response.json({ status: 'joined' }));
+    await editorApi.requestTripParticipation(uuid, 'open', command);
+    request.mockResolvedValueOnce(Response.json({ status: 'succeeded' }));
+    await editorApi.getPublicationOperation(uuid, uuid);
+    expect(changed).toHaveBeenCalledTimes(3);
+  }
+  finally {
+    sessionEvents.removeEventListener('overview-changed', changed);
+  }
+});
+
+it('invalidates cartography for a saved connected route with ready positive-length tracks', async () => {
+  const changed = vi.fn();
+  sessionEvents.addEventListener('overview-changed', changed);
+  const request = vi.fn<typeof fetch>();
+  vi.stubGlobal('fetch', request);
+  const command = { csrf: 'csrf', key: uuid };
+  const body = { route_revision_id: null, points: [], tracks: [] };
+  try {
+    for (const track of [
+      { status: 'needs_rebuild', distance_m: 30 },
+      { status: 'ready', distance_m: 0 },
+      { status: 'ready', distance_m: 30 },
+    ]) {
+      request.mockResolvedValueOnce(Response.json({ points: [{}, {}], tracks: [track] }));
+      await editorApi.replaceRoute(uuid, body, command);
+      expect(changed).toHaveBeenCalledTimes(track.status === 'ready' && track.distance_m > 0 ? 1 : 0);
+    }
+  }
+  finally {
+    sessionEvents.removeEventListener('overview-changed', changed);
+  }
 });
