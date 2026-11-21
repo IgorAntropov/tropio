@@ -22,13 +22,14 @@ export function usePublicResource<T>(key: string, load: (signal: AbortSignal) =>
     getCachedData: (id, app) => app.isHydrating ? app.payload.data[id] : undefined,
   });
   let timer: ReturnType<typeof setInterval> | undefined;
-  const check = () => {
+  const refresh = (dedupe: 'cancel' | 'defer') => {
     if (document.visibilityState === 'hidden') {
       return;
     }
     hidden.value = false;
-    void resource.refresh({ dedupe: 'cancel' });
+    void resource.refresh({ dedupe });
   };
+  const check = () => refresh('defer');
   const suspend = () => {
     hidden.value = true;
     resource.clear();
@@ -65,7 +66,7 @@ export function usePublicResource<T>(key: string, load: (signal: AbortSignal) =>
     value: computed(() => hidden.value ? null : resource.data.value?.body),
     status: computed(() => hidden.value ? undefined : resource.data.value?.status),
     pending: resource.pending,
-    refresh: check,
+    refresh: () => refresh('cancel'),
     clear: resource.clear,
   };
 }

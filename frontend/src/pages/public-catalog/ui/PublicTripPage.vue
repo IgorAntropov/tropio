@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   TripCard,
+  TripCloseButton,
   TripEquipmentList,
   TripTimeline,
 } from '@fsd/entities/public-trip';
@@ -12,9 +13,11 @@ import type {
 } from '@fsd/shared/api';
 import {
   UiBackLink,
-  UiButton,
+  UiSkeleton,
 } from '@fsd/shared/ui/kit';
 import { catalogQuery } from '../model/use-catalog-screens';
+import CatalogDetailSkeleton from './CatalogDetailSkeleton.vue';
+import CatalogTimelineSkeleton from './CatalogTimelineSkeleton.vue';
 import PublicReadIssue from './PublicReadIssue.vue';
 
 const props = withDefaults(defineProps<{ trip: PublicTrip | null; preview?: PublicTripSummary; status?: number; pending: boolean; mobile: boolean; favorite?: boolean; own: boolean }>(), { preview: undefined, status: undefined, favorite: undefined });
@@ -27,11 +30,11 @@ const panel = ref<HTMLElement>();
 const card = computed(() => props.trip ?? props.preview);
 let focusTarget: HTMLElement | undefined;
 function focusDetails() {
-  if (!panel.value || (!card.value && (props.pending || !props.status))) {
+  if (!panel.value) {
     return;
   }
   const anchor = route.hash === '#participation' && Boolean(props.trip);
-  if (route.hash === '#participation' && card.value && !props.trip) {
+  if (route.hash === '#participation' && !props.trip && (card.value || props.pending)) {
     return;
   }
   const target = panel.value.querySelector<HTMLElement>(anchor ? '#participation' : '.catalog-close-trip');
@@ -55,6 +58,7 @@ watch(() => [props.trip?.trip_id, props.pending, props.status], focusDetails, { 
       :data-scroll-pending="pending || undefined"
       data-scroll-region="catalog-detail"
     >
+      <span v-if="pending && !trip" class="tk-sr-only" role="status">{{ t('catalog.loadingTrip') }}</span>
       <TripCard
         v-if="card"
         expanded
@@ -72,11 +76,12 @@ watch(() => [props.trip?.trip_id, props.pending, props.status], focusDetails, { 
             @changed="emit('favorite', $event)"
           />
         </template>
-        <template v-if="trip" #participation>
-          <div class="catalog-personal-actions">
+        <template #participation>
+          <div v-if="trip" class="catalog-personal-actions">
             <TripParticipationAction :trip="trip" />
             <NuxtLink v-if="own" class="tk-button" :to="{ path: '/trips/' + trip.trip_id, hash: '#members' }">{{ t('accountTrips.manageRoster') }}</NuxtLink>
           </div>
+          <UiSkeleton v-else class="catalog-participation-skeleton" />
         </template>
         <template #timeline>
           <TripTimeline
@@ -85,30 +90,13 @@ watch(() => [props.trip?.trip_id, props.pending, props.status], focusDetails, { 
             v-model:segment="segment"
             :trip="trip"
           />
-          <p v-else role="status">{{ t('catalog.loadingTrip') }}</p>
+          <CatalogTimelineSkeleton v-else :days="card.day_count" />
           <TripEquipmentList v-if="trip" :items="trip.equipment" />
         </template>
       </TripCard>
+      <CatalogDetailSkeleton v-else-if="!status || status === 200" @close="emit('close')" />
       <div v-else class="catalog-detail-issue">
-        <UiButton
-          :aria-label="t('catalog.closeDetails')"
-          class="catalog-close-trip"
-          icon-only
-          size="small"
-          :title="t('catalog.closeDetails')"
-          @click="emit('close')"
-        >
-          <svg
-            aria-hidden="true"
-            fill="none"
-            height="14"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-width="1.8"
-            viewBox="0 0 14 14"
-            width="14"
-          ><path d="m1 1 12 12M13 1 1 13" /></svg>
-        </UiButton>
+        <TripCloseButton @click="emit('close')" />
         <PublicReadIssue
           detail
           :pending="pending"
@@ -126,4 +114,5 @@ watch(() => [props.trip?.trip_id, props.pending, props.status], focusDetails, { 
 
 <style scoped>
 .catalog-personal-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--tk-space-2); }
+.catalog-participation-skeleton { inline-size: 9rem; max-inline-size: 100%; block-size: var(--tk-target); }
 </style>

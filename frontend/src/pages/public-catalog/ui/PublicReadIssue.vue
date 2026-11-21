@@ -22,6 +22,7 @@ const message = computed(() => {
   <SystemErrorState
     v-else
     class="catalog-read-issue"
+    compact
     :description="message?.description"
     :heading="detail ? 'h1' : 'h2'"
     :status-code="status"

@@ -18,15 +18,14 @@ export function catalogQuery(query: LocationQuery): LocationQueryRaw {
 export function useCatalogScreens(tripId: Ref<string>) {
   const route = useRoute();
   const router = useRouter();
-  const mobile = ref(false);
-  let viewport: MediaQueryList | undefined;
+  const viewport = import.meta.client ? window.matchMedia('(max-width: 699px)') : undefined;
+  const mobile = ref(!useNuxtApp().isHydrating && !!viewport?.matches);
   const updateViewport = () => {
     mobile.value = viewport?.matches ?? false;
   };
   onMounted(() => {
-    viewport = window.matchMedia('(max-width: 699px)');
     updateViewport();
-    viewport.addEventListener('change', updateViewport);
+    viewport?.addEventListener('change', updateViewport);
   });
   onBeforeUnmount(() => viewport?.removeEventListener('change', updateViewport));
 

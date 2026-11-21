@@ -6,16 +6,15 @@ import {
 } from 'vue';
 import UiSkeleton from './UiSkeleton.vue';
 
-defineProps<{ src: string; alt: string; fit?: 'contain' | 'cover' }>();
+defineProps<{ src: string; alt: string; fit?: 'contain' | 'cover'; loading?: 'lazy' | 'eager' }>();
 const image = useTemplateRef<HTMLImageElement>('image');
 const state = ref<'loading' | 'ready' | 'error'>('loading');
 const attempt = ref(0);
 
-watch(image, async (element) => {
-  if (!element) {
+async function reveal(element: HTMLImageElement) {
+  if (image.value !== element) {
     return;
   }
-  state.value = 'loading';
   try {
     await element.decode();
     if (image.value === element) {
@@ -27,10 +26,21 @@ watch(image, async (element) => {
       state.value = 'error';
     }
   }
+}
+
+watch(image, (element) => {
+  state.value = 'loading';
+  if (element?.complete) {
+    void reveal(element);
+  }
 }, { flush: 'post' });
 
 function retry() {
   attempt.value++;
+}
+
+function imageSettled(event: Event) {
+  void reveal(event.currentTarget as HTMLImageElement);
 }
 </script>
 
@@ -42,8 +52,11 @@ function retry() {
       :alt="alt"
       :class="{ 'tk-image-ready': state === 'ready' }"
       decoding="async"
+      :loading="loading"
       :src="src"
       :style="{ objectFit: fit ?? 'cover' }"
+      @error="imageSettled"
+      @load="imageSettled"
     >
     <UiSkeleton v-if="state === 'loading'" class="tk-image-skeleton" />
     <slot v-if="state === 'error'" name="error" :retry="retry" />
@@ -56,4 +69,8 @@ function retry() {
 .tk-image img { display: block; visibility: hidden; }
 .tk-image .tk-image-ready { visibility: visible; }
 .tk-image-skeleton { border-radius: inherit; }
+@media (scripting: none) {
+  .tk-image img { visibility: visible; }
+  .tk-image .tk-image-skeleton { display: none; }
+}
 </style>

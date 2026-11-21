@@ -4,9 +4,10 @@ import type {
   PublicTrip,
   PublicTripSummary,
 } from '@fsd/shared/api';
-import { UiButton } from '@fsd/shared/ui/kit';
+import { UiImage } from '@fsd/shared/ui/kit';
 import { publicTripCover } from '../trip-cover';
 import OrganizerLink from './OrganizerLink.vue';
+import TripCloseButton from './TripCloseButton.vue';
 import TripFacts from './TripFacts.vue';
 import TripRouteMetrics from './TripRouteMetrics.vue';
 
@@ -19,30 +20,14 @@ const { t } = useI18n();
 <template>
   <article class="catalog-card" :class="{ 'catalog-card--active': active, 'catalog-card-expanded': expanded }">
     <div class="catalog-cover">
-      <img alt="" loading="lazy" :src="publicTripCover(trip)">
+      <UiImage alt="" :loading="expanded ? 'eager' : 'lazy'" :src="publicTripCover(trip)">
+        <template v-if="trip.cover_id" #error><img alt="" loading="lazy" src="/default-trip-cover.webp"></template>
+      </UiImage>
       <slot name="favorite" />
     </div>
     <header v-if="expanded" class="catalog-expanded-title">
       <h1>{{ trip.title }}</h1>
-      <UiButton
-        :aria-label="t('catalog.closeDetails')"
-        class="catalog-close-trip"
-        icon-only
-        size="small"
-        :title="t('catalog.closeDetails')"
-        @click="$emit('close')"
-      >
-        <svg
-          aria-hidden="true"
-          fill="none"
-          height="14"
-          stroke="currentColor"
-          stroke-linecap="round"
-          stroke-width="1.8"
-          viewBox="0 0 14 14"
-          width="14"
-        ><path d="m1 1 12 12M13 1 1 13" /></svg>
-      </UiButton>
+      <TripCloseButton @click="$emit('close')" />
     </header>
     <h3 v-else><NuxtLink
       class="catalog-card-link"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PublicOrganizerPage } from '@fsd/pages/public-catalog';
+import { PublicOrganizerPage } from '@fsd/pages/public-catalog/organizer';
 import {
   workspaceConfirmedKey,
   workspaceMemberKey,

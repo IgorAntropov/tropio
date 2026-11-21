@@ -4,9 +4,9 @@ import {
   ref,
   shallowRef,
 } from 'vue';
+import type { Ref } from 'vue';
 
-export function useCatalogLocation(autoAllowed: () => boolean) {
-  const near = shallowRef<string>();
+export function useCatalogLocation(near: Ref<string | undefined>, autoAllowed: () => boolean) {
   const located = shallowRef<string>();
   const issue = ref(false);
   const locating = ref(false);
@@ -76,7 +76,6 @@ export function useCatalogLocation(autoAllowed: () => boolean) {
     permission?.removeEventListener('change', permissionChanged);
   });
   return {
-    near,
     located,
     locating,
     issue,

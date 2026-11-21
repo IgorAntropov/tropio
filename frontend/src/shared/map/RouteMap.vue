@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   onBeforeUnmount,
   onMounted,
   ref,
   watch,
 } from 'vue';
+import RouteMapState from './RouteMapState.vue';
 import type {
   MapFlightPhase,
   MapFocus,
@@ -217,9 +217,8 @@ onBeforeUnmount(() => {
     :data-map-ready="!loading && !unavailable ? 'true' : undefined"
     :data-trip-flight="flightPhase"
   >
-    <div ref="container" class="route-map__canvas" :inert="flightPhase === 'flying'" />
-    <p v-if="loading" class="route-map__message" role="status">Карта загружается…</p>
-    <p v-if="unavailable" class="route-map__message" role="alert">{{ unavailableText }}</p>
+    <div ref="container" class="route-map__canvas" :inert="flightPhase === 'flying' || (tripMarkers && loading)" />
+    <RouteMapState v-if="loading || unavailable" :error="unavailable ? unavailableText : undefined" :skeleton="loading && tripMarkers" />
   </div>
 </template>
 
@@ -235,23 +234,6 @@ onBeforeUnmount(() => {
 .route-map__canvas {
   position: absolute;
   inset: 0;
-}
-
-.route-map__message {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: max-content;
-  max-width: calc(100% - 3rem);
-  margin: 0;
-  padding: 0.75rem 1rem;
-  border: 1px solid #d5ddd6;
-  border-radius: 0.75rem;
-  color: #253b36;
-  background: #f9fbf5;
-  text-align: center;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
 }
 
 .route-map :deep(.maplibregl-ctrl-top-right) {
