@@ -3,7 +3,7 @@ import '@fsd/shared/ui/kit/kit.css';
 import WorkspaceAccount from './WorkspaceAccount.vue';
 import './workspace-shell.css';
 
-const props = defineProps<{ immersive?: boolean }>();
+const props = defineProps<{ guest?: boolean; immersive?: boolean }>();
 const route = useRoute();
 const { t } = useI18n();
 const sidebarStorageKey = 'tropio:sidebar-collapsed';
@@ -86,13 +86,12 @@ const active = computed(() => {
 
 <template>
   <div
-    class="workspace-shell"
-    :class="{ 'workspace-shell--immersive': immersive, 'workspace-shell--animate-sidebar': animateSidebar }"
-    :data-sidebar-collapsed="sidebarPreference"
+    :class="{ 'workspace-shell': !guest, 'workspace-shell--immersive': !guest && immersive, 'workspace-shell--animate-sidebar': !guest && animateSidebar }"
+    :data-sidebar-collapsed="guest ? undefined : sidebarPreference"
   >
-    <a class="workspace-skip" href="#workspace-content">{{ t('workspace.skipToContent') }}</a>
+    <a v-if="!guest" class="workspace-skip" href="#workspace-content">{{ t('workspace.skipToContent') }}</a>
 
-    <aside id="workspace-sidebar" class="workspace-sidebar">
+    <aside v-if="!guest" id="workspace-sidebar" class="workspace-sidebar">
       <NuxtLink :aria-label="t('workspace.openFeed')" class="workspace-brand" to="/feed">
         <img
           alt=""
@@ -157,8 +156,8 @@ const active = computed(() => {
       </button>
     </aside>
 
-    <div class="workspace-main">
-      <header class="workspace-header">
+    <div :class="{ 'workspace-main': !guest }">
+      <header v-if="!guest" class="workspace-header">
         <NuxtLink :aria-label="t('workspace.openFeed')" class="workspace-brand workspace-header-brand" to="/feed">
           <img
             alt=""
@@ -185,7 +184,11 @@ const active = computed(() => {
           <WorkspaceAccount />
         </div>
       </header>
-      <div id="workspace-content" class="workspace-content" tabindex="-1">
+      <div
+        :id="guest ? undefined : 'workspace-content'"
+        :class="{ 'workspace-content': !guest }"
+        :tabindex="guest ? undefined : -1"
+      >
         <slot />
       </div>
     </div>

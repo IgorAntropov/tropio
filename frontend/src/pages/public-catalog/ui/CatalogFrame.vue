@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import '@fsd/shared/ui/kit/kit.css';
 import './catalog.css';
+
+defineProps<{ sessionConfirmed?: boolean | null }>();
 const { t } = useI18n();
 </script>
 
 <template>
-  <div class="catalog-frame">
-    <a class="catalog-skip" href="#catalog-content">{{ t('workspace.skipToContent') }}</a>
-    <header class="catalog-bar">
+  <div :class="{ 'catalog-frame': !sessionConfirmed, 'catalog-frame--checking': sessionConfirmed === null }" data-catalog-frame>
+    <a v-if="!sessionConfirmed" class="catalog-skip" href="#catalog-content">{{ t('workspace.skipToContent') }}</a>
+    <header v-if="!sessionConfirmed" class="catalog-bar">
       <NuxtLink class="catalog-brand" to="/catalog"><img
         alt=""
         height="34"
@@ -34,6 +36,6 @@ const { t } = useI18n();
         </NuxtLink>
       </nav>
     </header>
-    <main id="catalog-content" tabindex="-1"><slot /></main>
+    <main id="catalog-content" :class="{ 'catalog-workspace-content': sessionConfirmed }" tabindex="-1"><slot /></main>
   </div>
 </template>

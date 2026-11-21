@@ -1,15 +1,59 @@
 import {
+  afterEach,
   describe,
   expect,
   it,
+  vi,
 } from 'vitest';
+import { ref } from 'vue';
+import {
+  createMemoryHistory,
+  createRouter,
+} from 'vue-router';
+import {
+  beginWorkspaceNavigation,
+  verifyWorkspaceSession,
+} from '../app/composables/useWorkspaceSession';
 import {
   getWorkspaceSessionStatus,
   mayCheckWorkspaceSession,
   workspaceReturnPath,
 } from '../src/shared/session';
 
+vi.mock('@fsd/shared/session', () => import('../src/shared/session'));
+afterEach(() => vi.unstubAllGlobals());
+
 describe('workspace sessions', () => {
+  it('keeps the current catalog shell on a temporary identity failure and clears it on a confirmed guest response', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/catalog', component: {}, meta: { publicWorkspace: true } }],
+    });
+    const route = router.resolve('/catalog');
+    const app = {};
+    const confirmed = ref<boolean | null>(null);
+    const request = vi.fn();
+    vi.stubGlobal('useNuxtApp', () => app);
+    vi.stubGlobal('useRequestFetch', () => request);
+    vi.stubGlobal('useState', () => confirmed);
+    beginWorkspaceNavigation(route);
+
+    request.mockRejectedValueOnce(new TypeError('Disconnected'));
+    expect(await verifyWorkspaceSession(route)).toBe('unavailable');
+    expect(confirmed.value).toBe(false);
+
+    confirmed.value = true;
+    request.mockRejectedValueOnce(new TypeError('Disconnected'));
+    expect(await verifyWorkspaceSession(route)).toBe('unavailable');
+    expect(confirmed.value).toBe(true);
+
+    request.mockImplementationOnce(async (_path, { onResponse }) => {
+      onResponse({ response: { status: 401, _data: { code: 'SESSION_REQUIRED' } } });
+    });
+    expect(await verifyWorkspaceSession(route)).toBe('guest');
+    expect(confirmed.value).toBe(false);
+  });
+
   it('distinguishes a verified BFF session, a guest, and a dependency failure', () => {
     expect(getWorkspaceSessionStatus(200, { id: 'account-id' })).toBe('authenticated');
     expect(getWorkspaceSessionStatus(401, { code: 'SESSION_REQUIRED' })).toBe('guest');

@@ -472,15 +472,47 @@ it('maps an editor dependency disconnect to a correlated 503 Problem', async () 
   expect(await response.json()).toMatchObject({ code: 'DEPENDENCY_UNAVAILABLE', request_id: requestId });
 });
 
-it('renders the same published trip for guests and members and drops revoked SSR metadata', async () => {
+it.each(['/catalog', `/catalog/${routeId}`])('renders the guest and workspace shells around the same public content at %s', async (path) => {
+  const guest = await fetch(path);
+  expect(guest.status).toBe(200);
+  const guestHtml = await guest.text();
+  expect(guestHtml).toContain(catalogSummary.title);
+  expect(guestHtml).toMatch(/<div class="catalog-frame catalog-frame--checking"/);
+  const login = guestHtml.match(/<a\b[^>]*href="\/login"[^>]*>([\s\S]*?)<\/a>/)?.[1];
+  expect(login?.replace(/<[^>]+>/g, '').trim()).toBe('Войти');
+
+  const member = await fetch(path, { headers: { cookie: 'tropio_session=workspace-active' } });
+  expect(member.status).toBe(200);
+  const memberHtml = await member.text();
+  expect(memberHtml).toContain(catalogSummary.title);
+  expect(memberHtml).toContain('id="workspace-sidebar"');
+  expect(memberHtml).toMatch(/<main\b[^>]*class="catalog-workspace-content"/);
+  expect(memberHtml).not.toContain('class="catalog-bar"');
+  expect(memberHtml).not.toContain('workspace-csrf-fixture');
+});
+
+it('serves the catalog with guest navigation when identity verification fails', async () => {
+  identityDisconnected = true;
+  try {
+    const response = await fetch('/catalog', { headers: { cookie: 'tropio_session=workspace-active' } });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain(catalogSummary.title);
+    expect(html).toContain('class="catalog-bar"');
+    expect(html).toMatch(/<div class="catalog-frame"[^>]*>/);
+  }
+  finally {
+    identityDisconnected = false;
+  }
+});
+
+it('renders public trips without forwarding credentials and drops revoked SSR metadata', async () => {
   const headers = { 'cookie': 'tropio_session=workspace-active', 'x-csrf-token': 'ignore-on-public-read' };
   try {
     const catalog = await fetch('/catalog', { headers });
     expect(catalog.status).toBe(200);
     const publicHtml = await catalog.text();
     expect(publicHtml).toContain(catalogSummary.title);
-    const loginLinkContent = publicHtml.match(/<a\b[^>]*href="\/login"[^>]*>([\s\S]*?)<\/a>/)?.[1];
-    expect(loginLinkContent?.replace(/<[^>]+>/g, '').trim()).toBe('Войти');
     const details = await fetch(`/catalog/${routeId}`, { headers });
     expect(details.status).toBe(200);
     expect(details.headers.get('cache-control')).toContain('no-store');

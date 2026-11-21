@@ -335,7 +335,7 @@ body:has(.workspace-shell) {
   }
 
   .workspace-shell {
-    --workspace-top-bar: 60px;
+    --workspace-top-bar: 61px;
     --workspace-bottom-bar: calc(72px + env(safe-area-inset-bottom, 0px));
     grid-template-columns: minmax(0, 1fr);
     padding-block-end: var(--workspace-bottom-bar);

@@ -3,7 +3,7 @@ import { verifyWorkspaceSession } from '../composables/useWorkspaceSession';
 
 export default defineNuxtRouteMiddleware(async (to) => {
   const status = await verifyWorkspaceSession(to);
-  if (status === 'guest') {
+  if (status === 'guest' && !to.meta.publicWorkspace) {
     const returnTo = workspaceReturnPath(to.fullPath);
     return navigateTo({ path: '/login', query: returnTo ? { returnTo } : {} }, { replace: true });
   }

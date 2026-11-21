@@ -31,6 +31,7 @@ import CatalogFrame from './CatalogFrame.vue';
 import PublicReadIssue from './PublicReadIssue.vue';
 import PublicTripPageView from './PublicTripPage.vue';
 
+defineProps<{ sessionConfirmed: boolean | null }>();
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -463,7 +464,7 @@ if (import.meta.server) {
 </script>
 
 <template>
-  <CatalogFrame>
+  <CatalogFrame :session-confirmed="sessionConfirmed">
     <div class="catalog-page" :class="{ 'catalog-list-mode': mode === 'list', 'catalog-trip-open': !!expandedId }">
       <h1 v-if="!expandedId" class="tk-sr-only">{{ t('catalog.title') }}</h1>
       <div class="catalog-tools">

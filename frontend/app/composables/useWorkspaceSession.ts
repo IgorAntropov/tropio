@@ -42,7 +42,7 @@ export function beginWorkspaceNavigation(route: RouteLocationNormalized) {
 
 export async function verifyWorkspaceSession(
   to: RouteLocationNormalized,
-): Promise<Exclude<WorkspaceSession, 'unavailable'> | undefined> {
+): Promise<WorkspaceSession | undefined> {
   const nuxtApp = useNuxtApp();
   const navigation = workspaceNavigations.get(nuxtApp);
   if (navigation?.route !== to || navigation.controller.signal.aborted) {
@@ -68,7 +68,7 @@ export async function verifyWorkspaceSession(
     return;
   }
 
-  const confirmed = useState(workspaceConfirmedKey, () => false);
+  const confirmed = useState<boolean | null>(workspaceConfirmedKey, () => null);
   const member = import.meta.client ? useState<WorkspaceMember | null>(workspaceMemberKey, () => null) : undefined;
   const memberBeforeRequest = member?.value;
   const fetch = useRequestFetch();
@@ -88,6 +88,10 @@ export async function verifyWorkspaceSession(
   }
 
   const status = session ?? 'unavailable';
+  if (status === 'unavailable' && to.meta.publicWorkspace) {
+    confirmed.value ??= false;
+    return status;
+  }
   confirmed.value = status === 'authenticated';
   if (member && status !== 'authenticated') {
     member.value = null;

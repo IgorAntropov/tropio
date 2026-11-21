@@ -22,6 +22,7 @@ export function useCatalogExpansion(tripId: Ref<string>, selectedId: Ref<string>
   let focusTimeout: ReturnType<typeof setTimeout> | undefined;
   let closing = false;
   let removeNavigationHook: (() => void) | undefined;
+  let controlsRoot: HTMLElement | undefined;
 
   function remember(event: MouseEvent) {
     if (event.button || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
@@ -263,15 +264,16 @@ export function useCatalogExpansion(tripId: Ref<string>, selectedId: Ref<string>
     removeNavigationHook = router.afterEach(() => {
       closing = false;
     });
-    document.addEventListener('click', outside, true);
+    controlsRoot = stage.value?.closest<HTMLElement>('[data-catalog-frame]') ?? undefined;
+    controlsRoot?.addEventListener('click', outside, true);
     document.addEventListener('keydown', escape);
   });
   onBeforeUnmount(() => {
     removeNavigationHook?.();
     stopMotion();
     stopFocusRestore();
+    controlsRoot?.removeEventListener('click', outside, true);
     if (import.meta.client) {
-      document.removeEventListener('click', outside, true);
       document.removeEventListener('keydown', escape);
     }
   });
