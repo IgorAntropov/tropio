@@ -6,6 +6,7 @@ import {
   onUnmounted,
   ref,
   useId,
+  watch,
 } from 'vue';
 import { formatCalendarPeriod } from '@fsd/shared/i18n/format-calendar-period';
 import UiSelect from '../kit/UiSelect.vue';
@@ -34,6 +35,7 @@ const { t, locale } = useI18n();
 const id = useId();
 const root = ref<HTMLElement>();
 const trigger = ref<HTMLButtonElement>();
+const panel = ref<HTMLElement>();
 const grid = ref<HTMLTableElement>();
 const open = ref(false);
 const today = ref('');
@@ -99,9 +101,59 @@ const selectedYear = computed({
 function close(restoreFocus = false) {
   open.value = false;
   if (restoreFocus) {
-    trigger.value?.focus();
+    trigger.value?.focus({ preventScroll: true });
   }
 }
+
+watch(panel, (popup, _previous, onCleanup) => {
+  const button = trigger.value;
+  if (!popup || !button) {
+    return;
+  }
+  popup.showPopover?.();
+  const gap = 8;
+  const viewport = window.visualViewport;
+  const place = () => {
+    const rect = button.getBoundingClientRect();
+    const top = viewport?.offsetTop ?? 0;
+    const left = viewport?.offsetLeft ?? 0;
+    const width = viewport?.width ?? document.documentElement.clientWidth;
+    const height = viewport?.height ?? document.documentElement.clientHeight;
+    const panelWidth = Math.min(rect.width, width - 2 * gap);
+    popup.style.width = `${panelWidth}px`;
+    popup.style.left = `${Math.max(left + gap, Math.min(rect.left, left + width - gap - panelWidth))}px`;
+    const below = top + height - rect.bottom - 2 * gap;
+    const above = rect.top - top - 2 * gap;
+    const opensAbove = below < popup.scrollHeight + 2 && above > below;
+    popup.style.top = `${opensAbove ? rect.top - gap : rect.bottom + gap}px`;
+    popup.style.maxHeight = `${Math.max(0, opensAbove ? above : below)}px`;
+    popup.toggleAttribute('data-above', opensAbove);
+  };
+  place();
+  const resize = new ResizeObserver(place);
+  resize.observe(button);
+  resize.observe(popup);
+  if (button.form) {
+    resize.observe(button.form);
+  }
+  const visibility = new IntersectionObserver(([entry]) => {
+    if (entry && !entry.isIntersecting) {
+      close();
+    }
+  });
+  visibility.observe(button);
+  const events = new AbortController();
+  const options = { capture: true, signal: events.signal };
+  window.addEventListener('scroll', place, options);
+  window.addEventListener('resize', place, options);
+  viewport?.addEventListener('resize', place, options);
+  viewport?.addEventListener('scroll', place, options);
+  onCleanup(() => {
+    events.abort();
+    resize.disconnect();
+    visibility.disconnect();
+  });
+}, { flush: 'post' });
 
 async function focusDay() {
   await nextTick();
@@ -253,8 +305,10 @@ onUnmounted(() => document.removeEventListener('pointerdown', pointer));
     <div
       v-if="open && !disabled"
       :id="id"
+      ref="panel"
       :aria-labelledby="id + '-label'"
       class="date-range-panel"
+      popover="manual"
       role="group"
     >
       <div class="date-range-nav">
@@ -331,12 +385,21 @@ onUnmounted(() => document.removeEventListener('pointerdown', pointer));
 .date-range-value { flex: 1; min-width: 0; }
 .date-range > button > svg { flex: none; color: var(--tk-accent); }
 .date-range-panel {
+  position: fixed;
+  inset: auto;
+  z-index: 5;
+  box-sizing: border-box;
+  margin: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: var(--tk-space-2);
   border: 1px solid var(--tk-line);
   border-radius: var(--tk-radius);
   background: var(--tk-surface);
   color: var(--tk-ink);
+  box-shadow: var(--tk-shadow);
 }
+.date-range-panel[data-above] { transform: translateY(-100%); }
 .date-range-nav, .date-range-month { display: flex; align-items: center; }
 .date-range-nav { justify-content: space-between; }
 .date-range-nav .tk-icon-button { border-color: transparent; color: var(--tk-accent); }

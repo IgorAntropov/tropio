@@ -395,10 +395,6 @@ body:has(.route-editor) {
   white-space: pre-wrap;
 }
 
-.editor-compare-dialog {
-  width: min(100% - 32px, 820px);
-}
-
 .editor-compare-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -575,7 +571,7 @@ body:has(.route-editor) {
     margin-top: var(--tk-space-2);
   }
 
-  .editor-dialog {
+  .editor-dialog:not([data-layout="confirmation"]) {
     inset: 0;
     width: 100%;
     height: 100dvh;

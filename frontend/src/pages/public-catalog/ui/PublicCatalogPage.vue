@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  publicTripCover,
   TripCard,
   tripTypeIcons,
   useTripRoute,
@@ -21,9 +22,9 @@ import type { MapSelection } from '@fsd/shared/map';
 import { UiDateRange } from '@fsd/shared/ui/date-range';
 import {
   UiDialog,
+  UiSearchField,
   UiSegmented,
   UiSelect,
-  UiTextField,
 } from '@fsd/shared/ui/kit';
 import { catalogFilters } from '../model/catalog';
 import { useCatalogScreens } from '../model/use-catalog-screens';
@@ -455,7 +456,7 @@ useSeoMeta({
   ogTitle: () => expandedId.value ? expandedTrip.value?.title : title.value,
   ogDescription: () => description.value,
   ogUrl: () => expandedId.value && !expandedTrip.value ? undefined : canonical.value,
-  ogImage: () => expandedTrip.value ? new URL('/default-trip-cover.webp', config.siteUrl).href : undefined,
+  ogImage: () => expandedTrip.value ? new URL(publicTripCover(expandedTrip.value), config.siteUrl).href : undefined,
   robots: () => expandedId.value
     ? (expandedTrip.value ? 'index,follow' : 'noindex,nofollow')
     : status.value === 200 && !Object.keys(route.query).length ? 'index,follow' : 'noindex,follow',
@@ -476,23 +477,13 @@ if (import.meta.server) {
       <h1 v-if="!expandedId" class="tk-sr-only">{{ t('catalog.title') }}</h1>
       <div class="catalog-tools">
         <form class="catalog-search" role="search" @submit.prevent="setFilters({ q: query.trim() })">
-          <UiTextField
+          <UiSearchField
             v-model="query"
             :label="t('catalog.search')"
             :maxlength="120"
             name="q"
-          >
-            <template #trailing>
-              <button
-                :aria-label="t('catalog.find')"
-                class="tk-button tk-icon-button catalog-search-submit"
-                :title="t('catalog.find')"
-                type="submit"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
-              </button>
-            </template>
-          </UiTextField>
+            :submit-label="t('catalog.find')"
+          />
         </form>
         <button
           ref="filterButton"

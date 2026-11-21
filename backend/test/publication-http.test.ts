@@ -35,7 +35,9 @@ import type {
   Trip,
 } from './geo-http-fixture.js';
 
-type Draft = Trip & { publication_id: string | null };
+import { tripCover } from './trip-cover-fixture.js';
+
+type Draft = Trip & { cover_id: string | null; publication_id: string | null };
 type Operation = { status: 'pending' | 'succeeded' | 'failed'; operation_id: string; code?: string; publication_id?: string };
 type Card = {
   trip_id: string; publication_id: string; title: string; trip_type: string;
@@ -45,6 +47,7 @@ type Card = {
 type Page = { items: { trip_id: string; title: string; distance_m?: number; start: { lon: number; lat: number } }[]; next_cursor: string | null };
 const contractTrip = '/trips/{tripId}';
 const publicPath = '/catalog/trips';
+const publicCoverPath = publicPath + '/{tripId}/covers/{coverId}';
 const optionsPath = '/catalog/filter-options';
 const applicationPath = contractTrip + '/applications';
 const participationPath = '/catalog/participation';
@@ -164,6 +167,30 @@ describe('GIS-06 through the BFF', () => {
     expect((await json<Page>(await send('GET', `${publicPath}?${filters}`), 200)).items).toHaveLength(0);
   }, 30_000);
 
+  it('publishes the cover and packing list together and keeps their draft changes private', async () => {
+    const { path, card, draft, route } = await prepareTrip();
+    const cover = await tripCover('webp');
+    const equipment = [{ label: 'Фонарь', required: true }];
+    const withCover = await json<Draft>(await send('PATCH', path, owner, { trip_revision_id: draft.trip_revision_id, cover, equipment }), 200);
+    const imagePath = `${card}/covers/${withCover.cover_id}`;
+    expect((await send('GET', imagePath)).status).toBe(404);
+    await publish(path, manifest(withCover, route));
+    expect(await json<Card>(await send('GET', card), 200)).toMatchObject({ cover_id: withCover.cover_id, equipment });
+    const visible = await send('GET', imagePath);
+    expect(visible.status).toBe(200);
+    expect(visible.headers.get('cache-control')).toContain('no-store');
+    expect(visible.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(visible.headers.get('content-type')).toBe('image/webp');
+    expect(Buffer.from(await visible.arrayBuffer()).toString('base64')).toBe(cover.data_base64);
+    const current = await json<Draft>(await send('GET', path + '/draft', owner), 200);
+    const cleared = await json<Draft>(await send('PATCH', path, owner, { trip_revision_id: current.trip_revision_id, cover: null, equipment: [] }), 200);
+    expect((await send('GET', imagePath)).status).toBe(200);
+    expect(await json<Card>(await send('GET', card), 200)).toMatchObject({ cover_id: withCover.cover_id, equipment });
+    await publish(path, manifest(cleared, route));
+    expect((await send('GET', imagePath)).status).toBe(404);
+    expect(await json<Card>(await send('GET', card), 200)).toMatchObject({ cover_id: null, equipment: [] });
+  }, 30_000);
+
   it('loads system dictionaries and filters published starts within regional borders and legacy difficulty labels', async () => {
     type Option = { value: string; label: string };
     const options = await json<{ regions: Option[]; difficulties: Option[] }>(await send('GET', optionsPath), 200);
@@ -221,8 +248,11 @@ describe('GIS-06 through the BFF', () => {
       trip_revision_id: draft.trip_revision_id,
       start_date: '2200-01-01',
       end_date: '2200-01-01',
+      cover: await tripCover('jpeg'),
     }), 200);
     await publish(path, manifest(future, route, [optional.poi_id]));
+    const coverPath = card + '/covers/' + future.cover_id;
+    expect((await send('GET', coverPath)).status).toBe(200);
     expect(await json(await send('POST', path + '/applications', visitor), 200)).toEqual({ status: 'pending' });
     expect((await json<Card>(await send('GET', card), 200)).pois.map(poi => poi.poi_id)).toEqual([optional.poi_id]);
     await json(await send('PATCH', `/pois/${optional.poi_id}/visibility`, visitor, {
@@ -237,6 +267,7 @@ describe('GIS-06 through the BFF', () => {
       poi_revision_id: linkedVersion.poi_revision_id,
       visibility: 'private',
     }), 200);
+    await problem(await send('GET', coverPath), 'GET', publicCoverPath, 404, 'NOT_FOUND');
     await problem(await send('GET', card, visitor), 'GET', publicPath + '/{tripId}', 404, 'NOT_FOUND');
     await problem(await send('POST', path + '/applications', visitor), 'POST', applicationPath, 404, 'NOT_FOUND');
     expect(await json(await send('GET', participationPath + '?trip_ids=' + draft.trip_id, visitor), 200)).toEqual({ viewer_id: visitor.id, trip_ids: [], joined_trip_ids: [] });
@@ -487,6 +518,13 @@ describe('GIS-06 through the BFF', () => {
         target: publicPath,
         spec: publicPath,
         bad: publicPath + '?limit=0',
+        guest: true,
+      },
+      {
+        method: 'GET',
+        target: card + '/covers/' + randomUUID(),
+        spec: publicCoverPath,
+        bad: card + '/covers/bad',
         guest: true,
       },
       {

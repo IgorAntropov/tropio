@@ -30,6 +30,7 @@
   --tk-text-base: .9375rem;
   --tk-text-lg: 1.25rem;
   --tk-target: 44px;
+  --tk-text-input-height: max(54px, 2.8em);
 }
 
 [data-theme="dark"] {
@@ -204,7 +205,7 @@
 
 .tk-text-control .tk-text-input {
   display: block;
-  min-block-size: max(54px, 2.8em);
+  min-block-size: var(--tk-text-input-height);
   padding-block: calc(var(--tk-space-3) - var(--tk-text-border));
   padding-inline: calc(var(--tk-text-start) - var(--tk-text-border)) calc(var(--tk-text-end) - var(--tk-text-border));
   border: var(--tk-text-border) solid var(--tk-text-color);
@@ -362,7 +363,7 @@
   z-index: 5;
   top: calc(100% + var(--tk-space-2));
   inset-inline: 0;
-  max-height: min(360px, 70vh);
+  max-height: min(360px, var(--tk-select-available, 70vh));
   overflow: hidden auto;
   overscroll-behavior: contain;
   padding: var(--tk-space-2);
@@ -371,6 +372,9 @@
   background: var(--tk-surface);
   box-shadow: var(--tk-shadow);
 }
+
+.tk-select-panel[data-placement] { box-sizing: border-box; }
+.tk-select-panel[data-placement="above"] { top: auto; bottom: calc(100% + var(--tk-space-2)); }
 
 .tk-select-panel:focus-visible { outline: 2px solid var(--tk-focus); }
 
@@ -383,7 +387,7 @@
   min-inline-size: 0;
 }
 
-.tk-select-panel > .tk-input + .tk-select-options {
+.tk-select-panel > .tk-search-field + .tk-select-options {
   margin-top: var(--tk-space-2);
 }
 
@@ -576,15 +580,42 @@
 @media (prefers-reduced-motion: reduce) { .tk-spinner { animation: none; } }
 
 .tk-dialog {
+  --tk-dialog-size: 32.5rem;
+  --tk-dialog-width: min(var(--tk-dialog-size), calc(100vw - 2rem));
+  --tk-dialog-max-height: calc(100dvh - 2rem);
   box-sizing: border-box;
-  width: min(100% - 32px, 520px);
-  max-height: calc(100dvh - 32px);
+  width: var(--tk-dialog-width);
+  max-width: none;
+  max-height: var(--tk-dialog-max-height);
   padding: 0;
   border: 1px solid var(--tk-line);
   border-radius: var(--tk-radius-panel);
   background: var(--tk-surface);
   color: var(--tk-ink);
   box-shadow: var(--tk-shadow);
+}
+
+.tk-dialog[data-size="small"] { --tk-dialog-size: 25rem; }
+.tk-dialog[data-size="large"] { --tk-dialog-size: 51.25rem; }
+.tk-dialog[data-size="xlarge"] { --tk-dialog-size: 85vw; }
+
+@media (min-width: 640px) {
+  .tk-dialog[data-layout="landscape"] {
+    height: min(calc(var(--tk-dialog-width) * 5 / 8), var(--tk-dialog-max-height));
+  }
+}
+
+.tk-dialog[data-layout="square"] {
+  width: min(var(--tk-dialog-width), var(--tk-dialog-max-height));
+  height: min(var(--tk-dialog-width), var(--tk-dialog-max-height));
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .tk-dialog[data-size="xlarge"] { --tk-dialog-size: calc(100vw - 2rem); }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) and (orientation: portrait) {
+  .tk-dialog[data-size="xlarge"][data-layout="landscape"] { height: min(85dvh, var(--tk-dialog-max-height)); }
 }
 
 .tk-dialog::backdrop {
@@ -611,7 +642,7 @@
 .tk-dialog-header h2 { font-size: var(--tk-text-lg); }
 
 @media (max-width: 639px) {
-  .tk-dialog {
+  .tk-dialog:where([data-layout="content"], [data-layout="landscape"]) {
     inset: 0;
     width: 100%;
     height: 100dvh;

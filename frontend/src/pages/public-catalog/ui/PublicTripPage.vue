@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   TripCard,
+  TripEquipmentList,
   TripTimeline,
 } from '@fsd/entities/public-trip';
 import { TripParticipationAction } from '@fsd/features/trip-participation';
@@ -62,6 +63,7 @@ watch(() => [props.trip?.trip_id, props.pending, props.status], focusDetails, { 
             :trip="trip"
           />
           <p v-else role="status">{{ t('catalog.loadingTrip') }}</p>
+          <TripEquipmentList v-if="trip" :items="trip.equipment" />
         </template>
       </TripCard>
       <div v-else class="catalog-detail-issue">

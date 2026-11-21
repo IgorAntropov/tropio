@@ -12,14 +12,15 @@ const sessionCookie = /(?:^|;\s*)tropio_session=[^;\s]+/;
 export const guestHome = '/catalog';
 export const workspaceHome = '/feed';
 export const workspaceConfirmedKey = 'workspace-session-confirmed';
+export const workspaceReloadNoticeKey = 'workspace-reload-notice';
 export const workspaceMemberKey = 'workspace-member';
 export const loginReadyKey = 'workspace-login-ready';
 
 export type WorkspaceSession = 'authenticated' | 'guest' | 'unavailable';
-export type WorkspaceMember = Pick<IdentityProfile, 'avatar' | 'display_name'>;
+export type WorkspaceMember = Pick<IdentityProfile, 'id' | 'avatar' | 'display_name'>;
 
-export function workspaceMemberOf({ avatar, display_name }: WorkspaceMember): WorkspaceMember {
-  return { avatar, display_name };
+export function workspaceMemberOf({ id, avatar, display_name }: WorkspaceMember): WorkspaceMember {
+  return { id, avatar, display_name };
 }
 
 export function mayCheckWorkspaceSession(cookie: string | undefined) {

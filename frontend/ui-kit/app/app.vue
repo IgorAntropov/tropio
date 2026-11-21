@@ -93,6 +93,46 @@ const trackName = ref('');
 const tripName = ref('');
 const submitted = ref(false);
 const dialogOpen = ref(false);
+const dialogExamples = [
+  {
+    value: 'small',
+    label: 'Маленькое',
+    size: 'small',
+    layout: 'content',
+  },
+  {
+    value: 'medium',
+    label: 'Среднее',
+    size: 'medium',
+    layout: 'content',
+  },
+  {
+    value: 'large',
+    label: 'Большое',
+    size: 'large',
+    layout: 'content',
+  },
+  {
+    value: 'xlarge',
+    label: 'Очень большое, 8:5',
+    size: 'xlarge',
+    layout: 'landscape',
+  },
+  {
+    value: 'square',
+    label: 'Квадратное',
+    size: 'medium',
+    layout: 'square',
+  },
+  {
+    value: 'confirmation',
+    label: 'Подтверждение',
+    size: 'small',
+    layout: 'confirmation',
+  },
+] as const;
+const dialogChoice = ref<readonly string[]>(['medium']);
+const dialogExample = computed(() => dialogExamples.find(example => example.value === dialogChoice.value[0]) ?? dialogExamples[1]);
 const formMode = ref<'track' | 'trip'>('track');
 const formSaved = ref(false);
 const tripResults = computed(() => filters.value.length ? trips.filter(trip => filters.value.includes(trip.type)) : trips);
@@ -206,7 +246,7 @@ function openForm(mode: 'track' | 'trip') {
             </article>
             <article class="sample">
               <h3>Форма редактирования</h3>
-              <p class="tk-muted form-description">Модальное окно на широком экране. Отдельный экран на смартфоне.</p>
+              <UiSelect v-model="dialogChoice" label="Формат окна" :options="dialogExamples" />
               <fieldset class="button-size-field">
                 <legend>Размер кнопок формы</legend>
                 <div class="button-size-options">
@@ -262,7 +302,13 @@ function openForm(mode: 'track' | 'trip') {
       </main>
     </div>
 
-    <UiDialog v-model="dialogOpen" :subtitle="formMode === 'track' ? 'Лесная тропа → Поворот к озеру' : undefined" :title="formMode === 'track' ? 'Редактирование трека' : 'Новое путешествие'">
+    <UiDialog
+      v-model="dialogOpen"
+      :layout="dialogExample.layout"
+      :size="dialogExample.size"
+      :subtitle="formMode === 'track' ? 'Лесная тропа → Поворот к озеру' : undefined"
+      :title="formMode === 'track' ? 'Редактирование трека' : 'Новое путешествие'"
+    >
       <form class="example-stack" novalidate @submit.prevent="saveExample">
         <template v-if="formMode === 'track'">
           <UiTextField
@@ -354,11 +400,10 @@ body { margin: 0; }
 .people-list .tk-avatar { flex: none; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--tk-space-2); flex-wrap: wrap; margin-top: var(--tk-space-3); }
 .form-examples { display: flex; flex-wrap: wrap; gap: var(--tk-space-2); }
-.button-size-field { margin: 0 0 var(--tk-space-4); padding: 0; border: 0; min-width: 0; }
+.button-size-field { margin: var(--tk-space-4) 0; padding: 0; border: 0; min-width: 0; }
 .button-size-field legend { padding: 0; font-weight: 600; font-size: var(--tk-text-sm); }
 .button-size-options { display: flex; align-items: center; flex-wrap: wrap; gap: var(--tk-space-3); padding-block: var(--tk-space-2); }
 .button-size-options [aria-pressed=true] { border-color: var(--tk-accent); background: var(--tk-selected); }
-.showcase .form-description { margin-bottom: var(--tk-space-4); }
 .showcase .save-confirmation { margin-top: var(--tk-space-3); }
 .sample-colors { grid-column: 1 / -1; }
 .color-list { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--tk-space-3); }

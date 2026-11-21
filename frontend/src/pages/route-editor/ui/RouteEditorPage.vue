@@ -513,7 +513,7 @@ onBeforeUnmount(() => {
   <UiDialog
     v-if="ready"
     v-model="confirmingClear"
-    class="route-clear-dialog"
+    layout="confirmation"
     :title="t('routeEditor.clearTitle')"
   >
     <p class="route-clear-message">{{ t('routeEditor.clearMessage') }}</p>
@@ -530,15 +530,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.route-clear-dialog {
-  width: min(calc(100% - 32px), 520px);
-  height: fit-content;
-  max-height: calc(100dvh - 32px);
-  margin: auto;
-  border: 1px solid var(--tk-line);
-  border-radius: var(--tk-radius-panel);
-}
-
 .route-clear-message {
   margin: 0;
 }

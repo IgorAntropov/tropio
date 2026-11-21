@@ -1,4 +1,6 @@
 import { BffProblem } from '../http/bff-problem.js';
+import { imageType } from '../http/image-format.js';
+import type { ImageType } from '../http/image-format.js';
 import { uuid } from '../identity/identity-input.js';
 
 export interface EquipmentItem {
@@ -15,7 +17,13 @@ export function admissionMode(value: unknown): AdmissionMode {
   return value;
 }
 
+export interface CoverUpload {
+  content_type: ImageType;
+  data_base64: string;
+}
+
 export interface TripFields {
+  cover: CoverUpload | null;
   title: string;
   description: string | null;
   start_date: string | null;
@@ -36,7 +44,7 @@ export interface DayFields {
 
 const tripKeys = [
   'title', 'description', 'start_date', 'end_date', 'timezone', 'free_capacity',
-  'difficulty', 'participation_rules', 'equipment', 'admission_mode',
+  'difficulty', 'participation_rules', 'equipment', 'admission_mode', 'cover',
 ];
 const dayKeys = ['local_date', 'description', 'notes'];
 
@@ -56,7 +64,7 @@ function cleanText(value: unknown, maximum: number): string {
   return value.trim();
 }
 
-function requiredText(value: unknown, maximum: number): string {
+export function requiredText(value: unknown, maximum: number): string {
   const text = cleanText(value, maximum);
   if (!text) {
     throw new BffProblem('INVALID_REQUEST');
@@ -158,6 +166,19 @@ function tripFields(input: Record<string, unknown>): Partial<TripFields> {
   }
   if (Object.hasOwn(input, 'admission_mode')) {
     result.admission_mode = admissionMode(input.admission_mode);
+  }
+  if (Object.hasOwn(input, 'cover')) {
+    if (input.cover === null) {
+      result.cover = null;
+    }
+    else {
+      const upload = fields(input.cover, ['content_type', 'data_base64']);
+      const contentType = imageType(upload.content_type);
+      if (!contentType || typeof upload.data_base64 !== 'string') {
+        throw new BffProblem('INVALID_REQUEST');
+      }
+      result.cover = { content_type: contentType, data_base64: upload.data_base64 };
+    }
   }
   return result;
 }

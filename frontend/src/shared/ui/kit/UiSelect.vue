@@ -9,6 +9,7 @@ import {
   watch,
 } from 'vue';
 import MaterialSymbol from '../material-symbol/MaterialSymbol.vue';
+import UiSearchField from './UiSearchField.vue';
 
 type Option = {
   value: string;
@@ -19,6 +20,7 @@ type Option = {
 
 const props = withDefaults(defineProps<{
   label: string;
+  labelHidden?: boolean;
   options: readonly Option[];
   placeholder?: string;
   multiple?: boolean;
@@ -27,15 +29,18 @@ const props = withDefaults(defineProps<{
   disabled?: boolean;
   pending?: boolean;
   error?: string;
-}>(), { placeholder: 'Выбрать', error: undefined });
+  panelBoundary?: HTMLElement | null;
+}>(), { placeholder: 'Выбрать', error: undefined, panelBoundary: undefined });
 
 const model = defineModel<readonly string[]>({ default: () => [] });
 const id = useId();
 const root = ref<HTMLElement>();
 const trigger = ref<HTMLButtonElement>();
 const panel = ref<HTMLElement>();
-const search = ref<HTMLInputElement>();
+const search = ref<InstanceType<typeof UiSearchField>>();
 const open = ref(false);
+const opensAbove = ref(false);
+const availableHeight = ref<number>();
 const query = ref('');
 let navigatingRadios = false;
 let internalPointer = false;
@@ -55,7 +60,7 @@ function close(returnFocus = false) {
   query.value = '';
   navigatingRadios = false;
   if (returnFocus) {
-    trigger.value?.focus();
+    trigger.value?.focus({ preventScroll: !!props.panelBoundary });
   }
 }
 
@@ -69,8 +74,64 @@ async function toggle() {
   const option = panel.value?.querySelector<HTMLInputElement>('.tk-select-option input:checked:not(:disabled)')
     ?? panel.value?.querySelector<HTMLInputElement>('.tk-select-option input:not(:disabled)');
   const target = search.value ?? option ?? panel.value;
-  target?.focus();
+  if (props.panelBoundary && target instanceof HTMLElement) {
+    target.focus({ preventScroll: true });
+    const label = option?.closest('label');
+    if (label && panel.value) {
+      const offset = label.getBoundingClientRect().top - panel.value.getBoundingClientRect().top;
+      if (offset < 0 || offset + label.offsetHeight > panel.value.clientHeight) {
+        panel.value.scrollTop += offset;
+      }
+    }
+  }
+  else {
+    target?.focus();
+  }
 }
+
+watch([open, () => props.panelBoundary], ([active, boundary], _previous, onCleanup) => {
+  const button = trigger.value;
+  const popup = panel.value;
+  if (!active || !boundary || !button || !popup) {
+    opensAbove.value = false;
+    availableHeight.value = undefined;
+    return;
+  }
+  const viewport = window.visualViewport;
+  const place = () => {
+    const bounds = boundary.getBoundingClientRect();
+    const rect = button.getBoundingClientRect();
+    if (rect.bottom <= bounds.top || rect.top >= bounds.bottom) {
+      close();
+      return;
+    }
+    const viewportTop = viewport?.offsetTop ?? 0;
+    const viewportBottom = viewportTop + (viewport?.height ?? document.documentElement.clientHeight);
+    const gap = parseFloat(getComputedStyle(popup).paddingBlockStart);
+    const below = Math.min(bounds.bottom, viewportBottom) - rect.bottom - gap;
+    const above = rect.top - Math.max(bounds.top, viewportTop) - gap;
+    const naturalHeight = popup.scrollHeight + popup.offsetHeight - popup.clientHeight;
+    opensAbove.value = below < naturalHeight && above > below;
+    availableHeight.value = Math.max(0, Math.floor(opensAbove.value ? above : below));
+  };
+  place();
+  const resize = new ResizeObserver(place);
+  resize.observe(boundary);
+  resize.observe(button);
+  resize.observe(popup);
+  const content = new MutationObserver(place);
+  content.observe(boundary, { childList: true, subtree: true, characterData: true });
+  const events = new AbortController();
+  const options = { capture: true, signal: events.signal };
+  window.addEventListener('scroll', place, options);
+  viewport?.addEventListener('scroll', place, options);
+  viewport?.addEventListener('resize', place, options);
+  onCleanup(() => {
+    events.abort();
+    content.disconnect();
+    resize.disconnect();
+  });
+}, { flush: 'post' });
 
 function change(value: string, checked: boolean) {
   if (props.multiple) {
@@ -102,11 +163,7 @@ function selectOption(event: MouseEvent, option: Option) {
   close(true);
 }
 
-function searchEnter(event: KeyboardEvent) {
-  if (event.isComposing) {
-    return;
-  }
-  event.preventDefault();
+function searchEnter() {
   const available = visible.value.filter(option => !option.disabled);
   const only = available.length === 1 ? available[0] : undefined;
   if (only && !props.multiple) {
@@ -165,7 +222,7 @@ watch(() => props.disabled || props.pending, (blocked) => {
     @keydown.esc="onEscape"
     @pointercancel="internalPointer = false"
   >
-    <span :id="`${id}-label`" class="tk-label">{{ label }}</span>
+    <span :id="`${id}-label`" :class="labelHidden ? 'tk-sr-only' : 'tk-label'">{{ label }}</span>
     <div class="tk-select-anchor">
       <button
         ref="trigger"
@@ -180,6 +237,7 @@ watch(() => props.disabled || props.pending, (blocked) => {
         :disabled="disabled || pending"
         type="button"
         @click="toggle"
+        @mousedown.left="panelBoundary && $event.preventDefault()"
       >
         <span v-if="showIcons" aria-hidden="true" class="tk-select-icons">
           <span v-for="option in selected" :key="option.value" :title="option.label"><MaterialSymbol v-if="option.icon" :name="option.icon" /></span>
@@ -197,18 +255,17 @@ watch(() => props.disabled || props.pending, (blocked) => {
         :id="id"
         ref="panel"
         class="tk-select-panel"
+        :data-placement="availableHeight === undefined ? undefined : opensAbove ? 'above' : 'below'"
+        :style="availableHeight === undefined ? undefined : { '--tk-select-available': `${availableHeight}px` }"
         tabindex="-1"
       >
-        <input
+        <UiSearchField
           v-if="searchable"
           ref="search"
           v-model="query"
-          :aria-label="`Поиск · ${label}`"
-          class="tk-input"
-          placeholder="Найти вариант"
-          type="search"
-          @keydown.enter="searchEnter"
-        >
+          :label="`Поиск · ${label}`"
+          @confirm="searchEnter"
+        />
         <fieldset
           class="tk-select-options"
           :data-multiple="multiple"

@@ -19,11 +19,9 @@ body:has(.catalog-frame) { margin: 0; background: var(--tk-canvas); }
 .detail-summary h1 { margin: 0; font-weight: 700; font-size: clamp(1.6rem, 2.4vw, 2.35rem); line-height: 1.15; letter-spacing: -.045em; }
 .catalog-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: var(--tk-space-2); padding: var(--catalog-gutter); }
 .catalog-search { min-width: 0; }
-.catalog-search .catalog-search-submit { color: var(--tk-accent); border: 0; background: transparent; box-shadow: none; }
-.catalog-search .catalog-search-submit:hover { background: var(--tk-raised); }
-.catalog-filters { width: 54px; padding: 0; color: var(--tk-accent); }
+.catalog-filters { width: var(--tk-target); padding: 0; color: var(--tk-accent); }
 .catalog-filters-active { border-color: var(--tk-accent); background: var(--tk-selected); }
-.catalog-tools svg, .catalog-nearby svg {
+.catalog-filters svg, .catalog-nearby svg {
   display: block;
   width: 21px;
   height: 21px;

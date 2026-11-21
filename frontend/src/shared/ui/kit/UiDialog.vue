@@ -10,7 +10,13 @@ const open = defineModel<boolean>({ default: false });
 const dialog = ref<HTMLDialogElement>();
 const id = useId();
 const visible = ref(false);
-const props = defineProps<{ title: string; subtitle?: string; slide?: boolean }>();
+const props = defineProps<{
+  title: string;
+  subtitle?: string;
+  slide?: boolean;
+  size?: 'small' | 'medium' | 'large' | 'xlarge';
+  layout?: 'content' | 'compact' | 'landscape' | 'square' | 'confirmation';
+}>();
 const emit = defineEmits<{ closed: [] }>();
 let generation = 0;
 
@@ -58,8 +64,10 @@ function closed() {
     ref="dialog"
     :aria-labelledby="id"
     class="tk-dialog"
+    :data-layout="layout ?? 'content'"
+    :data-size="size ?? (layout === 'compact' || layout === 'confirmation' ? 'small' : 'medium')"
     :data-visible="visible || undefined"
-    @cancel.prevent="open = false"
+    @cancel.self.prevent="open = false"
     @close="closed"
   >
     <div class="tk-dialog-inner">

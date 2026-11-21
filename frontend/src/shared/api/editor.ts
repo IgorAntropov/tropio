@@ -23,6 +23,7 @@ export type DraftDay = Schemas['DraftDay'];
 export type TripDraftSummary = Schemas['TripDraftSummary'];
 export type MyTripDraftList = Schemas['MyTripDraftList'];
 export type CreateTripDraftRequest = Input<'createTripDraft'>;
+export type EquipmentLibraryItem = Schemas['EquipmentLibraryItem'];
 export type UpdateTripDraftRequest = Input<'updateTripDraft'>;
 export type PublishCommand = Input<'publishTrip'>;
 export type UnpublishCommand = Input<'unpublishTrip'>;
@@ -141,6 +142,9 @@ export const editorApi = {
     }),
   listTrips: (query?: TripListQuery, signal?: AbortSignal) =>
     call<MyTripDraftList>(queryPath('/trips', query), { signal }),
+  listEquipment: (signal?: AbortSignal) => call<Output<'listEquipmentLibrary'>>('/me/equipment', { signal }),
+  createEquipment: (body: Input<'createPersonalEquipment'>, command: EditorCommand) =>
+    call<EquipmentLibraryItem>('/me/equipment', { ...command, method: 'POST', body }),
   createTrip: (body: CreateTripDraftRequest, command: EditorCommand) =>
     call<TravelDraft>('/trips', { ...command, method: 'POST', body }),
   getTrip: (tripId: string, signal?: AbortSignal) =>

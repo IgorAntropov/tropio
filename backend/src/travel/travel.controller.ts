@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   Inject,
   Param,
@@ -10,6 +11,7 @@ import {
   Put,
   Query,
   Req,
+  StreamableFile,
 } from '@nestjs/common';
 import type { NodeRequest } from '@nestjs/platform-node';
 import { requireSession } from '../identity/identity-session.js';
@@ -56,6 +58,14 @@ export class TravelController {
   async readDraft(@Req() request: NodeRequest, @Param('tripId') tripId: string) {
     const ownerId = await this.identity.authenticate(requireSession(request));
     return this.travel.readDraft(ownerId, travelUuid(tripId));
+  }
+
+  @Get('trips/:tripId/covers/:coverId')
+  @Header('X-Content-Type-Options', 'nosniff')
+  async readDraftCover(@Req() request: NodeRequest, @Param('tripId') tripId: string, @Param('coverId') coverId: string) {
+    const ownerId = await this.identity.authenticate(requireSession(request));
+    const image = await this.travel.draftCover(ownerId, travelUuid(tripId), travelUuid(coverId));
+    return new StreamableFile(image.bytes, { type: image.content_type });
   }
 
   @Patch('trips/:tripId')

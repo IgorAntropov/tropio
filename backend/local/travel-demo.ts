@@ -2,9 +2,12 @@ import { createHash } from 'node:crypto';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module.js';
 import { RouteService } from '../src/geo/routes/route.service.js';
+import { BffProblem } from '../src/http/bff-problem.js';
 import { IdentityService } from '../src/identity/identity.service.js';
 import { publishInput } from '../src/publication/publication-input.js';
 import { PublicationWorker } from '../src/publication/publication-worker.js';
+import { parsePersonalEquipment } from '../src/travel/equipment/equipment-input.js';
+import { EquipmentLibrary } from '../src/travel/equipment/equipment-library.service.js';
 import { PublicCatalog } from '../src/travel/public-catalog.js';
 import { PublicationService } from '../src/travel/publication.service.js';
 import {
@@ -23,6 +26,7 @@ interface DemoStop {
 
 interface DemoTrip {
   id: string;
+  slug: string;
   owner: string;
   status: string;
   title: string;
@@ -33,14 +37,27 @@ interface DemoTrip {
   difficulty: string;
   freeCapacity: number;
   admissionMode: string;
+  equipment?: { label: string; required: boolean }[];
   days: { description: string; stops: DemoStop[] }[];
 }
 
-interface DemoVersion {
+interface TravelVersion {
   version: number;
-  organizer: { id: string };
+  organizer: { id: string; email: string; displayName: string };
   trips: DemoTrip[];
 }
+
+interface EquipmentVersion {
+  version: number;
+  personalEquipment: {
+    label: string;
+    icon?: string;
+    group?: { label: string };
+    subgroup?: { label: string };
+  }[];
+}
+
+export type DemoVersion = EquipmentVersion | TravelVersion;
 
 interface DemoContext {
   identityUrl: string;
@@ -95,6 +112,29 @@ export async function publishDemoTrip(
   }
 }
 
+async function seedPersonalEquipment(library: EquipmentLibrary, editor: TravelEditor, version: EquipmentVersion) {
+  for (const [index, fields] of version.personalEquipment.entries()) {
+    for (let attempt = 0; ; attempt++) {
+      const suffix = attempt === 0 ? '' : attempt === 1 ? ' (пример)' : ` (пример ${attempt})`;
+      const input = parsePersonalEquipment({ ...fields, label: fields.label + suffix });
+      const key = commandKey(editor.userId, version.version, `equipment/${index}/${attempt}`);
+      try {
+        const item = await library.add(editor, key, input);
+        if (item.scope === 'personal' && item.icon === fields.icon
+          && item.group?.label.toLowerCase() === fields.group?.label.toLowerCase()
+          && item.subgroup?.label.toLowerCase() === fields.subgroup?.label.toLowerCase()) {
+          break;
+        }
+      }
+      catch (error) {
+        if (!(error instanceof BffProblem) || error.code !== 'EQUIPMENT_DETAILS_CONFLICT') {
+          throw error;
+        }
+      }
+    }
+  }
+}
+
 export async function applyTravelDemoVersion(context: DemoContext, version: DemoVersion) {
   const application = await NestFactory.createApplicationContext(AppModule.configure(
     { databaseUrl: context.identityUrl },
@@ -103,6 +143,13 @@ export async function applyTravelDemoVersion(context: DemoContext, version: Demo
   ), { logger: false, abortOnError: false });
   try {
     const identity = application.get(IdentityService);
+    const owner = (userId: string): TravelEditor => ({ userId, confirmSession: async () => {
+      await identity.getPublicProfile(userId);
+    } });
+    if ('personalEquipment' in version) {
+      await seedPersonalEquipment(application.get(EquipmentLibrary), owner(context.travelerId), version);
+      return;
+    }
     const travel = application.get(TravelService);
     const geo = application.get(RouteService);
     const publications = application.get(PublicationService);
@@ -116,9 +163,7 @@ export async function applyTravelDemoVersion(context: DemoContext, version: Demo
         throw new Error(`Некорректные поля демопоездки ${trip.id}`);
       }
       const userId = trip.owner === 'company' ? version.organizer.id : context.travelerId;
-      const editor = { userId, confirmSession: async () => {
-        await identity.getPublicProfile(userId);
-      } };
+      const editor = owner(userId);
       const key = (action: string) => commandKey(trip.id, version.version, action);
       const fields = createTripInput({
         title: trip.title,
@@ -129,6 +174,7 @@ export async function applyTravelDemoVersion(context: DemoContext, version: Demo
         difficulty: difficulty.label,
         free_capacity: trip.freeCapacity,
         admission_mode: trip.admissionMode,
+        ...(trip.equipment && { equipment: trip.equipment }),
       });
       let draft = await travel.createTrip(editor, key('create'), fields, trip.id);
       const routes: ReturnType<typeof publishInput>['routes'] = [];

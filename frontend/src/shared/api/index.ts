@@ -8,6 +8,7 @@ export type {
   DraftDay,
   EditorCommand,
   EditorRequest,
+  EquipmentLibraryItem,
   EnsureTripDayRouteRequest,
   GeoBuildMode,
   GeoTransportMode,

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   Inject,
   Param,
@@ -9,6 +10,7 @@ import {
   Query,
   Req,
   Res,
+  StreamableFile,
 } from '@nestjs/common';
 import type {
   NodeRequest,
@@ -113,6 +115,13 @@ export class PublicationController {
     const viewer_id = await this.identity.optionalViewer(readToken(request, sessionCookie));
     const participation = viewer_id ? await this.catalog.participation(viewer_id, ids) : { trip_ids: [], joined_trip_ids: [] };
     return { viewer_id, ...participation };
+  }
+
+  @Get('catalog/trips/:tripId/covers/:coverId')
+  @Header('X-Content-Type-Options', 'nosniff')
+  async cover(@Param('tripId') tripId: string, @Param('coverId') coverId: string) {
+    const image = await this.catalog.cover(travelUuid(tripId), travelUuid(coverId));
+    return new StreamableFile(image.bytes, { type: image.content_type });
   }
 
   @Get('catalog/trips/:tripId')

@@ -5,6 +5,7 @@ import type {
   PublicTripSummary,
 } from '@fsd/shared/api';
 import { UiButton } from '@fsd/shared/ui/kit';
+import { publicTripCover } from '../trip-cover';
 import OrganizerLink from './OrganizerLink.vue';
 import TripFacts from './TripFacts.vue';
 
@@ -16,7 +17,7 @@ const { t } = useI18n();
 
 <template>
   <article class="catalog-card" :class="{ 'catalog-card--active': active, 'catalog-card-expanded': expanded }">
-    <div class="catalog-cover"><img alt="" loading="lazy" src="/default-trip-cover.webp"></div>
+    <div class="catalog-cover"><img alt="" loading="lazy" :src="publicTripCover(trip)"></div>
     <header v-if="expanded" class="catalog-expanded-title">
       <h1>{{ trip.title }}</h1>
       <UiButton

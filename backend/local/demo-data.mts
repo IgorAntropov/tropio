@@ -19,7 +19,7 @@ import {
 } from 'node:url';
 import pg from 'pg';
 import demoAccount from '../../fixtures/demo-account.json' with { type: 'json' };
-import type firstVersion from '../../fixtures/demo/0001-travel.json';
+import type { DemoVersion } from './travel-demo.js';
 import {
   allowLocalDemoData,
   ensureLocalDemoAccount,
@@ -30,8 +30,6 @@ interface DemoDatabases {
   travelUrl: string;
   geoUrl: string;
 }
-
-type DemoVersion = typeof firstVersion;
 
 interface AppliedVersion {
   version: number;
@@ -51,12 +49,15 @@ function readDemoVersions(directory: string) {
     const bytes = readFileSync(join(directory, filename));
     const data = JSON.parse(bytes.toString('utf8')) as DemoVersion;
     const version = index + 1;
-    if (!/^\d{4}-[a-z][a-z0-9-]*\.json$/.test(filename) || Number(filename.slice(0, 4)) !== version
-      || data.version !== version || !data.organizer?.id || !data.organizer.email?.endsWith('.test')
-      || !data.organizer.displayName?.trim() || !Array.isArray(data.trips)) {
+    const personal = filename.endsWith('-personal-equipment.json');
+    if (!/^\d{4}-[a-z][a-z0-9-]*\.json$/.test(filename) || Number(filename.slice(0, 4)) !== version || data.version !== version
+      || personal !== ('personalEquipment' in data)
+      || ('personalEquipment' in data
+        ? !Array.isArray(data.personalEquipment)
+        : !data.organizer?.id || !data.organizer.email?.endsWith('.test') || !data.organizer.displayName?.trim() || !Array.isArray(data.trips))) {
       throw new Error(`Некорректная версия демонстрационных данных: ${filename}`);
     }
-    for (const trip of data.trips) {
+    for (const trip of ('trips' in data ? data.trips : [])) {
       const id = trip.id.toLowerCase();
       if (ids.has(id) || slugs.has(trip.slug)) {
         throw new Error('Повтор UUID или slug демонстрационной поездки: ' + trip.slug);
@@ -106,9 +107,11 @@ async function applyPendingVersions(client: pg.Client, databases: DemoDatabases,
         'INSERT INTO travel.local_demo_versions (version, filename, checksum) VALUES ($1, $2, $3) ON CONFLICT (version) DO NOTHING',
         [version, filename, checksum],
       );
-      const { id, email, displayName } = data.organizer;
       await retryDemoStatementTimeout(async () => {
-        await ensureLocalDemoAccount(databases.identityUrl, { id, email, displayName });
+        if ('organizer' in data) {
+          const { id, email, displayName } = data.organizer;
+          await ensureLocalDemoAccount(databases.identityUrl, { id, email, displayName });
+        }
         await worker.applyTravelDemoVersion({ ...databases, travelerId: demoAccount.id }, data);
       });
       await client.query('UPDATE travel.local_demo_versions SET applied_at = clock_timestamp() WHERE version = $1', [version]);

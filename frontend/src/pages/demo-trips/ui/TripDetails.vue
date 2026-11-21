@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { TripFacts } from '@fsd/entities/public-trip';
+import {
+  TripEquipmentList,
+  TripFacts,
+} from '@fsd/entities/public-trip';
 import type { DemoTrip } from '../model/trips';
 
 defineProps<{ trip: DemoTrip; personal?: boolean }>();
@@ -29,6 +32,7 @@ const { t, n } = useI18n();
         <ol><li v-for="stop in day.stops" :key="stop.name">{{ stop.name }}</li></ol>
       </section>
     </section>
+    <TripEquipmentList :items="trip.equipment" />
   </main>
 </template>
 

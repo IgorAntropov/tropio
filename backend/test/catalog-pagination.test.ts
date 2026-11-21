@@ -24,6 +24,7 @@ it.each([
     tripId: randomUUID(),
     ownerId,
     distance_m,
+    cover_id: null,
     publication_id: randomUUID(),
     access_generation: '1',
     applications_open: true,

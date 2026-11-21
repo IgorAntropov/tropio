@@ -1,7 +1,9 @@
 import account from '../../../../../fixtures/demo-account.json';
 import type firstVersion from '../../../../../fixtures/demo/0001-travel.json';
 
-type DemoVersion = typeof firstVersion;
+type DemoVersion = Omit<typeof firstVersion, 'trips'> & {
+  trips: (typeof firstVersion.trips[number] & { equipment?: { label: string; required: boolean }[] })[];
+};
 
 function presentTrip(trip: DemoVersion['trips'][number], organizer: DemoVersion['organizer']) {
   const mode = trip.transportMode;
@@ -31,18 +33,24 @@ function presentTrip(trip: DemoVersion['trips'][number], organizer: DemoVersion[
 
 export type DemoTrip = ReturnType<typeof presentTrip>;
 
-export function buildDemoCatalog(files: Record<string, DemoVersion>) {
-  const paths = Object.keys(files).sort();
+export function buildDemoCatalog(files: Record<string, DemoVersion>, personalVersionPaths: string[] = []) {
+  const paths = [...Object.keys(files), ...personalVersionPaths].sort();
   if (!paths.length) {
     throw new Error('Нет версий демонстрационных данных.');
   }
   const ids = new Set<string>();
   const slugs = new Set<string>();
   const trips = paths.flatMap((path, index) => {
-    const data = files[path]!;
     const filename = path.split('/').at(-1)!;
-    if (!/^\d{4}-[a-z][a-z0-9-]*\.json$/.test(filename) || Number(filename.slice(0, 4)) !== index + 1
-      || data.version !== index + 1) {
+    const version = index + 1;
+    if (!/^\d{4}-[a-z][a-z0-9-]*\.json$/.test(filename) || Number(filename.slice(0, 4)) !== version) {
+      throw new Error('Некорректная версия демонстрационных данных: ' + filename);
+    }
+    const data = files[path];
+    if (!data && filename.endsWith('-personal-equipment.json')) {
+      return [];
+    }
+    if (data?.version !== version) {
       throw new Error('Некорректная версия демонстрационных данных: ' + filename);
     }
     return data.trips.map((trip) => {
@@ -61,5 +69,9 @@ export function buildDemoCatalog(files: Record<string, DemoVersion>) {
   };
 }
 
-const versions = import.meta.glob<DemoVersion>('../../../../../fixtures/demo/*.json', { eager: true, import: 'default' });
-export const { demoTrips, myDemoTrips } = buildDemoCatalog(versions);
+const versions = import.meta.glob<DemoVersion>([
+  '../../../../../fixtures/demo/*.json',
+  '!../../../../../fixtures/demo/*-personal-equipment.json',
+], { eager: true, import: 'default' });
+const personalVersionPaths = Object.keys(import.meta.glob('../../../../../fixtures/demo/*-personal-equipment.json'));
+export const { demoTrips, myDemoTrips } = buildDemoCatalog(versions, personalVersionPaths);

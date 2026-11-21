@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Трулала GIS MVP
-  version: 0.5.0
+  version: 0.7.0
   description: |
     Внешний API BFF. Identity реализован в GIS-02, черновики Travel в GIS-03. Редактор маршрутов, расчёт треков и POI реализованы в GIS-04. В GIS-06 Travel публикует закреплённые версии, а публичный каталог проверяет действующий доступ к геометрии.
     Каждый ответ этого контракта получает Cache-Control: no-store и X-Request-Id.
@@ -294,6 +294,55 @@ paths:
           $ref: '#/components/responses/IdentityCsrfRejected'
         '503':
           $ref: '#/components/responses/IdentityUnavailable'
+  /me/equipment:
+    get:
+      operationId: listEquipmentLibrary
+      tags: [Travel equipment]
+      summary: Получить базовые предметы и личный инвентарь пользователя
+      responses:
+        '200':
+          description: Справочник для выбора снаряжения в поездку.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EquipmentLibrary'}
+        '401':
+          $ref: '#/components/responses/TravelSessionRequired'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
+    post:
+      operationId: createPersonalEquipment
+      tags: [Travel equipment]
+      summary: Добавить предмет в личный инвентарь
+      description: Форма добавления передаёт scope со значением personal. Команда сохраняет вещь владельца даже при совпадении с системным названием. Личные атрибуты также подразумевают личную запись. Для прежних клиентов команда только с названием может вернуть существующую системную вещь. Имя группы или подгруппы создаёт её при отсутствии, UUID выбирает существующую. Подгруппа требует родительскую группу. Названия сравниваются без учёта регистра после удаления пробелов по краям. Несовпадение атрибутов существующего личного предмета возвращает конфликт. Предмет и новые папки сохраняются одной транзакцией.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreatePersonalEquipmentRequest'}
+      responses:
+        '201':
+          description: Предмет доступен пользователю для выбора.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EquipmentLibraryItem'}
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '401':
+          $ref: '#/components/responses/TravelSessionRequired'
+        '403':
+          $ref: '#/components/responses/TravelCsrfRejected'
+        '404':
+          $ref: '#/components/responses/TravelDraftNotFound'
+        '409':
+          $ref: '#/components/responses/EquipmentWriteConflict'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
   /me/avatar:
     patch:
       operationId: selectMyIdentityAvatar
@@ -483,6 +532,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TripDraft'
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '401':
+          $ref: '#/components/responses/TravelSessionRequired'
+        '404':
+          $ref: '#/components/responses/TravelDraftNotFound'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
+  /trips/{tripId}/covers/{coverId}:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+      - $ref: '#/components/parameters/TripCoverId'
+    get:
+      operationId: getTripDraftCover
+      tags: [Travel drafts]
+      summary: Прочитать обложку текущего черновика владельца
+      responses:
+        '200':
+          $ref: '#/components/responses/TripCoverImage'
         '400':
           $ref: '#/components/responses/TravelInvalidRequest'
         '401':
@@ -952,6 +1020,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicTrip'
+        '400':
+          $ref: '#/components/responses/TravelInvalidRequest'
+        '404':
+          $ref: '#/components/responses/TravelDraftNotFound'
+        '503':
+          $ref: '#/components/responses/TravelUnavailable'
+  /catalog/trips/{tripId}/covers/{coverId}:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+      - $ref: '#/components/parameters/TripCoverId'
+    get:
+      operationId: getPublicTripCover
+      tags: [Travel publications]
+      summary: Прочитать обложку из активной публичной версии поездки
+      description: При каждом чтении действуют условия доступности этой версии в публичном каталоге, включая доступ к закреплённым Geo-данным.
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/TripCoverImage'
         '400':
           $ref: '#/components/responses/TravelInvalidRequest'
         '404':
@@ -1498,6 +1585,11 @@ components:
       name: limit
       in: query
       schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+    TripCoverId:
+      name: coverId
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/Uuid'}
     TripId:
       name: tripId
       in: path
@@ -1560,6 +1652,15 @@ components:
         maximum: 100
         default: 30
   responses:
+    TripCoverImage:
+      description: Изображение обложки размером до 2 МиБ.
+      headers:
+        Cache-Control: {required: true, schema: {type: string, const: no-store}}
+        X-Content-Type-Options: {required: true, schema: {type: string, const: nosniff}}
+      content:
+        image/jpeg: {schema: {type: string, format: binary}}
+        image/png: {schema: {type: string, format: binary}}
+        image/webp: {schema: {type: string, format: binary}}
     GeoInvalidRequest:
       description: Недопустимое тело, заголовок, UUID или параметры запроса.
       content:
@@ -1811,6 +1912,17 @@ components:
                 properties:
                   status: {const: 404}
                   code: {const: NOT_FOUND}
+    EquipmentWriteConflict:
+      description: Ключ повторного запроса уже использован с другим содержимым или личная вещь с этим названием имеет другие свойства.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 409}
+                  code: {enum: [IDEMPOTENCY_KEY_REUSED, EQUIPMENT_DETAILS_CONFLICT]}
     TravelKeyReused:
       description: Ключ уже занят другой командой или её результат недоступен.
       content:
@@ -2177,6 +2289,89 @@ components:
       type: [integer, 'null']
       minimum: 1
       maximum: 2147483647
+    TripCoverUpload:
+      type: [object, 'null']
+      additionalProperties: false
+      required: [content_type, data_base64]
+      description: Однокадровое изображение до 2 097 152 байт и 40 000 000 пикселей включительно. Значение null назначает системную обложку. При обновлении пропущенное поле сохраняет текущую обложку.
+      properties:
+        content_type: {type: string, enum: [image/jpeg, image/png, image/webp]}
+        data_base64:
+          type: string
+          minLength: 4
+          maxLength: 2796204
+          contentEncoding: base64
+    EquipmentLibrary:
+      type: object
+      additionalProperties: false
+      required: [categories, items]
+      properties:
+        categories:
+          type: array
+          description: Системные категории в порядке отображения.
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, label, group]
+            properties:
+              id: {$ref: '#/components/schemas/EquipmentCategoryId'}
+              label: {type: string}
+              group: {type: string}
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/EquipmentLibraryItem'}
+    EquipmentCategoryId:
+      type: string
+      enum: [documents, clothing, hygiene, health, electronics, bags, food, orientation, camp, cooking, hiking, cycling, car, water, winter, city, family, other]
+    PersonalEquipmentGroup:
+      type: object
+      additionalProperties: false
+      required: [id, label]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        label: {type: string, minLength: 1, maxLength: 120}
+    PersonalEquipmentGroupReference:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [id]
+          properties:
+            id: {$ref: '#/components/schemas/Uuid'}
+        - type: object
+          additionalProperties: false
+          required: [label]
+          properties:
+            label: {type: string, minLength: 1, maxLength: 120}
+    EquipmentLibraryItem:
+      type: object
+      additionalProperties: false
+      required: [id, label, scope, category]
+      properties:
+        id: {$ref: '#/components/schemas/Uuid'}
+        label: {type: string, minLength: 1, maxLength: 120}
+        scope: {type: string, enum: [system, personal]}
+        category: {$ref: '#/components/schemas/EquipmentCategoryId'}
+        group: {$ref: '#/components/schemas/PersonalEquipmentGroup'}
+        subgroup: {$ref: '#/components/schemas/PersonalEquipmentGroup'}
+        icon: {$ref: '#/components/schemas/EquipmentCategoryId'}
+        code: {type: string, description: Стабильный код системного предмета.}
+        carry_scope: {type: string, enum: [personal, group], description: Для одного человека или всей группы.}
+        travel_types: {type: array, items: {type: string}}
+        condition: {type: [string, 'null']}
+        unit: {type: string, enum: [pcs]}
+        is_active: {type: boolean}
+    CreatePersonalEquipmentRequest:
+      type: object
+      additionalProperties: false
+      required: [label]
+      dependentRequired:
+        subgroup: [group]
+      properties:
+        label: {type: string, minLength: 1, maxLength: 120}
+        scope: {type: string, enum: [personal]}
+        group: {$ref: '#/components/schemas/PersonalEquipmentGroupReference'}
+        subgroup: {$ref: '#/components/schemas/PersonalEquipmentGroupReference'}
+        icon: {$ref: '#/components/schemas/EquipmentCategoryId'}
     TripEquipment:
       type: array
       maxItems: 50
@@ -2204,6 +2399,7 @@ components:
         difficulty: {$ref: '#/components/schemas/TripDifficulty'}
         participation_rules: {$ref: '#/components/schemas/TripText'}
         equipment: {$ref: '#/components/schemas/TripEquipment'}
+        cover: {$ref: '#/components/schemas/TripCoverUpload'}
     UpdateTripDraftRequest:
       type: object
       additionalProperties: false
@@ -2235,6 +2431,7 @@ components:
         difficulty: {$ref: '#/components/schemas/TripDifficulty'}
         participation_rules: {$ref: '#/components/schemas/TripText'}
         equipment: {$ref: '#/components/schemas/TripEquipment'}
+        cover: {$ref: '#/components/schemas/TripCoverUpload'}
     AddTripDayRequest:
       type: object
       additionalProperties: false
@@ -2265,6 +2462,7 @@ components:
       additionalProperties: false
       required: [admission_mode, trip_id, trip_revision_id, publication_id, visibility, title, start_date, end_date]
       properties:
+        cover_id: {$ref: '#/components/schemas/NullableUuid'}
         trip_id: {$ref: '#/components/schemas/Uuid'}
         trip_revision_id: {$ref: '#/components/schemas/Uuid'}
         publication_id: {$ref: '#/components/schemas/NullableUuid'}
@@ -2285,6 +2483,7 @@ components:
       additionalProperties: false
       required: [admission_mode, trip_id, trip_revision_id, publication_id, visibility, title, description, start_date, end_date, timezone, free_capacity, difficulty, participation_rules, equipment, days]
       properties:
+        cover_id: {$ref: '#/components/schemas/NullableUuid'}
         published_manifest:
           description: Состав активной публикации для сравнения черновика владельца. trip_revision_id соответствует моменту переключения на этот снимок.
           type: object
@@ -2713,6 +2912,7 @@ components:
       additionalProperties: false
       required: [admission_mode, confirmed_participants, trip_id, publication_id, organizer, title, description, start_date, end_date, difficulty, free_capacity, trip_type, day_count, applications_open, lifecycle, start]
       properties:
+        cover_id: {$ref: '#/components/schemas/NullableUuid'}
         organizer:
           anyOf:
             - $ref: '#/components/schemas/PublicOrganizer'
@@ -2740,6 +2940,8 @@ components:
       additionalProperties: false
       required: [admission_mode, confirmed_participants, trip_id, publication_id, organizer, title, description, start_date, end_date, difficulty, free_capacity, trip_type, day_count, applications_open, lifecycle, start, days, pois]
       properties:
+        cover_id: {$ref: '#/components/schemas/NullableUuid'}
+        equipment: {$ref: '#/components/schemas/TripEquipment'}
         organizer:
           anyOf:
             - $ref: '#/components/schemas/PublicOrganizer'

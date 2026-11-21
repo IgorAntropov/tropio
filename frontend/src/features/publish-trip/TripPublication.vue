@@ -155,7 +155,7 @@ const publishLabel = computed(() => {
         </template>
       </template>
     </div>
-    <UiDialog v-model="dialog" :title="t(confirmation === 'private' ? 'publication.privateConfirm' : 'publication.withdrawConfirm')">
+    <UiDialog v-model="dialog" layout="confirmation" :title="t(confirmation === 'private' ? 'publication.privateConfirm' : 'publication.withdrawConfirm')">
       <p>{{ t('publication.confirmHint') }}</p>
       <div class="publication-actions"><button class="tk-button" type="button" @click="dialog = false">{{ t('publication.keep') }}</button><button class="tk-button tk-button-primary" type="button" @click="confirm">{{ t('publication.confirm') }}</button></div>
     </UiDialog>

@@ -13,6 +13,11 @@ import {
 import { parse } from 'yaml';
 import { createApplication } from '../src/create-application.js';
 
+import {
+  largeTripCover,
+  tripCover,
+} from './trip-cover-fixture.js';
+
 type Method = 'GET' | 'POST' | 'PATCH' | 'PUT';
 type Request = {
   method?: Method;
@@ -35,6 +40,7 @@ type Day = {
   notes: string | null;
 };
 type TripSummary = {
+  cover_id: string | null;
   admission_mode: 'open' | 'request';
   trip_id: string;
   trip_revision_id: string;
@@ -90,11 +96,12 @@ const contract = parse(readFileSync(new URL('../../docs/contracts/openapi.yaml',
 const listTrips = { method: 'GET', path: '/trips' } as const;
 const createTrip = { method: 'POST', path: '/trips' } as const;
 const readDraft = { method: 'GET', path: '/trips/{tripId}/draft' } as const;
+const readCover = { method: 'GET', path: '/trips/{tripId}/covers/{coverId}' } as const;
 const patchTrip = { method: 'PATCH', path: '/trips/{tripId}' } as const;
 const addDay = { method: 'POST', path: '/trips/{tripId}/days' } as const;
 const patchDay = { method: 'PATCH', path: '/days/{dayId}' } as const;
 const attachRoute = { method: 'PUT', path: '/days/{dayId}/route' } as const;
-const operations = [listTrips, createTrip, readDraft, patchTrip, addDay, patchDay, attachRoute];
+const operations = [listTrips, createTrip, readDraft, readCover, patchTrip, addDay, patchDay, attachRoute];
 const observed = new Set<string>();
 const servers: Server[] = [];
 const verificationMail: Mail[] = [];
@@ -262,6 +269,7 @@ function reservedDay(draft: Draft) {
 function pathFor(operation: Operation, draft: Draft, resourceId?: string) {
   return operation.path
     .replace('{tripId}', resourceId ?? draft.trip_id)
+    .replace('{coverId}', draft.cover_id ?? draft.trip_id)
     .replace('{dayId}', resourceId ?? reservedDay(draft).day_id);
 }
 
@@ -367,6 +375,54 @@ describe('Travel HTTP contract', () => {
     expect(secondPage.items).toHaveLength(1);
     expect(secondPage.items[0]).toMatchObject({ trip_id: secondId });
     expect(secondPage.next_cursor).toBeNull();
+  });
+
+  it('atomically assigns a cover on create or update and allows only the current owner draft image', async () => {
+    const cover = await largeTripCover();
+    expect(cover.data_base64.length).toBeGreaterThan(256 * 1024);
+    const replacement = await tripCover('jpeg');
+    const request = mutation(createTrip, owner, { title: 'Сосновая тропа', cover });
+    const draft = await draftResponse(await send('/trips', request), 201);
+    expect(draft.cover_id).toMatch(uuid);
+    expect(await draftResponse(await send('/trips', request), 201)).toEqual(draft);
+    await expectProblem(await send('/trips', { ...request, body: { ...request.body, cover: replacement } }), createTrip, 409, 'IDEMPOTENCY_KEY_REUSED');
+    const path = `/trips/${draft.trip_id}/covers/${draft.cover_id}`;
+    const image = await send(path, { session: owner });
+    expect(image.status).toBe(200);
+    expect(image.headers.get('content-type')).toBe(cover.content_type);
+    expect(image.headers.get('cache-control')).toContain('no-store');
+    expect(image.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(Buffer.from(await image.arrayBuffer()).toString('base64')).toEqual(cover.data_base64);
+    expect((await send(path)).status).toBe(401);
+    await expectProblem(await send(path, { session: visitor }), readCover, 404, 'NOT_FOUND');
+    expect((await send(`/catalog/trips/${draft.trip_id}/covers/${draft.cover_id}`)).status).toBe(404);
+    const patched = await draftResponse(await edit(patchTrip, draft, { description: 'С обложкой' }));
+    expect(patched.cover_id).toEqual(draft.cover_id);
+    const key = randomUUID();
+    const changed = await draftResponse(await edit(patchTrip, patched, { cover: replacement }, key));
+    expect(changed.cover_id).toMatch(uuid);
+    expect(changed.cover_id).not.toEqual(draft.cover_id);
+    expect(await draftResponse(await edit(patchTrip, patched, { cover: replacement }, key))).toEqual(changed);
+    expect((await send(path, { session: owner })).status).toBe(404);
+    const cleared = await draftResponse(await edit(patchTrip, changed, { cover: null }));
+    expect(cleared.cover_id).toBeNull();
+    expect((await send(`/trips/${changed.trip_id}/covers/${changed.cover_id}`, { session: owner })).status).toBe(404);
+  });
+
+  it('rejects invalid cover bytes and retains the previous draft revision', async () => {
+    const draft = await create('Проверка обложки');
+    const cover = await tripCover('png');
+    for (const invalid of [
+      { ...cover, content_type: 'image/svg+xml' },
+      { ...cover, content_type: 'image/jpeg' },
+      { ...cover, data_base64: 'not base64' },
+      { ...cover, data_base64: Buffer.from(cover.data_base64, 'base64').subarray(0, 40).toString('base64') },
+      { ...cover, data_base64: Buffer.from(cover.data_base64, 'base64').subarray(0, -3).toString('base64') },
+      { ...cover, data_base64: Buffer.alloc(2 * 1024 * 1024 + 1).toString('base64') },
+    ]) {
+      await expectProblem(await edit(patchTrip, draft, { cover: invalid }), patchTrip, 400, 'INVALID_REQUEST');
+    }
+    expect(await read(draft)).toEqual(draft);
   });
 
   it('persists day changes and binds one server-created empty route to each selected day', async () => {
@@ -616,7 +672,7 @@ describe('Travel HTTP contract', () => {
       const input = inputFor(operation, fixture, owner);
       const invalidPath = operation === listTrips
         ? '/trips?limit=0'
-        : operation === readDraft ? pathFor(operation, fixture, 'invalid-id') : path;
+        : operation.method === 'GET' ? pathFor(operation, fixture, 'invalid-id') : path;
       const invalidInput = operation.method === 'GET' ? input : { ...input, body: { unexpected: true } };
 
       await expectProblem(await send(invalidPath, invalidInput), operation, 400, 'INVALID_REQUEST');

@@ -34,10 +34,8 @@ import type {
   PoiScope,
   PoiVisibilityInput,
 } from './poi-input.js';
-import {
-  imageType,
-  readPrivatePoiMedia,
-} from './poi-storage.js';
+import { imageType } from '../../http/image-format.js';
+import { readPrivatePoiMedia } from './poi-storage.js';
 
 type PoiView = ReturnType<typeof poiView>;
 type VisibilityView = ReturnType<typeof visibilityView>;

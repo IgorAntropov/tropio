@@ -182,6 +182,7 @@ function submit() {
   <UiDialog
     :aria-describedby="confirmingRemoval ? removeDescription : undefined"
     class="editor-dialog"
+    :layout="confirmingRemoval ? 'confirmation' : 'content'"
     :model-value="true"
     :subtitle="subtitle"
     :title="t(confirmingRemoval ? 'removeConfirm' : object.type === 'point' ? 'editPoint' : 'editTrack')"

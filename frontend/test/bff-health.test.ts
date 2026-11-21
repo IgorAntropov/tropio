@@ -28,6 +28,7 @@ const picture = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 
 const catalogSummary = {
   trip_id: routeId,
+  cover_id: dayId,
   publication_id: revision,
   organizer: { id: dayId, display_name: 'Анна', avatar: null },
   title: 'Тропа от лагеря до смотровой',
@@ -46,6 +47,7 @@ const catalogSummary = {
 } satisfies PublicTripSummary;
 const catalogDetail = {
   ...catalogSummary,
+  equipment: [{ label: 'Карта тропы', required: false }],
   days: [{
     position: 1,
     local_date: catalogSummary.start_date,
@@ -129,7 +131,10 @@ const upstream = createServer(async (request, response) => {
     request.socket.destroy();
     return;
   }
-  if (request.url === `/api/v1/pois/${routeId}/media/${revision}`) {
+  if (request.url === `/api/v1/pois/${routeId}/media/${revision}`
+    || request.url === `/api/v1/catalog/trips/${routeId}/covers/${dayId}`
+    || request.url === `/api/v1/trips/${routeId}/covers/${dayId}`) {
+    forwarded = request.headers;
     response.writeHead(200, { 'content-type': 'image/png', 'x-request-id': requestId }).end(picture);
     return;
   }
@@ -461,6 +466,19 @@ it('serves POI images without modifying the bytes or enabling caching', async ()
   expect(new Uint8Array(await response.arrayBuffer())).toEqual(picture);
 });
 
+it.each([
+  [`/api/v1/catalog/trips/${routeId}/covers/${dayId}`, undefined],
+  [`/api/v1/trips/${routeId}/covers/${dayId}`, 'tropio_session=active'],
+])('proxies the cover bytes and scopes credentials at %s', async (path, cookie) => {
+  const response = await fetch(path!, { headers: { cookie: 'tropio_session=active; ignored=other' } });
+  expect(response.status).toBe(200);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+  expect(response.headers.get('content-type')).toBe('image/png');
+  expect(new Uint8Array(await response.arrayBuffer())).toEqual(picture);
+  expect(forwarded.cookie).toBe(cookie);
+});
+
 it('rejects undeclared editor operations and encoded route separators', async () => {
   const unexpected = await fetch(`/api/v1/routes/${routeId}`, { method: 'DELETE' });
   const invalid = await fetch('/api/v1/routes/%2Fshadow');
@@ -494,6 +512,10 @@ it.each(['/catalog', `/catalog/${routeId}`])('renders the guest and workspace sh
   expect(member.status).toBe(200);
   const memberHtml = await member.text();
   expect(memberHtml).toContain(catalogSummary.title);
+  expect(memberHtml).toContain(`/api/v1/catalog/trips/${routeId}/covers/${dayId}`);
+  if (path !== '/catalog') {
+    expect(memberHtml).toContain('Карта тропы');
+  }
   expect(memberHtml).toContain('id="workspace-sidebar"');
   expect(memberHtml).toMatch(/<main\b[^>]*class="catalog-workspace-content workspace-page"/);
   expect(memberHtml).toMatch(/class="[^"]*\bworkspace-page-panel\b[^"]*"/);

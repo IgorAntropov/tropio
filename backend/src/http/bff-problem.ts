@@ -16,6 +16,7 @@ const problems = {
   CSRF_REJECTED: [403, 'Request origin or CSRF token rejected'],
   NOT_FOUND: [404, 'Not found'],
   IDEMPOTENCY_KEY_REUSED: [409, 'Idempotency key reused'],
+  EQUIPMENT_DETAILS_CONFLICT: [409, 'Equipment with this name has different details'],
   TRIP_REVISION_CONFLICT: [409, 'Trip revision conflict'],
   TRIP_APPLICATION_UNAVAILABLE: [409, 'Participation requests are closed for this user or trip'],
   ROUTE_REVISION_CONFLICT: [409, 'Route revision conflict'],

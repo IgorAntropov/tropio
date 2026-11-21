@@ -17,6 +17,8 @@ const identityRoutes = new Set([
 ]);
 
 const editorRoutes = new Set([
+  'GET me/equipment',
+  'POST me/equipment',
   'GET catalog/participation',
   'GET trips',
   'POST trips',
@@ -32,6 +34,7 @@ const editorPaths = [
   /^POST trips\/[^/]+\/(?:publish|unpublish|archive)$/,
   /^GET trips\/[^/]+\/publication-operations\/[^/]+$/,
   /^GET trips\/[^/]+\/draft$/,
+  /^GET trips\/[^/]+\/covers\/[^/]+$/,
   /^PUT days\/[^/]+\/route$/,
   /^(GET|PUT) routes\/[^/]+$/,
   /^POST routes\/[^/]+\/restore$/,
@@ -39,13 +42,16 @@ const editorPaths = [
   /^GET pois\/[^/]+(?:\/media\/[^/]+)?$/,
 ];
 
-const mediaPath = /^pois\/[^/]+\/media\/[^/]+$/;
+const mediaPath = /^(?:pois\/[^/]+\/media|(?:catalog\/)?trips\/[^/]+\/covers)\/[^/]+$/;
 const imageTypes = ['image/jpeg', 'image/png', 'image/webp'];
 const identityCookies = ['tropio_session', 'tropio_registration'];
 const editorCookies = ['tropio_session'];
 
 function bodyLimit(methodPath: string) {
-  return methodPath === 'POST trips' || /^(?:POST trips\/[^/]+\/publish|PATCH trips\/[^/]+)$/.test(methodPath) || /^PUT (?:days\/[^/]+\/route|routes\/[^/]+)$/.test(methodPath)
+  if (methodPath === 'POST trips' || /^PATCH trips\/[^/]+$/.test(methodPath)) {
+    return 3 * 1024 * 1024;
+  }
+  return /^POST trips\/[^/]+\/publish$/.test(methodPath) || /^PUT (?:days\/[^/]+\/route|routes\/[^/]+)$/.test(methodPath)
     ? 256 * 1024
     : 8 * 1024;
 }
@@ -113,7 +119,7 @@ export default defineEventHandler(async (event) => {
     setResponseHeader(event, 'vary', 'Cookie');
   }
   const identity = identityRoutes.has(methodPath) || /^GET users\/[^/]+$/.test(methodPath);
-  const catalog = methodPath === 'GET catalog/filter-options' || /^GET catalog\/trips(?:\/[^/]+)?$/.test(methodPath);
+  const catalog = methodPath === 'GET catalog/filter-options' || /^GET catalog\/trips(?:\/[^/]+(?:\/covers\/[^/]+)?)?$/.test(methodPath);
   if (!identity && !catalog && !editorRoutes.has(methodPath) && !editorPaths.some(pattern => pattern.test(methodPath))) {
     return problem(event, requestId, 404, 'NOT_FOUND', 'Not found');
   }
@@ -206,6 +212,7 @@ export default defineEventHandler(async (event) => {
       }
     }
     if (image && response.body) {
+      setResponseHeader(event, 'x-content-type-options', 'nosniff');
       return sendStream(event, response.body);
     }
     if (payload === null) {

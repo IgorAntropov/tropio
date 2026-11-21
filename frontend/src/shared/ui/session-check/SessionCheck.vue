@@ -3,11 +3,12 @@ import { UiStatus } from '../kit';
 import '../kit/kit.css';
 
 const { t } = useI18n();
+defineProps<{ message?: string }>();
 </script>
 
 <template>
   <div class="session-check">
-    <UiStatus tone="pending">{{ t('workspace.sessionChecking') }}</UiStatus>
+    <UiStatus tone="pending">{{ message || t('workspace.sessionChecking') }}</UiStatus>
   </div>
 </template>
 

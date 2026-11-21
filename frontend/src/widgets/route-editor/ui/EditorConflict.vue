@@ -28,8 +28,9 @@ const options = computed(() => [{ value: 'local', label: t('local') }, { value: 
 
 <template>
   <UiDialog
-    class="editor-dialog editor-compare-dialog"
+    class="editor-dialog"
     :model-value="true"
+    size="large"
     :title="t('compare')"
     @update:model-value="!$event && emit('close')"
   >

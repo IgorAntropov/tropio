@@ -71,6 +71,16 @@ it('requires consecutive versions matching the file names', () => {
   expect(() => buildDemoCatalog({ '0001-travel.json': nextVersion })).toThrow('Некорректная версия');
 });
 
+it('keeps private equipment versions out of the published catalog sequence', () => {
+  const files = {
+    '0001-travel.json': dataset,
+    '0003-lakes.json': { ...nextVersion, version: 3 },
+  };
+  const { demoTrips: published } = buildDemoCatalog(files, ['0002-personal-equipment.json']);
+  expect(published.at(-1)?.id).toBe(nextTour.id);
+  expect(() => buildDemoCatalog(files)).toThrow('Некорректная версия');
+});
+
 it('keeps the travel fixture identifiers, detail links and day geometry valid', () => {
   expect(dataset.version).toBe(1);
   expect(new Set(dataset.trips.map(trip => trip.id)).size).toBe(12);

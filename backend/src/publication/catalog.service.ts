@@ -16,10 +16,11 @@ import type {
   CatalogPosition,
 } from './publication-input.js';
 
-function fields({ tripId, publication_id, snapshot, applications_open, confirmed_participants }: Candidate, organizer: PublicOrganizer | null) {
+function fields({ tripId, publication_id, cover_id, snapshot, applications_open, confirmed_participants }: Candidate, organizer: PublicOrganizer | null) {
   return {
     trip_id: tripId,
     publication_id,
+    cover_id,
     organizer,
     title: snapshot.title,
     description: snapshot.description ?? '',
@@ -104,6 +105,24 @@ export class CatalogService {
     return { trip_ids, joined_trip_ids };
   }
 
+  async cover(id: string, coverId: string) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const candidate = await this.travel.candidate(id);
+      if (!candidate || candidate.cover_id !== coverId) {
+        throw new BffProblem('NOT_FOUND');
+      }
+      const [start] = await this.geo.readStarts([manifest(candidate)]);
+      if (!start) {
+        throw new BffProblem('NOT_FOUND');
+      }
+      const image = await this.travel.cover(candidate, coverId);
+      if (image) {
+        return image;
+      }
+    }
+    throw new BffProblem('DEPENDENCY_UNAVAILABLE');
+  }
+
   async detail(id: string) {
     for (let attempt = 0; attempt < 2; attempt++) {
       const candidate = await this.travel.candidate(id);
@@ -140,6 +159,7 @@ export class CatalogService {
       }
       return {
         ...fields(candidate, organizer),
+        equipment: candidate.snapshot.equipment ?? [],
         start: geo.start,
         days,
         pois: geo.pois,

@@ -23,6 +23,8 @@ const identitySchemas = [
 ];
 
 const editorOperations = [
+  'listEquipmentLibrary',
+  'createPersonalEquipment',
   'listMyTripDrafts',
   'createTripDraft',
   'updateTripDraft',

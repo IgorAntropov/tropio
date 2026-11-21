@@ -37,14 +37,57 @@ function draftWithDates(start: string | null, end: string | null, dates: (string
   };
 }
 
-it('creates a trip with just a title and leaves the optional fields empty', () => {
+it('starts a new trip with one free place and allows clearing the capacity', () => {
   expect(tripSettingsBody({ ...tripSettings(), title: '  Перевал  ' })).toEqual({
     title: 'Перевал',
     description: null,
     start_date: null,
     end_date: null,
-    free_capacity: null,
+    free_capacity: 1,
+    equipment: [],
   });
+  expect(tripSettingsBody({ ...tripSettings(), free_capacity: '' }).free_capacity).toBeNull();
+});
+
+it.each([null, 1, 6])('preserves the saved capacity %s when editing other fields', (capacity) => {
+  const draft = { ...draftWithDates(null, null, []), free_capacity: capacity };
+  const fields = tripSettings(draft);
+  expect(fields.free_capacity).toBe(capacity?.toString() ?? '');
+  fields.title = 'Другая поездка';
+  expect(tripSettingsPatch(draft, tripSettingsBody(fields))).toEqual({
+    trip_revision_id: draft.trip_revision_id,
+    title: fields.title,
+  });
+});
+
+it('keeps an existing cover and ordered equipment when editing other fields', () => {
+  const draft = draftWithDates(null, null, []);
+  draft.cover_id = crypto.randomUUID();
+  draft.equipment = [{ label: 'Фонарь', required: false }, { label: 'Рюкзак', required: true }];
+  const fields = tripSettings(draft);
+  expect(tripSettingsPatch(draft, tripSettingsBody(fields))).toEqual({ trip_revision_id: draft.trip_revision_id });
+  fields.equipment[0]!.required = true;
+  fields.equipment.pop();
+  expect(draft.equipment).toHaveLength(2);
+  expect(draft.equipment[0]?.required).toBe(false);
+  expect(tripSettingsPatch(draft, tripSettingsBody(fields))).toEqual({
+    trip_revision_id: draft.trip_revision_id,
+    equipment: [{ label: 'Фонарь', required: true }],
+  });
+});
+
+it('sends a replacement cover or an explicit reset and can clear all gear', () => {
+  const draft = draftWithDates(null, null, []);
+  draft.cover_id = crypto.randomUUID();
+  draft.equipment = [{ label: 'Налобный фонарь', required: false }];
+  const fields = tripSettings(draft);
+  fields.cover = { content_type: 'image/webp', data_base64: 'aW1hZ2U=' };
+  expect(tripSettingsPatch(draft, tripSettingsBody(fields))).toEqual({ cover: fields.cover, trip_revision_id: draft.trip_revision_id });
+  fields.cover = null;
+  fields.equipment = [];
+  expect(tripSettingsPatch(draft, tripSettingsBody(fields))).toEqual({ cover: null, equipment: [], trip_revision_id: draft.trip_revision_id });
+  draft.cover_id = null;
+  expect(tripSettingsPatch(draft, tripSettingsBody(fields))).not.toHaveProperty('cover');
 });
 
 it('lets the owner edit basic fields on an older draft without resubmitting its dates', () => {

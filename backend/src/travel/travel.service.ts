@@ -9,6 +9,11 @@ import {
   manifestColumns,
   revokePublication,
 } from './publication-state.js';
+import {
+  decodeCover,
+  storeCover,
+} from './trip-cover.js';
+import type { TripCoverFile } from './trip-cover.js';
 import { TravelDatabase } from './travel-database.js';
 import type {
   DayFields,
@@ -27,9 +32,10 @@ type EditAction = Exclude<Action, 'trip.create'>;
 type Target = { kind: 'day' | 'trip'; id: string };
 type DraftEdit<Fields> = { trip_revision_id: string; patch: Partial<Fields> };
 type Dates = Pick<TripFields, 'start_date' | 'end_date'>;
-type TripWriteFields = Omit<TripFields, 'equipment'>;
+type TripWriteFields = Omit<TripFields, 'equipment' | 'cover'>;
 
 interface TripSummary extends Dates {
+  cover_id: string | null;
   admission_mode: TripFields['admission_mode'];
   trip_id: string;
   trip_revision_id: string;
@@ -73,7 +79,7 @@ interface Command {
 }
 
 const summaryColumns = `
-  t.id AS trip_id, t.trip_revision_id, t.publication_id, t.visibility, t.title, t.admission_mode,
+  t.id AS trip_id, t.trip_revision_id, t.publication_id, t.visibility, t.title, t.admission_mode, t.cover_id,
   to_char(t.start_date, 'YYYY-MM-DD') AS start_date, to_char(t.end_date, 'YYYY-MM-DD') AS end_date
 `;
 
@@ -302,6 +308,21 @@ export class TravelService {
     });
   }
 
+  async draftCover(ownerId: string, tripId: string, coverId: string) {
+    return this.database.transaction(async (client) => {
+      const { rows: [image] } = await client.query<TripCoverFile>(
+        `SELECT c.bytes, c.content_type FROM travel.trip_covers c
+         JOIN travel.trips t ON (t.id, t.cover_id) = (c.trip_id, c.id)
+         WHERE t.id = $1 AND t.owner_user_id = $2 AND t.archived_at IS NULL AND c.id = $3`,
+        [tripId, ownerId, coverId],
+      );
+      if (!image) {
+        throw new BffProblem('NOT_FOUND');
+      }
+      return image;
+    });
+  }
+
   async readDraft(ownerId: string, tripId: string): Promise<TripDraft> {
     return this.database.transaction(client => getDraft(client, ownerId, tripId));
   }
@@ -311,6 +332,7 @@ export class TravelService {
   ): Promise<TripDraft> {
     const { title, description = null, start_date = null, end_date = null, timezone = null, free_capacity = null,
       difficulty = null, participation_rules = null, equipment = [], admission_mode = 'request' } = input;
+    const cover = input.cover ? await decodeCover(input.cover) : null;
     const command = makeCommand(editor.userId, 'trip.create', editor.userId, key, {
       title,
       description,
@@ -321,6 +343,7 @@ export class TravelService {
       difficulty,
       participation_rules,
       equipment,
+      ...(cover ? { cover: createHash('sha256').update(cover.bytes).digest('hex') } : {}),
       ...(admission_mode === 'open' ? { admission_mode } : {}),
       ...(tripId ? { trip_id: tripId } : {}),
     });
@@ -355,6 +378,10 @@ export class TravelService {
       }
 
       await client.query('INSERT INTO travel.trip_days (trip_id, position, local_date) VALUES ($1, 1, $2)', [trip.id, start_date]);
+      if (cover) {
+        const coverId = await storeCover(client, trip.id, cover);
+        await client.query('UPDATE travel.trips SET cover_id = $2 WHERE id = $1', [trip.id, coverId]);
+      }
       await insertEquipment(client, trip.id, equipment);
       await audit(client, trip.id, command, trip.id);
       const draft = await getDraft(client, editor.userId, trip.id);
@@ -408,8 +435,12 @@ export class TravelService {
   }
 
   async updateTrip(editor: TravelEditor, tripId: string, key: string, input: ReturnType<typeof updateTripInput>): Promise<TripDraft> {
-    return this.editDraft(editor, { kind: 'trip', id: tripId }, 'trip.update', key, input, async (client, trip) => {
-      const { equipment, ...patch } = input.patch;
+    const { cover: upload, equipment, ...patch } = input.patch;
+    const cover = upload ? await decodeCover(upload) : upload;
+    const command = cover
+      ? { ...input, patch: { ...input.patch, cover: createHash('sha256').update(cover.bytes).digest('hex') } }
+      : input;
+    return this.editDraft(editor, { kind: 'trip', id: tripId }, 'trip.update', key, command, async (client, trip) => {
       const updated = { ...trip, ...patch };
       assertTripDates(updated);
       if (input.shift_day_dates && (!trip.start_date || trip.start_date === updated.start_date)) {
@@ -427,6 +458,17 @@ export class TravelService {
         [tripId, updated.title, updated.description, updated.start_date, updated.end_date, updated.timezone,
           updated.free_capacity, updated.difficulty, updated.participation_rules, updated.visibility, updated.admission_mode],
       );
+      if (cover !== undefined) {
+        const coverId = cover ? await storeCover(client, tripId, cover) : null;
+        await client.query('UPDATE travel.trips SET cover_id = $2 WHERE id = $1', [tripId, coverId]);
+        if (trip.cover_id) {
+          await client.query(
+            `DELETE FROM travel.trip_covers c WHERE c.id = $2 AND c.trip_id = $1
+             AND NOT EXISTS (SELECT FROM travel.trip_versions v WHERE (v.trip_id, v.cover_id) = (c.trip_id, c.id))`,
+            [tripId, trip.cover_id],
+          );
+        }
+      }
       if (equipment !== undefined) {
         await client.query('DELETE FROM travel.trip_equipment WHERE trip_id = $1', [tripId]);
         await insertEquipment(client, tripId, equipment);

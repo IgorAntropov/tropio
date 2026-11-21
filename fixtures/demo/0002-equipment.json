@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "organizer": {
+    "id": "c2deb9c8-2104-4dd9-8a07-a10a30168c71",
+    "email": "tours@tropio.test",
+    "displayName": "Бюро путешествий «Северная тропа»"
+  },
+  "trips": [
+    {
+      "id": "e83190f6-3822-4850-8b06-d06bb44de57a",
+      "slug": "tomskiy-bor-s-ryukzakom",
+      "owner": "traveler",
+      "status": "published",
+      "title": "С рюкзаком по Тимирязевскому бору",
+      "region": "Томская область",
+      "summary": "Идём от посёлка к озеру через сосновый лес. Берём воду для привала, а у берега можно понаблюдать за птицами.",
+      "startDate": "2027-06-20",
+      "timezone": "Asia/Tomsk",
+      "distanceKm": 4.8,
+      "transportMode": "foot",
+      "difficulty": "easy",
+      "freeCapacity": 6,
+      "admissionMode": "open",
+      "equipment": [
+        { "label": "Бутылка для воды", "required": true },
+        { "label": "Дождевик", "required": true },
+        { "label": "Бинокль", "required": false }
+      ],
+      "days": [
+        {
+          "description": "От посёлка идём по лесной дороге к озеру Песчаному.",
+          "stops": [
+            { "name": "Начало лесной дороги", "lon": 84.896, "lat": 56.490 },
+            { "name": "Сосновая поляна", "lon": 84.882, "lat": 56.500 },
+            { "name": "Берег озера", "lon": 84.870, "lat": 56.507 }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -89,6 +89,9 @@ async function testService(service) {
   try {
     applyMigrations({ database });
     const args = ['--filter', '@tropio/backend', 'exec', 'vitest', 'run', `test/${service}-http.test.ts`];
+    if (service === 'travel') {
+      args.push('test/equipment-library-http.test.ts');
+    }
     const required = services.includes(service) ? services.slice(0, services.indexOf(service) + 1) : services;
     return await withDatabaseRoles(database, required, true,
       env => runPnpm(args, env));

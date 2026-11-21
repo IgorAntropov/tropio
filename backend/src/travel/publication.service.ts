@@ -308,8 +308,8 @@ export class PublicationService {
         return;
       }
       await client.query(
-        `INSERT INTO travel.trip_versions (publication_id, trip_id, trip_version, operation_id, snapshot)
-         VALUES ($1,$2,$3,$4,$5)`, [publicationId, trip.trip_id, state!.version, job.id, snapshot],
+        `INSERT INTO travel.trip_versions (publication_id, trip_id, trip_version, operation_id, snapshot, cover_id)
+         VALUES ($1,$2,$3,$4,$5,$6)`, [publicationId, trip.trip_id, state!.version, job.id, snapshot, draft.cover_id],
       );
       await client.query(
         `UPDATE travel.trips SET publication_id = $2, trip_revision_id = $3, version = version + 1,

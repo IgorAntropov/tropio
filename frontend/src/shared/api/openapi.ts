@@ -67,6 +67,50 @@ export interface components {
         TripCalendarDate: string | null;
         TripTimezone: string | null;
         TripCapacity: number | null;
+        TripCoverUpload: {
+            content_type: "image/jpeg" | "image/png" | "image/webp";
+            data_base64: string;
+        } | null;
+        EquipmentLibrary: {
+            categories: {
+                id: components["schemas"]["EquipmentCategoryId"];
+                label: string;
+                group: string;
+            }[];
+            items: components["schemas"]["EquipmentLibraryItem"][];
+        };
+        EquipmentCategoryId: "documents" | "clothing" | "hygiene" | "health" | "electronics" | "bags" | "food" | "orientation" | "camp" | "cooking" | "hiking" | "cycling" | "car" | "water" | "winter" | "city" | "family" | "other";
+        PersonalEquipmentGroup: {
+            id: components["schemas"]["Uuid"];
+            label: string;
+        };
+        PersonalEquipmentGroupReference: {
+            id: components["schemas"]["Uuid"];
+        } | {
+            label: string;
+        };
+        EquipmentLibraryItem: {
+            id: components["schemas"]["Uuid"];
+            label: string;
+            scope: "system" | "personal";
+            category: components["schemas"]["EquipmentCategoryId"];
+            group?: components["schemas"]["PersonalEquipmentGroup"];
+            subgroup?: components["schemas"]["PersonalEquipmentGroup"];
+            icon?: components["schemas"]["EquipmentCategoryId"];
+            code?: string;
+            carry_scope?: "personal" | "group";
+            travel_types?: string[];
+            condition?: string | null;
+            unit?: "pcs";
+            is_active?: boolean;
+        };
+        CreatePersonalEquipmentRequest: {
+            label: string;
+            scope?: "personal";
+            group?: components["schemas"]["PersonalEquipmentGroupReference"];
+            subgroup?: components["schemas"]["PersonalEquipmentGroupReference"];
+            icon?: components["schemas"]["EquipmentCategoryId"];
+        };
         TripEquipment: components["schemas"]["TripEquipmentItem"][];
         TripEquipmentItem: {
             label: string;
@@ -83,6 +127,7 @@ export interface components {
             difficulty?: components["schemas"]["TripDifficulty"];
             participation_rules?: components["schemas"]["TripText"];
             equipment?: components["schemas"]["TripEquipment"];
+            cover?: components["schemas"]["TripCoverUpload"];
         };
         UpdateTripDraftRequest: {
             trip_revision_id: components["schemas"]["Uuid"];
@@ -98,11 +143,13 @@ export interface components {
             difficulty?: components["schemas"]["TripDifficulty"];
             participation_rules?: components["schemas"]["TripText"];
             equipment?: components["schemas"]["TripEquipment"];
+            cover?: components["schemas"]["TripCoverUpload"];
         };
         EnsureTripDayRouteRequest: {
             trip_revision_id: components["schemas"]["Uuid"];
         };
         TripDraftSummary: {
+            cover_id?: components["schemas"]["NullableUuid"];
             trip_id: components["schemas"]["Uuid"];
             trip_revision_id: components["schemas"]["Uuid"];
             publication_id: components["schemas"]["NullableUuid"];
@@ -117,6 +164,7 @@ export interface components {
             next_cursor: components["schemas"]["NullableUuid"];
         };
         TripDraft: {
+            cover_id?: components["schemas"]["NullableUuid"];
             published_manifest?: {
                 trip_revision_id: components["schemas"]["Uuid"];
                 routes: components["schemas"]["PublishRoute"][];
@@ -338,6 +386,7 @@ export interface components {
             avatar: components["schemas"]["SystemAvatar"] | null;
         };
         PublicTripSummary: {
+            cover_id?: components["schemas"]["NullableUuid"];
             organizer: components["schemas"]["PublicOrganizer"] | null;
             distance_m?: number;
             trip_id: components["schemas"]["Uuid"];
@@ -357,6 +406,8 @@ export interface components {
             start: components["schemas"]["LonLat"];
         };
         PublicTrip: {
+            cover_id?: components["schemas"]["NullableUuid"];
+            equipment?: components["schemas"]["TripEquipment"];
             organizer: components["schemas"]["PublicOrganizer"] | null;
             trip_id: components["schemas"]["Uuid"];
             publication_id: components["schemas"]["Uuid"];
@@ -624,6 +675,17 @@ export interface components {
                 };
             };
         };
+        EquipmentWriteConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"] & {
+                    status?: 409;
+                    code?: "IDEMPOTENCY_KEY_REUSED" | "EQUIPMENT_DETAILS_CONFLICT";
+                };
+            };
+        };
         TravelKeyReused: {
             headers: {
                 [name: string]: unknown;
@@ -709,6 +771,59 @@ export interface components {
     };
 }
 export interface operations {
+    listEquipmentLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentLibrary"];
+                };
+            };
+            401: components["responses"]["TravelSessionRequired"];
+            503: components["responses"]["TravelUnavailable"];
+        };
+    };
+    createPersonalEquipment: {
+        parameters: {
+            query?: never;
+            header: {
+                Origin: components["parameters"]["IdentityOrigin"];
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePersonalEquipmentRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentLibraryItem"];
+                };
+            };
+            400: components["responses"]["TravelInvalidRequest"];
+            401: components["responses"]["TravelSessionRequired"];
+            403: components["responses"]["TravelCsrfRejected"];
+            404: components["responses"]["TravelDraftNotFound"];
+            409: components["responses"]["EquipmentWriteConflict"];
+            503: components["responses"]["TravelUnavailable"];
+        };
+    };
     listMyTripDrafts: {
         parameters: {
             query?: {

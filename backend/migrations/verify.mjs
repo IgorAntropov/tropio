@@ -11,7 +11,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import {
+  basename,
+  join,
+} from 'node:path';
 import { URL } from 'node:url';
 import { composeSql } from './compose-sql.mjs';
 import {
@@ -58,7 +61,59 @@ inTestDatabase((database, sql) => {
 
 inTestDatabase((database, sql) => {
   sql('CREATE EXTENSION postgis WITH SCHEMA public;');
+  const beforeCovers = mkdtempSync(join(tmpdir(), 'tropio-travel-upgrade-'));
+  try {
+    for (const owner of migrationOwners) {
+      cpSync(join(migrationDirectory, owner), join(beforeCovers, owner), {
+        recursive: true,
+        filter: entry => owner !== 'travel' || !entry.endsWith('.sql') || Number(basename(entry).slice(0, 4)) <= 8,
+      });
+    }
+    applyMigrations({ database, directory: beforeCovers });
+    sql(`
+SET LOCAL ROLE tropio_travel_runtime;
+WITH old_trip AS (
+  INSERT INTO travel.trips (owner_user_id, created_by_user_id, title)
+  VALUES (gen_random_uuid(), gen_random_uuid(), 'Travel upgrade fixture') RETURNING id
+)
+INSERT INTO travel.trip_equipment (trip_id, position, label, required)
+SELECT id, 1, 'Термос', true FROM old_trip;
+`);
+    for (const file of readdirSync(join(migrationDirectory, 'travel')).filter(name => /^00(09|10)_/.test(name))) {
+      cpSync(join(migrationDirectory, 'travel', file), join(beforeCovers, 'travel', file));
+    }
+    applyMigrations({ database, directory: beforeCovers });
+    sql(`
+SET LOCAL ROLE tropio_travel_runtime;
+WITH existing AS (
+    INSERT INTO travel.personal_equipment (owner_user_id, label)
+    VALUES (gen_random_uuid(), 'Старая личная вещь') RETURNING id, owner_user_id, label
+)
+INSERT INTO travel.equipment_commands (owner_user_id, idempotency_key, request_label, response)
+SELECT owner_user_id, gen_random_uuid(), label, jsonb_build_object('id', id, 'label', label, 'scope', 'personal', 'category', 'other') FROM existing;
+`);
+  }
+  finally {
+    rmSync(beforeCovers, { recursive: true, force: true });
+  }
   applyMigrations({ database });
+  sql(`
+DO $fixture$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM travel.trips t JOIN travel.trip_equipment e ON e.trip_id = t.id
+                   WHERE t.title = 'Travel upgrade fixture' AND t.cover_id IS NULL AND e.label = 'Термос' AND e.required)
+       OR NOT EXISTS (SELECT 1 FROM travel.equipment_catalog WHERE code = 'tent') THEN
+        RAISE EXCEPTION 'Existing draft equipment or system dictionary missing after upgrade';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM travel.personal_equipment e JOIN travel.equipment_commands c
+                   ON c.owner_user_id = e.owner_user_id AND c.response->>'id' = e.id::text
+                   WHERE e.label = 'Старая личная вещь' AND e.group_id IS NULL AND e.subgroup_id IS NULL
+                       AND e.icon IS NULL AND c.request_options = '{}' AND c.request_label = e.label) THEN
+        RAISE EXCEPTION 'Personal equipment or command replay missing after upgrade';
+    END IF;
+END;
+$fixture$;
+`);
   sql(contract);
   checkHistory(sql, migrationCount);
 

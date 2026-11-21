@@ -5,7 +5,8 @@ import {
 import process from 'node:process';
 import { BffProblem } from '../../http/bff-problem.js';
 
-type ImageType = 'image/jpeg' | 'image/png' | 'image/webp';
+import { isImage } from '../../http/image-format.js';
+import type { ImageType } from '../../http/image-format.js';
 
 const payloadHash = createHash('sha256').update('').digest('hex');
 const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
@@ -50,22 +51,6 @@ function storageRequest(objectKey: string) {
       'authorization': `AWS4-HMAC-SHA256 Credential=${accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature.toString('hex')}`,
     },
   };
-}
-
-export function imageType(value: string): ImageType | undefined {
-  if (value === 'image/jpeg' || value === 'image/png' || value === 'image/webp') {
-    return value;
-  }
-}
-
-export function isImage(bytes: Buffer, type: ImageType): boolean {
-  if (type === 'image/jpeg') {
-    return bytes.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]));
-  }
-  if (type === 'image/png') {
-    return bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  }
-  return bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP';
 }
 
 export async function readPrivatePoiMedia(objectKey: string, contentType: ImageType): Promise<Buffer> {

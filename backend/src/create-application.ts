@@ -11,7 +11,7 @@ import { BffProblemFilter } from './http/bff-problem.js';
 import type { IdentityOptions } from './identity/identity.config.js';
 import type { TravelOptions } from './travel/travel.config.js';
 
-function jsonBodyKind(request: IncomingMessage): 'large' | 'default' | undefined {
+function jsonBodyKind(request: IncomingMessage): 'cover' | 'large' | 'default' | undefined {
   const path = request.url?.split('?')[0]?.replace(/\/$/, '') ?? '';
   const contentType = request.headers['content-type']?.split(';')[0]?.trim().toLowerCase();
   if (contentType !== 'application/json') {
@@ -19,8 +19,12 @@ function jsonBodyKind(request: IncomingMessage): 'large' | 'default' | undefined
   }
 
   const method = request.method;
-  if ((method === 'POST' && (path === '/api/v1/trips' || /^\/api\/v1\/trips\/[^/]+\/(?:days|publish)$/.test(path)))
-    || (method === 'PATCH' && /^\/api\/v1\/(trips|days)\/[^/]+$/.test(path))
+  if ((method === 'POST' && path === '/api/v1/trips') || (method === 'PATCH' && /^\/api\/v1\/trips\/[^/]+$/.test(path))) {
+    return 'cover';
+  }
+
+  if ((method === 'POST' && /^\/api\/v1\/trips\/[^/]+\/(?:days|publish)$/.test(path))
+    || (method === 'PATCH' && /^\/api\/v1\/days\/[^/]+$/.test(path))
     || (method === 'PUT' && /^\/api\/v1\/(days\/[^/]+\/route|routes\/[^/]+)$/.test(path))) {
     return 'large';
   }
@@ -52,6 +56,11 @@ export async function createApplication(
     { ...options, bodyParser: false },
   );
 
+  app.useBodyParser('json', {
+    limit: '3mb',
+    inflate: false,
+    type: request => jsonBodyKind(request) === 'cover',
+  });
   app.useBodyParser('json', {
     limit: '256kb',
     inflate: false,

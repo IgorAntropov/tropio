@@ -9,13 +9,18 @@ import type {
 } from '../publication/publication-input.js';
 import { manifestColumns } from './publication-state.js';
 import { TravelDatabase } from './travel-database.js';
-import type { AdmissionMode } from './travel-input.js';
+import type { TripCoverFile } from './trip-cover.js';
+import type {
+  AdmissionMode,
+  EquipmentItem,
+} from './travel-input.js';
 import {
   applicationsOpenSql,
   participantCountSql,
 } from './trip-applications.js';
 
 interface Snapshot {
+  equipment?: EquipmentItem[];
   title: string;
   description: string | null;
   start_date: string | null;
@@ -29,6 +34,7 @@ interface Snapshot {
 }
 
 export interface Candidate extends GeoManifest {
+  cover_id: string | null;
   ownerId: string;
   applications_open: boolean;
   confirmed_participants: number;
@@ -43,7 +49,7 @@ interface FilterOption {
 }
 
 const candidateQuery = (distance = '0') => `SELECT ${distance} AS distance_m, t.id AS "tripId", t.owner_user_id AS "ownerId", t.access_generation, v.publication_id, v.operation_id AS "operationId",
-  v.snapshot, seats.confirmed_participants, ${applicationsOpenSql} AS applications_open, ${manifestColumns('v.operation_id')}
+  v.snapshot, v.cover_id, seats.confirmed_participants, ${applicationsOpenSql} AS applications_open, ${manifestColumns('v.operation_id')}
   FROM travel.trip_catalog_entries c JOIN travel.trips t ON (t.id,t.publication_id) = (c.trip_id,c.publication_id)
   JOIN travel.trip_versions v ON (v.trip_id,v.publication_id) = (t.id,t.publication_id)
   ${participantCountSql}
@@ -65,6 +71,20 @@ export class PublicCatalog {
     return this.database.transaction(async (client) => {
       const { rows: [row] } = await client.query<Candidate>(`${candidateQuery()} AND t.id = $1`, [id]);
       return row;
+    });
+  }
+
+  cover(candidate: Candidate, coverId: string) {
+    return this.database.transaction(async (client) => {
+      const { rows: [image] } = await client.query<TripCoverFile>(
+        `SELECT c.bytes, c.content_type FROM travel.trips t
+         JOIN travel.trip_versions v ON (v.trip_id, v.publication_id) = (t.id, t.publication_id)
+         JOIN travel.trip_covers c ON (c.trip_id, c.id) = (v.trip_id, v.cover_id)
+         WHERE t.id = $1 AND c.id = $2 AND t.publication_id = $3 AND t.access_generation = $4
+           AND t.visibility = 'public' AND t.archived_at IS NULL`,
+        [candidate.tripId, coverId, candidate.publication_id, candidate.access_generation],
+      );
+      return image;
     });
   }
 
