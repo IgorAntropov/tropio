@@ -1,0 +1,56 @@
+.account-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--tk-space-4);
+  min-inline-size: 0;
+}
+
+.account-form > .tk-button,
+.account-form .tk-field-error {
+  overflow-wrap: anywhere;
+}
+
+.account-form .tk-input {
+  width: 100%;
+  font-size: 1rem;
+}
+
+.account-notice {
+  margin: 0;
+  color: var(--tk-muted);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.account-notice-error {
+  padding: var(--tk-space-3);
+  border: 1px solid var(--tk-line);
+  border-radius: var(--tk-radius);
+  color: var(--tk-danger);
+  font-size: var(--tk-text-base);
+}
+
+.account-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tk-space-2) var(--tk-space-4);
+  margin-top: var(--tk-space-4);
+}
+
+.account-links a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--tk-target);
+  color: var(--tk-accent);
+  font-size: var(--tk-text-base);
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tk-space-2);
+}

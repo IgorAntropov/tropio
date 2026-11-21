@@ -32,6 +32,6 @@ const { t } = useI18n();
         </NuxtLink>
       </nav>
     </header>
-    <main id="catalog-content" :class="{ 'catalog-workspace-content': sessionConfirmed }" tabindex="-1"><slot /></main>
+    <main id="catalog-content" :class="{ 'catalog-workspace-content workspace-page': sessionConfirmed }" tabindex="-1"><slot /></main>
   </div>
 </template>

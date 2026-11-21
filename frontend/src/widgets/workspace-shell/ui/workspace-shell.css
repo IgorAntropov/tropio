@@ -11,6 +11,7 @@ body:has(.workspace-shell) {
 .workspace-shell {
   --workspace-top-bar: 64px;
   --workspace-bottom-bar: 0px;
+  --workspace-page-inset: 0px;
   --workspace-sidebar-width: 224px;
   --workspace-brand-compact: 0;
   --workspace-content-height: calc(100dvh - var(--workspace-top-bar) - var(--workspace-bottom-bar));
@@ -24,6 +25,12 @@ body:has(.workspace-shell) {
 .workspace-shell[data-sidebar-collapsed="true"] {
   --workspace-sidebar-width: 68px;
   --workspace-brand-compact: 1;
+}
+
+@media (min-width: 700px) {
+  .workspace-shell {
+    --workspace-page-inset: clamp(.75rem, 2vw, 1.5rem);
+  }
 }
 
 @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
@@ -46,7 +53,7 @@ body:has(.workspace-shell) {
   max-block-size: 100dvh;
   overflow: hidden auto;
   min-inline-size: 0;
-  padding: var(--tk-space-4) 10px;
+  padding: var(--tk-space-1) 10px var(--tk-space-4);
   border-inline-end: 1px solid var(--tk-line);
   background: color-mix(in srgb, var(--tk-raised) 70%, var(--tk-surface));
 }
@@ -63,7 +70,7 @@ body:has(.workspace-shell) {
   grid-template-columns: minmax(0, 1fr);
   place-items: center;
   flex: none;
-  block-size: 60px;
+  block-size: calc(var(--workspace-top-bar) - var(--tk-space-1));
   overflow: clip;
 }
 
@@ -98,7 +105,7 @@ body:has(.workspace-shell) {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--tk-space-1);
-  margin: var(--tk-space-5) 0 0;
+  margin: var(--workspace-page-inset) 0 0;
   padding: 0;
   list-style: none;
 }
@@ -197,14 +204,7 @@ body:has(.workspace-shell) {
 }
 
 .workspace-content {
-  --workspace-page-inset: 0px;
   min-block-size: var(--workspace-content-height);
-}
-
-@media (min-width: 700px) {
-  .workspace-content {
-    --workspace-page-inset: clamp(.75rem, 2vw, 1.5rem);
-  }
 }
 
 .workspace-content:focus {
@@ -217,7 +217,7 @@ body:has(.workspace-shell) {
   justify-content: flex-end;
   gap: var(--tk-space-3);
   min-block-size: var(--workspace-top-bar);
-  padding: 8px clamp(16px, 3vw, 40px);
+  padding: 8px var(--workspace-page-inset);
   border-block-end: 1px solid var(--tk-line);
   background: var(--tk-surface);
 }

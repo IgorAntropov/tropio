@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import { WorkspacePage } from '../workspace-page/index';
+
 defineProps<{ label: string }>();
 
 const { t } = useI18n();
 </script>
 
 <template>
-  <main :aria-label="label" class="workspace-placeholder">
+  <WorkspacePage :aria-label="label">
     <div class="workspace-placeholder-panel">
       <img
         alt=""
@@ -15,23 +17,17 @@ const { t } = useI18n();
       >
       <p>{{ t('workspace.comingSoon') }}</p>
     </div>
-  </main>
+  </WorkspacePage>
 </template>
 
 <style scoped>
-.workspace-placeholder {
-  display: grid;
-  min-block-size: var(--workspace-content-height);
-  padding: var(--workspace-page-inset);
-}
-
 .workspace-placeholder-panel {
   display: grid;
+  min-block-size: 100%;
   place-content: center;
   justify-items: center;
   gap: var(--tk-space-4);
   padding: var(--tk-space-4);
-  background: #fcfdf9;
   text-align: center;
 }
 
@@ -46,12 +42,5 @@ const { t } = useI18n();
   font-size: clamp(1rem, 2vw, 1.25rem);
   font-weight: 600;
   text-wrap: balance;
-}
-
-@media (min-width: 700px) {
-  .workspace-placeholder-panel {
-    border: 1px solid var(--tk-line);
-    border-radius: var(--tk-radius-panel);
-  }
 }
 </style>

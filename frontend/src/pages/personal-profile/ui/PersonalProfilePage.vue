@@ -12,7 +12,6 @@ import {
   workspaceMemberOf,
 } from '@fsd/shared/session';
 import type { WorkspaceMember } from '@fsd/shared/session';
-import { AccountPanel } from '@fsd/shared/ui/account-panel';
 import {
   hasInvalidText,
   useFormValidation,
@@ -22,6 +21,8 @@ import {
   UiStatus,
   UiTextField,
 } from '@fsd/shared/ui/kit';
+import { WorkspacePage } from '@fsd/shared/ui/workspace-page/index';
+import '@fsd/shared/ui/account-panel/account-form.css';
 
 const { t } = useI18n();
 const profile = shallowRef<IdentityProfile>();
@@ -162,146 +163,162 @@ async function saveAvatar() {
 </script>
 
 <template>
-  <AccountPanel :title="pageTitle" wide>
-    <div v-if="!profile" class="account-form">
-      <UiStatus v-if="loadingProfile || !profileError" tone="pending">{{ t('identity.loading') }}</UiStatus>
-      <template v-else-if="signInNeeded">
-        <p class="account-notice">{{ t('identity.errors.sessionRequired') }}</p>
-        <nav :aria-label="t('identity.navigation')" class="account-links">
-          <NuxtLink to="/login">{{ t('identity.login.submit') }}</NuxtLink>
-          <NuxtLink to="/register">{{ t('identity.register.submit') }}</NuxtLink>
-        </nav>
-      </template>
+  <WorkspacePage>
+    <div class="workspace-page-body profile-content">
+      <h1 class="workspace-page-title">{{ pageTitle }}</h1>
+      <div v-if="!profile" class="account-form">
+        <UiStatus v-if="loadingProfile || !profileError" tone="pending">{{ t('identity.loading') }}</UiStatus>
+        <template v-else-if="signInNeeded">
+          <p class="account-notice">{{ t('identity.errors.sessionRequired') }}</p>
+          <nav :aria-label="t('identity.navigation')" class="account-links">
+            <NuxtLink to="/login">{{ t('identity.login.submit') }}</NuxtLink>
+            <NuxtLink to="/register">{{ t('identity.register.submit') }}</NuxtLink>
+          </nav>
+        </template>
+        <template v-else>
+          <p class="account-notice account-notice-error" role="alert">{{ t(profileError) }}</p>
+          <button class="tk-button" type="button" @click="reloadProfile">{{ t('identity.retry') }}</button>
+        </template>
+      </div>
       <template v-else>
-        <p class="account-notice account-notice-error" role="alert">{{ t(profileError) }}</p>
-        <button class="tk-button" type="button" @click="reloadProfile">{{ t('identity.retry') }}</button>
+        <form
+          v-if="!editingAvatar"
+          :aria-busy="pending"
+          class="account-form"
+          novalidate
+          @submit.prevent="saveProfile"
+        >
+          <div class="profile-grid">
+            <div class="account-form">
+              <UiTextField
+                v-model="name"
+                autocomplete="nickname"
+                :disabled="pending"
+                :error="errors.name"
+                :label="t('identity.profile.name')"
+                :maxlength="160"
+                name="display-name"
+                required
+                @blur="touch('name')"
+              />
+              <UiTextField
+                v-model="bio"
+                :disabled="pending"
+                :error="errors.bio"
+                :label="t('identity.profile.bio')"
+                :maxlength="2000"
+                name="bio"
+                :rows="4"
+                @blur="touch('bio')"
+              />
+            </div>
+            <section :aria-label="t('identity.profile.preview')" class="profile-preview">
+              <h2>{{ t('identity.profile.preview') }}</h2>
+              <div class="profile-preview-heading">
+                <UiAvatar :name="name || profile.display_name" :src="avatar?.url" />
+                <strong>{{ name || profile.display_name }}</strong>
+              </div>
+              <p v-if="bio" class="profile-text">{{ bio }}</p>
+              <button
+                ref="avatarOpener"
+                class="tk-button"
+                :disabled="pending"
+                type="button"
+                @click="openAvatars"
+              >
+                {{ t('identity.profile.changeAvatar') }}
+              </button>
+            </section>
+          </div>
+          <p v-if="message" class="account-notice account-notice-error" role="alert">{{ t(message) }}</p>
+          <NuxtLink v-if="sessionExpired" to="/login">{{ t('identity.login.submit') }}</NuxtLink>
+          <footer class="profile-footer">
+            <UiStatus v-if="feedback" tone="success">{{ t(feedback) }}</UiStatus>
+            <div class="account-actions">
+              <button
+                class="tk-button"
+                :disabled="pending || !hasEdits"
+                type="button"
+                @click="cancelProfile"
+              >{{ t('identity.cancel') }}</button>
+              <button class="tk-button tk-button-primary" :disabled="pending || !hasEdits || !valid" type="submit">
+                {{ t(pending ? 'identity.working' : 'identity.save') }}
+              </button>
+            </div>
+          </footer>
+        </form>
+        <form
+          v-else
+          :aria-busy="pending || loadingAssets"
+          class="account-form"
+          @submit.prevent="saveAvatar"
+        >
+          <section class="profile-preview">
+            <h2 ref="avatarHeading" tabindex="-1">{{ t(avatarChanged ? 'identity.profile.avatarPreview' : 'identity.profile.currentAvatar') }}</h2>
+            <div class="profile-preview-heading">
+              <UiAvatar :name="profile.display_name" :src="avatar?.url" />
+              <strong>{{ profile.display_name }}</strong>
+            </div>
+          </section>
+          <UiStatus v-if="loadingAssets || (!assets && !assetsError)" tone="pending">{{ t('identity.loading') }}</UiStatus>
+          <div v-else-if="assetsError" class="account-form">
+            <p class="account-notice account-notice-error" role="alert">{{ t(assetsError) }}</p>
+            <button class="tk-button" type="button" @click="reloadAssets">{{ t('identity.retry') }}</button>
+          </div>
+          <fieldset v-else-if="assets?.length" class="profile-avatar-fieldset" :disabled="pending">
+            <legend>{{ t('identity.profile.avatars') }}</legend>
+            <div class="profile-avatar-options">
+              <label v-for="(item, index) in assets" :key="item.id" class="profile-avatar-option">
+                <input
+                  v-model="selectedId"
+                  class="tk-sr-only"
+                  name="avatar"
+                  type="radio"
+                  :value="item.id"
+                >
+                <span class="tk-sr-only">{{ t('identity.profile.avatarChoice', { number: index + 1 }) }}</span>
+                <span aria-hidden="true">
+                  <UiAvatar :name="t('identity.profile.avatarChoice', { number: index + 1 })" :src="item.url" />
+                </span>
+              </label>
+            </div>
+          </fieldset>
+          <p v-else class="account-notice">{{ t('identity.profile.noAvatars') }}</p>
+          <p v-if="message" class="account-notice account-notice-error" role="alert">{{ t(message) }}</p>
+          <NuxtLink v-if="sessionExpired" to="/login">{{ t('identity.login.submit') }}</NuxtLink>
+          <footer class="profile-footer">
+            <div class="account-actions">
+              <button
+                class="tk-button"
+                :disabled="pending"
+                type="button"
+                @click="closeAvatars"
+              >{{ t('identity.cancel') }}</button>
+              <button class="tk-button tk-button-primary" :disabled="pending || loadingAssets || !avatarChanged" type="submit">
+                {{ t(pending ? 'identity.working' : 'identity.save') }}
+              </button>
+            </div>
+          </footer>
+        </form>
       </template>
     </div>
-    <template v-else>
-      <form
-        v-if="!editingAvatar"
-        :aria-busy="pending"
-        class="account-form"
-        novalidate
-        @submit.prevent="saveProfile"
-      >
-        <div class="profile-grid">
-          <div class="account-form">
-            <UiTextField
-              v-model="name"
-              autocomplete="nickname"
-              :disabled="pending"
-              :error="errors.name"
-              :label="t('identity.profile.name')"
-              :maxlength="160"
-              name="display-name"
-              required
-              @blur="touch('name')"
-            />
-            <UiTextField
-              v-model="bio"
-              :disabled="pending"
-              :error="errors.bio"
-              :label="t('identity.profile.bio')"
-              :maxlength="2000"
-              name="bio"
-              :rows="4"
-              @blur="touch('bio')"
-            />
-          </div>
-          <section :aria-label="t('identity.profile.preview')" class="profile-preview">
-            <h2>{{ t('identity.profile.preview') }}</h2>
-            <div class="profile-preview-heading">
-              <UiAvatar :name="name || profile.display_name" :src="avatar?.url" />
-              <strong>{{ name || profile.display_name }}</strong>
-            </div>
-            <p v-if="bio" class="profile-text">{{ bio }}</p>
-            <button
-              ref="avatarOpener"
-              class="tk-button"
-              :disabled="pending"
-              type="button"
-              @click="openAvatars"
-            >
-              {{ t('identity.profile.changeAvatar') }}
-            </button>
-          </section>
-        </div>
-        <p v-if="message" class="account-notice account-notice-error" role="alert">{{ t(message) }}</p>
-        <NuxtLink v-if="sessionExpired" to="/login">{{ t('identity.login.submit') }}</NuxtLink>
-        <footer class="profile-footer">
-          <UiStatus v-if="feedback" tone="success">{{ t(feedback) }}</UiStatus>
-          <div class="account-actions">
-            <button
-              class="tk-button"
-              :disabled="pending || !hasEdits"
-              type="button"
-              @click="cancelProfile"
-            >{{ t('identity.cancel') }}</button>
-            <button class="tk-button tk-button-primary" :disabled="pending || !hasEdits || !valid" type="submit">
-              {{ t(pending ? 'identity.working' : 'identity.save') }}
-            </button>
-          </div>
-        </footer>
-      </form>
-      <form
-        v-else
-        :aria-busy="pending || loadingAssets"
-        class="account-form"
-        @submit.prevent="saveAvatar"
-      >
-        <section class="profile-preview">
-          <h2 ref="avatarHeading" tabindex="-1">{{ t(avatarChanged ? 'identity.profile.avatarPreview' : 'identity.profile.currentAvatar') }}</h2>
-          <div class="profile-preview-heading">
-            <UiAvatar :name="profile.display_name" :src="avatar?.url" />
-            <strong>{{ profile.display_name }}</strong>
-          </div>
-        </section>
-        <UiStatus v-if="loadingAssets || (!assets && !assetsError)" tone="pending">{{ t('identity.loading') }}</UiStatus>
-        <div v-else-if="assetsError" class="account-form">
-          <p class="account-notice account-notice-error" role="alert">{{ t(assetsError) }}</p>
-          <button class="tk-button" type="button" @click="reloadAssets">{{ t('identity.retry') }}</button>
-        </div>
-        <fieldset v-else-if="assets?.length" class="profile-avatar-fieldset" :disabled="pending">
-          <legend>{{ t('identity.profile.avatars') }}</legend>
-          <div class="profile-avatar-options">
-            <label v-for="(item, index) in assets" :key="item.id" class="profile-avatar-option">
-              <input
-                v-model="selectedId"
-                class="tk-sr-only"
-                name="avatar"
-                type="radio"
-                :value="item.id"
-              >
-              <span class="tk-sr-only">{{ t('identity.profile.avatarChoice', { number: index + 1 }) }}</span>
-              <span aria-hidden="true">
-                <UiAvatar :name="t('identity.profile.avatarChoice', { number: index + 1 })" :src="item.url" />
-              </span>
-            </label>
-          </div>
-        </fieldset>
-        <p v-else class="account-notice">{{ t('identity.profile.noAvatars') }}</p>
-        <p v-if="message" class="account-notice account-notice-error" role="alert">{{ t(message) }}</p>
-        <NuxtLink v-if="sessionExpired" to="/login">{{ t('identity.login.submit') }}</NuxtLink>
-        <footer class="profile-footer">
-          <div class="account-actions">
-            <button
-              class="tk-button"
-              :disabled="pending"
-              type="button"
-              @click="closeAvatars"
-            >{{ t('identity.cancel') }}</button>
-            <button class="tk-button tk-button-primary" :disabled="pending || loadingAssets || !avatarChanged" type="submit">
-              {{ t(pending ? 'identity.working' : 'identity.save') }}
-            </button>
-          </div>
-        </footer>
-      </form>
-    </template>
-  </AccountPanel>
+  </WorkspacePage>
 </template>
 
 <style scoped>
+.profile-content {
+  inline-size: min(100%, 780px);
+}
+
+.profile-content > .account-form {
+  margin-block-start: var(--tk-space-5);
+}
+
+.profile-content a:focus-visible {
+  outline: 2px solid var(--tk-focus);
+  outline-offset: 2px;
+}
+
 .profile-grid {
   display: grid;
   grid-template-columns: 1.15fr 1fr;

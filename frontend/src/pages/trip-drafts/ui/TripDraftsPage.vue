@@ -18,6 +18,7 @@ import {
   readFailureStatus,
 } from '@fsd/shared/api';
 import { SystemErrorState } from '@fsd/shared/ui/page-error';
+import { WorkspacePage } from '@fsd/shared/ui/workspace-page/index';
 import type {
   MyTripDraftList,
   TravelDraft,
@@ -108,7 +109,7 @@ onBeforeUnmount(() => request.abort());
 </script>
 
 <template>
-  <main class="trip-workspace">
+  <WorkspacePage class="trip-workspace">
     <SystemErrorState
       v-if="readStatus && !draft && !result"
       class="trip-workspace__unavailable"
@@ -123,20 +124,12 @@ onBeforeUnmount(() => request.abort());
       >{{ t('catalog.retry') }}</button>
       <NuxtLink class="tk-button" :to="tripId ? '/trips' : '/feed'">{{ t(tripId ? 'workspace.trips' : 'workspace.feed.title') }}</NuxtLink>
     </SystemErrorState>
-    <div v-else class="trip-workspace__content">
-      <NuxtLink class="trip-workspace__back" :to="tripId ? '/trips' : '/'">
-        ← {{ t(tripId ? 'workspace.trips' : 'productName') }}
+    <div v-else class="workspace-page-body trip-workspace__content">
+      <NuxtLink v-if="tripId" class="trip-workspace__back" to="/trips">
+        ← {{ t('workspace.trips') }}
       </NuxtLink>
       <header>
-        <h1>{{ tripId ? (draft?.title || 'Путешествие') : 'Мои путешествия' }}</h1>
-        <button
-          v-if="!tripId && !signedOut"
-          class="tk-button tk-button-primary"
-          type="button"
-          @click="creating = true"
-        >
-          {{ t('workspace.createTrip') }}
-        </button>
+        <h1 class="workspace-page-title">{{ tripId ? (draft?.title || t('tripDrafts.programTitle')) : t('workspace.trips') }}</h1>
         <button
           v-if="draft"
           class="tk-button"
@@ -203,17 +196,16 @@ onBeforeUnmount(() => request.abort());
         >Показать ещё</button>
       </section>
     </div>
-  </main>
+  </WorkspacePage>
 </template>
 
 <style scoped>
-.trip-workspace { min-height: var(--workspace-content-height, 100dvh); background: var(--tk-canvas); color: var(--tk-ink); }
-.trip-workspace__unavailable { min-height: inherit; }
-.trip-workspace__content { max-width: 56rem; margin: 0 auto; padding: clamp(1rem, 5vw, 4rem); }
-.trip-workspace__content header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 1rem 0 2rem; }
-.trip-workspace__content h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 2.75rem); }
-.trip-workspace__content h2 { font-size: 1.25rem; margin: 1.8rem 0 .9rem; }
+.trip-workspace__unavailable { min-block-size: 100%; }
+.trip-workspace__content { overflow-wrap: anywhere; }
+.trip-workspace__content header { display: flex; justify-content: space-between; align-items: center; gap: var(--tk-space-4); flex-wrap: wrap; margin-block-end: var(--tk-space-5); }
+.trip-workspace__content h2 { font-size: var(--tk-text-lg); margin: var(--tk-space-5) 0 var(--tk-space-3); }
 .trip-workspace__back { color: var(--tk-accent); font-weight: 650; text-decoration: none; }
+.trip-workspace__back + header { margin-block-start: var(--tk-space-3); }
 .trip-workspace__list { list-style: none; display: grid; gap: .75rem; margin: 0 0 1rem; padding: 0; }
 .trip-workspace__list li { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: .75rem; padding: 1rem; border: 1px solid var(--tk-line); border-radius: var(--tk-radius); background: var(--tk-surface); }
 .trip-workspace__list p { margin: .35rem 0 0; white-space: pre-wrap; color: var(--tk-muted); }

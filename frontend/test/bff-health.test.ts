@@ -486,6 +486,7 @@ it.each(['/catalog', `/catalog/${routeId}`])('renders the guest and workspace sh
   const guestHtml = await guest.text();
   expect(guestHtml).toContain(catalogSummary.title);
   expect(guestHtml).toMatch(/<div class="catalog-frame catalog-frame--checking"/);
+  expect(guestHtml).not.toMatch(/class="[^"]*\bworkspace-page-panel\b[^"]*"/);
   const login = guestHtml.match(/<a\b[^>]*href="\/login"[^>]*>([\s\S]*?)<\/a>/)?.[1];
   expect(login?.replace(/<[^>]+>/g, '').trim()).toBe('Войти');
 
@@ -494,9 +495,19 @@ it.each(['/catalog', `/catalog/${routeId}`])('renders the guest and workspace sh
   const memberHtml = await member.text();
   expect(memberHtml).toContain(catalogSummary.title);
   expect(memberHtml).toContain('id="workspace-sidebar"');
-  expect(memberHtml).toMatch(/<main\b[^>]*class="catalog-workspace-content"/);
+  expect(memberHtml).toMatch(/<main\b[^>]*class="catalog-workspace-content workspace-page"/);
+  expect(memberHtml).toMatch(/class="[^"]*\bworkspace-page-panel\b[^"]*"/);
   expect(memberHtml).not.toContain('class="catalog-bar"');
   expect(memberHtml).not.toContain('workspace-csrf-fixture');
+});
+
+it.each(['/feed', '/chats', '/trips', `/trips/${routeId}`, '/profile'])('renders a single shared workspace panel at %s', async (path) => {
+  const response = await fetch(path, { headers: { cookie: 'tropio_session=workspace-active' } });
+  expect(response.status).toBe(200);
+  const html = await response.text();
+  expect(html).toContain('id="workspace-sidebar"');
+  expect(html.match(/<main\b/g)).toHaveLength(1);
+  expect(html.match(/class="[^"]*\bworkspace-page-panel\b[^"]*"/g)).toHaveLength(1);
 });
 
 it('serves the catalog with guest navigation when identity verification fails', async () => {

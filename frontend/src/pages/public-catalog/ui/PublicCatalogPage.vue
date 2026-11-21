@@ -472,7 +472,7 @@ if (import.meta.server) {
 
 <template>
   <CatalogFrame :session-confirmed="sessionConfirmed">
-    <div class="catalog-page" :class="{ 'catalog-list-mode': mode === 'list', 'catalog-trip-open': !!expandedId }">
+    <div class="catalog-page" :class="{ 'workspace-page-panel': sessionConfirmed, 'catalog-list-mode': mode === 'list', 'catalog-trip-open': !!expandedId }">
       <h1 v-if="!expandedId" class="tk-sr-only">{{ t('catalog.title') }}</h1>
       <div class="catalog-tools">
         <form class="catalog-search" role="search" @submit.prevent="setFilters({ q: query.trim() })">

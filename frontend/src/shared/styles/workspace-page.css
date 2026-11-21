@@ -1,0 +1,32 @@
+.workspace-page {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  block-size: var(--workspace-content-height);
+  padding: var(--workspace-page-inset);
+}
+
+.workspace-page-panel {
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: auto;
+  background: #fcfdf9;
+}
+
+.workspace-page-body {
+  padding: clamp(1rem, 2vw, 1.5rem);
+}
+
+.workspace-page-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.16;
+  letter-spacing: -.025em;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 700px) {
+  .workspace-page-panel {
+    border: 1px solid var(--tk-line);
+    border-radius: var(--tk-radius-panel);
+  }
+}

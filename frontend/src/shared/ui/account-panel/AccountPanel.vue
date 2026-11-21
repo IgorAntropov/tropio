@@ -4,7 +4,6 @@ import AuthMapBackdrop from './AuthMapBackdrop.vue';
 
 defineProps<{
   title: string;
-  wide?: boolean;
   auth?: boolean;
   backToLogin?: boolean;
   loginLink?: string;
@@ -15,7 +14,7 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <main class="account-surface" :class="{ 'account-surface-wide': wide, 'account-surface-auth': auth }">
+  <main class="account-surface" :class="{ 'account-surface-auth': auth }">
     <AuthMapBackdrop v-if="auth" class="account-map" />
     <div class="account-panel">
       <header class="account-panel-header">
