@@ -9,6 +9,7 @@ import type {
   PublicTripSummary,
 } from '@fsd/shared/api';
 import { UiButton } from '@fsd/shared/ui/kit';
+import { catalogQuery } from '../model/use-catalog-screens';
 import PublicReadIssue from './PublicReadIssue.vue';
 
 const props = defineProps<{ trip: PublicTrip | null; preview?: PublicTripSummary; status?: number; pending: boolean; mobile: boolean }>();
@@ -42,7 +43,7 @@ watch(() => [props.trip?.trip_id, props.pending, props.status], focusDetails, { 
 </script>
 
 <template>
-  <section :aria-label="card?.title ?? t('catalog.short')" class="catalog-expanded">
+  <section :aria-label="card?.title ?? t('catalog.short')" class="catalog-expanded" :class="{ 'catalog-expanded-unavailable': status && status !== 200 }">
     <div ref="panel" class="catalog-expanded-card">
       <TripCard
         v-if="card"
@@ -83,8 +84,15 @@ watch(() => [props.trip?.trip_id, props.pending, props.status], focusDetails, { 
             width="14"
           ><path d="m1 1 12 12M13 1 1 13" /></svg>
         </UiButton>
-        <PublicReadIssue :pending="pending" :status="status" @retry="emit('retry')">
-          <template #returnToCatalog><button class="tk-button" type="button" @click="emit('close')">{{ t('catalog.open') }}</button></template>
+        <PublicReadIssue
+          detail
+          :pending="pending"
+          :status="status"
+          @retry="emit('retry')"
+        >
+          <template #returnToCatalog>
+            <NuxtLink class="tk-button" :to="{ path: '/catalog', query: catalogQuery(route.query) }">{{ t('catalog.open') }}</NuxtLink>
+          </template>
         </PublicReadIssue>
       </div>
     </div>

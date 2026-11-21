@@ -12,6 +12,10 @@ import type {
   PublicTrip,
   PublicTripPage,
 } from '@fsd/shared/api';
+import {
+  isResourceId,
+  readFailureStatus,
+} from '@fsd/shared/api';
 import { RouteMap } from '@fsd/shared/map';
 import type { MapSelection } from '@fsd/shared/map';
 import { UiDateRange } from '@fsd/shared/ui/date-range';
@@ -249,7 +253,7 @@ const detail = usePublicResource('public-catalog-detail', async (signal) => {
   if (!id) {
     return null;
   }
-  if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id)) {
+  if (!isResourceId(id)) {
     throw createError({ statusCode: 404 });
   }
   try {
@@ -262,7 +266,7 @@ const detail = usePublicResource('public-catalog-detail', async (signal) => {
   }
   catch (error) {
     signal.throwIfAborted();
-    if (id === expandedId.value && error && typeof error === 'object' && 'statusCode' in error && error.statusCode === 404) {
+    if (id === expandedId.value && [403, 404, 410].includes(readFailureStatus(error))) {
       const alreadyWithdrawn = withdrawn.has(id);
       withdrawn.set(id, ++accessCheck);
       if (selected.value === id) {
@@ -281,7 +285,8 @@ const detail = usePublicResource('public-catalog-detail', async (signal) => {
 });
 const expandedTrip = computed(() => detail.value.value?.trip_id === expandedId.value ? detail.value.value : null);
 const { day, segment, points: routePoints, tracks, pois, selection, focus: routeFocus, select } = useTripRoute(expandedTrip);
-const routeScreen = computed(() => routeMap.value && (!detail.status.value || detail.status.value === 200));
+const detailUnavailable = computed(() => Boolean(detail.status.value && detail.status.value !== 200));
+const routeScreen = computed(() => routeMap.value && !detailUnavailable.value);
 const displayedDay = computed(() => {
   const days = expandedTrip.value?.days;
   return days?.find(item => item.position === dayNumber.value) ?? days?.[0];
@@ -372,7 +377,9 @@ function more() {
 }
 const points = computed(() => (results.value?.items ?? []).map(trip => ({ id: trip.trip_id, label: trip.title, position: trip.start })));
 const current = computed(() => results.value?.items.find(item => item.trip_id === selected.value) ?? results.value?.items[0]);
-const mapVisible = computed(() => expandedId.value ? !mobile.value || routeScreen.value : (!mobile.value && detailLeaving.value) || (mode.value === 'map' && !!current.value));
+const mapVisible = computed(() => expandedId.value
+  ? !detailUnavailable.value && (!mobile.value || routeScreen.value)
+  : (!mobile.value && detailLeaving.value) || (mode.value === 'map' && !!current.value));
 const routeName = computed(() => (expandedTrip.value ?? preview.value)?.title);
 const routeDay = computed(() => displayedDay.value?.position ?? dayNumber.value);
 function showRoute(id: string) {

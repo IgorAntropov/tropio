@@ -100,7 +100,12 @@ export async function verifyWorkspaceSession(
     member.value = workspaceMemberOf(profile);
   }
   if (status === 'unavailable') {
-    throw createError({ statusCode: 503, statusMessage: 'Service Unavailable', fatal: true });
+    throw createError({
+      statusCode: 503,
+      statusMessage: 'Service Unavailable',
+      fatal: true,
+      data: { retryPath: to.fullPath },
+    });
   }
   return status;
 }

@@ -10,7 +10,7 @@ import type {
   LocationQueryRaw,
 } from 'vue-router';
 
-function catalogQuery(query: LocationQuery): LocationQueryRaw {
+export function catalogQuery(query: LocationQuery): LocationQueryRaw {
   return Object.fromEntries(Object.entries(query).filter(([key]) => key !== 'screen' && key !== 'day'));
 }
 

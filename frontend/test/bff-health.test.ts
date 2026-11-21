@@ -527,12 +527,15 @@ it('renders public trips without forwarding credentials and drops revoked SSR me
     expect(await details.text()).toContain(catalogSummary.title);
     expect(forwarded.cookie).toBeUndefined();
     expect(forwarded['x-csrf-token']).toBeUndefined();
-    for (const status of [404, 503]) {
+    for (const [status, illustration] of [[403, 'gate'], [404, 'map'], [410, 'map'], [500, 'lantern'], [503, 'lantern']] as const) {
       catalogStatus = status;
       const hidden = await fetch(`/catalog/${routeId}`, { headers });
       expect(hidden.status).toBe(status);
       expect(hidden.headers.get('cache-control')).toContain('no-store');
-      expect(await hidden.text()).not.toContain(catalogSummary.title);
+      const body = await hidden.text();
+      expect(body).not.toContain(catalogSummary.title);
+      expect(body).toContain(`system-pages/${illustration}.webp`);
+      expect(body).toContain('noindex,nofollow');
     }
     const list = await fetch('/catalog', { headers });
     expect(await list.text()).not.toContain(catalogSummary.title);
@@ -542,6 +545,16 @@ it('renders public trips without forwarding credentials and drops revoked SSR me
     catalogStatus = 200;
   }
 });
+
+it.each(['/organizers/not-an-id', '/trips/not-an-id', `/trips/${routeId}/days/not-an-id/route`])(
+  'renders an illustrated 404 for an invalid resource address at %s', async (path) => {
+    const response = await fetch(path, { headers: { accept: 'text/html' }, redirect: 'manual' });
+    expect(response.status).toBe(404);
+    const html = await response.text();
+    expect(html).toContain('system-pages/map.webp');
+    expect(html).toContain('noindex');
+  },
+);
 
 it.each([
   ['2026-03-01', null, '1 мар. 2026 г.'],

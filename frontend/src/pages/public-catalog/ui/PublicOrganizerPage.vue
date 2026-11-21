@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import type { PublicIdentityProfile } from '@fsd/shared/api';
+import {
+  canRetryRead,
+  isResourceId,
+} from '@fsd/shared/api';
 import { UiAvatar } from '@fsd/shared/ui/kit';
+import { SystemErrorState } from '@fsd/shared/ui/page-error';
 import { usePublicResource } from '../model/use-public-resource';
 import CatalogFrame from './CatalogFrame.vue';
 
@@ -8,7 +13,7 @@ const props = defineProps<{ id: string }>();
 const { t } = useI18n();
 const canonical = new URL('/organizers/' + encodeURIComponent(props.id), useRuntimeConfig().public.siteUrl).href;
 const { ready, value: profile, status, pending, refresh } = usePublicResource('public-organizer-' + props.id, async (signal) => {
-  if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(props.id)) {
+  if (!isResourceId(props.id)) {
     throw createError({ statusCode: 404 });
   }
   return await $fetch<PublicIdentityProfile>('/api/v1/users/' + encodeURIComponent(props.id), {
@@ -37,19 +42,28 @@ if (import.meta.server && status.value !== 200) {
 <template>
   <CatalogFrame>
     <div class="catalog-detail">
-      <NuxtLink class="catalog-back" to="/catalog">← {{ t('catalog.title') }}</NuxtLink>
+      <NuxtLink v-if="profile" class="catalog-back" to="/catalog">← {{ t('catalog.title') }}</NuxtLink>
       <article v-if="profile" class="detail-hero detail-summary catalog-profile">
         <UiAvatar :name="profile.display_name" :src="profile.avatar?.url" />
         <div><span>{{ t('catalog.organizer') }}</span><h1>{{ profile.display_name }}</h1><p v-if="profile.bio">{{ profile.bio }}</p></div>
       </article>
-      <div v-else class="catalog-empty"><h1>{{ t(pending ? 'catalog.loadingProfile' : 'catalog.profileUnavailable') }}</h1>
+      <SystemErrorState
+        v-else-if="status && status !== 200"
+        class="catalog-profile-issue"
+        heading="h1"
+        :status-code="status"
+        :title="status === 404 || status === 410 ? t('catalog.profileUnavailable') : undefined"
+      >
         <button
-          v-if="status === 503"
-          class="tk-button"
+          v-if="canRetryRead(status)"
+          class="tk-button tk-button-primary"
+          :disabled="pending"
           type="button"
           @click="refresh"
         >{{ t('catalog.retry') }}</button>
-      </div>
+        <NuxtLink class="tk-button" to="/catalog">{{ t('catalog.open') }}</NuxtLink>
+      </SystemErrorState>
+      <p v-else class="catalog-empty" role="status">{{ t('catalog.loadingProfile') }}</p>
     </div>
   </CatalogFrame>
 </template>

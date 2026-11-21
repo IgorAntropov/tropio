@@ -13,7 +13,7 @@ const { t } = useI18n();
 const trip = demoTrips.find(item => item.slug === route.params.slug);
 
 if (!trip) {
-  throw createError({ status: 404 });
+  throw createError({ status: 404, fatal: true });
 }
 
 useSeoMeta({ title: () => t('pageTitle', { title: trip.title }) });

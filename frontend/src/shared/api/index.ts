@@ -56,3 +56,8 @@ export type {
   SystemAvatar,
 } from './identity';
 export { useIdentityAction } from './use-identity-action';
+export {
+  canRetryRead,
+  readFailureStatus,
+} from './read-failure';
+export { isResourceId } from './resource-id';

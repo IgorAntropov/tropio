@@ -12,7 +12,12 @@ import {
   TripDraftDialog,
   useTripCreation,
 } from '@fsd/features/trip-draft-dialog';
-import { editorApi } from '@fsd/shared/api';
+import {
+  canRetryRead,
+  editorApi,
+  readFailureStatus,
+} from '@fsd/shared/api';
+import { SystemErrorState } from '@fsd/shared/ui/page-error';
 import type {
   MyTripDraftList,
   TravelDraft,
@@ -34,6 +39,7 @@ const router = useRouter();
 const result = shallowRef<MyTripDraftList | null>(null);
 const draft = shallowRef<TravelDraft | null>(null);
 const issue = ref('');
+const readStatus = ref<number>();
 const signedOut = ref(false);
 const loading = ref(true);
 const creating = useTripCreation();
@@ -59,12 +65,14 @@ function failure(error: unknown) {
     return;
   }
   signedOut.value = editorProblemCode(error) === 'SESSION_REQUIRED';
+  readStatus.value = signedOut.value ? undefined : readFailureStatus(error);
   issue.value = describeEditorError(error);
 }
 
 async function load(append = false) {
   loading.value = true;
   issue.value = '';
+  readStatus.value = undefined;
   signedOut.value = false;
   try {
     if (props.tripId) {
@@ -101,7 +109,21 @@ onBeforeUnmount(() => request.abort());
 
 <template>
   <main class="trip-workspace">
-    <div class="trip-workspace__content">
+    <SystemErrorState
+      v-if="readStatus && !draft && !result"
+      class="trip-workspace__unavailable"
+      heading="h1"
+      :status-code="readStatus"
+    >
+      <button
+        v-if="canRetryRead(readStatus)"
+        class="tk-button tk-button-primary"
+        type="button"
+        @click="load()"
+      >{{ t('catalog.retry') }}</button>
+      <NuxtLink class="tk-button" :to="tripId ? '/trips' : '/feed'">{{ t(tripId ? 'workspace.trips' : 'workspace.feed.title') }}</NuxtLink>
+    </SystemErrorState>
+    <div v-else class="trip-workspace__content">
       <NuxtLink class="trip-workspace__back" :to="tripId ? '/trips' : '/'">
         ← {{ t(tripId ? 'workspace.trips' : 'productName') }}
       </NuxtLink>
@@ -130,7 +152,7 @@ onBeforeUnmount(() => request.abort());
         @saved="acceptSettings"
       />
       <p v-if="issue" class="trip-workspace__message" role="alert">{{ issue }}</p>
-      <NuxtLink v-if="signedOut" class="tk-button tk-button-primary" to="/login">Войти</NuxtLink>
+      <NuxtLink v-if="signedOut" class="tk-button tk-button-primary" :to="{ path: '/login', query: { returnTo: route.fullPath } }">{{ t('identity.login.submit') }}</NuxtLink>
       <button
         v-else-if="issue"
         class="tk-button"
@@ -186,6 +208,7 @@ onBeforeUnmount(() => request.abort());
 
 <style scoped>
 .trip-workspace { min-height: var(--workspace-content-height, 100dvh); background: var(--tk-canvas); color: var(--tk-ink); }
+.trip-workspace__unavailable { min-height: inherit; }
 .trip-workspace__content { max-width: 56rem; margin: 0 auto; padding: clamp(1rem, 5vw, 4rem); }
 .trip-workspace__content header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 1rem 0 2rem; }
 .trip-workspace__content h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 2.75rem); }

@@ -3,6 +3,7 @@ import {
   onMounted,
   ref,
 } from 'vue';
+import { readFailureStatus } from '@fsd/shared/api';
 
 export function usePublicResource<T>(key: string, load: (signal: AbortSignal) => Promise<T>) {
   const hidden = ref(false);
@@ -14,8 +15,7 @@ export function usePublicResource<T>(key: string, load: (signal: AbortSignal) =>
     }
     catch (error) {
       signal.throwIfAborted();
-      const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 503;
-      return { status: status === 404 || status === 400 ? status : 503, body: null };
+      return { status: readFailureStatus(error), body: null };
     }
   }, {
     deep: false,

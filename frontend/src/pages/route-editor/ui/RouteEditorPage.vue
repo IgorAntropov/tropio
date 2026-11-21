@@ -13,8 +13,10 @@ import type {
   MapSelection,
 } from '@fsd/shared/map';
 import {
+  canRetryRead,
   editorApi,
   identityApi,
+  readFailureStatus,
 } from '@fsd/shared/api';
 import type {
   DraftDay,
@@ -31,6 +33,7 @@ import {
 import type { EditSelection } from '@fsd/features/edit-route';
 import { useCreatedTripDay } from '@fsd/features/trip-draft-dialog';
 import { UiDialog } from '@fsd/shared/ui/kit';
+import { SystemErrorState } from '@fsd/shared/ui/page-error';
 import '@fsd/shared/ui/kit/kit.css';
 
 const props = defineProps<{ tripId: string; dayId: string }>();
@@ -42,6 +45,7 @@ const day = shallowRef<DraftDay | null>(null);
 const csrf = ref('');
 const loading = ref(true);
 const loadIssue = ref('');
+const readStatus = ref<number>();
 const signIn = ref(false);
 const request = new AbortController();
 const key = ref('');
@@ -146,7 +150,7 @@ async function sync(next: TravelDraft) {
   loaded.value = next;
   day.value = next.days.find(item => item.day_id === props.dayId) ?? null;
   if (!day.value) {
-    loadIssue.value = 'День путешествия недоступен.';
+    readStatus.value = 404;
     return;
   }
   if (!day.value.route_id) {
@@ -163,6 +167,7 @@ async function sync(next: TravelDraft) {
 async function load() {
   loading.value = true;
   loadIssue.value = '';
+  readStatus.value = undefined;
   signIn.value = false;
   try {
     await renewCsrf();
@@ -170,6 +175,9 @@ async function load() {
   }
   catch (error) {
     showLoadError(error);
+    if (!request.signal.aborted && !signIn.value) {
+      readStatus.value = readFailureStatus(error);
+    }
   }
   finally {
     loading.value = false;
@@ -469,12 +477,22 @@ onBeforeUnmount(() => {
   </RouteEditor>
 
   <main v-else class="route-loading">
-    <section class="route-loading__panel">
+    <SystemErrorState v-if="readStatus" heading="h1" :status-code="readStatus">
+      <button
+        v-if="canRetryRead(readStatus)"
+        class="tk-button tk-button-primary"
+        type="button"
+        @click="load"
+      >{{ t('catalog.retry') }}</button>
+      <NuxtLink v-if="loaded" class="tk-button" :to="backTo">{{ fromMap ? t('workspace.backToMap') : t('tripDrafts.programTitle') }}</NuxtLink>
+      <NuxtLink v-else class="tk-button" to="/trips">{{ t('workspace.trips') }}</NuxtLink>
+    </SystemErrorState>
+    <section v-else class="route-loading__panel">
       <NuxtLink :to="backTo">{{ fromMap ? '← ' + t('workspace.backToMap') : '← К программе путешествия' }}</NuxtLink>
       <h1>{{ loaded?.title || 'Редактор маршрута' }}</h1>
       <p v-if="loadIssue" role="alert">{{ loadIssue }}</p>
       <p v-if="loading" role="status">Загружаем маршрут…</p>
-      <NuxtLink v-else-if="signIn" class="tk-button tk-button-primary" to="/login">Войти</NuxtLink>
+      <NuxtLink v-else-if="signIn" class="tk-button tk-button-primary" :to="{ path: '/login', query: { returnTo: route.fullPath } }">{{ t('identity.login.submit') }}</NuxtLink>
       <button
         v-else-if="day && !day.route_id"
         class="tk-button tk-button-primary"

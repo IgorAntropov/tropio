@@ -106,6 +106,7 @@ body:has(.catalog-frame) { margin: 0; background: var(--tk-canvas); }
 .catalog-empty { grid-column: 1/-1; align-self: center; justify-self: center; max-width: 36rem; padding: clamp(4rem, 8vh, 7rem) 1.25rem; margin-inline: auto; text-align: center; }
 .catalog-empty h2 { margin: 0; font-size: clamp(1.25rem, 2.6vw, 1.8rem); letter-spacing: -.03em; }
 .catalog-empty p { color: var(--tk-muted); line-height: 1.6; }
+.catalog-read-issue { grid-column: 1/-1; margin: auto; }
 .tk-dialog.catalog-drawer {
   --drawer-gutter: clamp(1rem, 3vw, 1.75rem);
   position: fixed;
@@ -171,6 +172,7 @@ body:has(.catalog-frame) { margin: 0; background: var(--tk-canvas); }
 }
 .catalog-detail { max-width: 76rem; margin: 0 auto; padding: clamp(1rem, 2.5vw, 2.4rem); }
 .catalog-back { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: .55rem; font-weight: 650; }
+.catalog-profile-issue { min-height: 65dvh; }
 .detail-hero { overflow: hidden; background: var(--tk-surface); border: 1px solid var(--tk-line); border-radius: var(--tk-radius-panel); }
 .detail-summary { padding: clamp(1rem, 2.5vw, 2rem); }
 .detail-summary p { margin: .85rem 0 0; color: var(--tk-muted); line-height: 1.55; white-space: pre-line; }
@@ -249,6 +251,7 @@ body:has(.catalog-frame) { margin: 0; background: var(--tk-canvas); }
   pointer-events: none;
 }
 .catalog-expanded-leaving { position: absolute; inset: 0 auto auto 0; }
+.catalog-expanded-unavailable { width: 100%; }
 .catalog-expanded-card {
   height: 100%;
   min-width: 0;
@@ -297,6 +300,7 @@ body:has(.catalog-frame) { margin: 0; background: var(--tk-canvas); }
 .catalog-card-expanded .catalog-participation { text-align: end; scroll-margin-block: 1rem; }
 .catalog-card-timeline { min-width: 0; grid-area: timeline; }
 .catalog-detail-issue { position: relative; border: 1px solid var(--tk-line); border-radius: var(--tk-radius); }
+.catalog-expanded-unavailable .catalog-detail-issue { display: grid; height: 100%; align-items: safe center; overflow: auto; border: 0; }
 .catalog-detail-issue .catalog-close-trip { position: absolute; top: .5rem; right: .5rem; }
 @media (min-width: 700px) and (max-width: 1000px) {
   .catalog-stage { --catalog-sidebar: max(17rem, 40cqi); }

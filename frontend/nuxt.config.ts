@@ -8,6 +8,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-11-18',
   devtools: { enabled: false },
   modules: ['@nuxt/eslint', '@nuxtjs/i18n'],
+  plugins: [fileURLToPath(new URL('./src/app/plugins/offline-navigation.client.ts', import.meta.url))],
   i18n: {
     defaultLocale,
     locales: [{ code: defaultLocale, language: defaultLocale, file: 'ru.json' }],
@@ -67,6 +68,7 @@ export default defineNuxtConfig({
     pages: {
       srcDir: 'demo/',
       serverDir: 'demo/server',
+      experimental: { prerenderErrorPages: [404] },
       app: {
         baseURL: pagesBaseURL,
         head: {
