@@ -18,6 +18,7 @@ const problems = {
   IDEMPOTENCY_KEY_REUSED: [409, 'Idempotency key reused'],
   EQUIPMENT_DETAILS_CONFLICT: [409, 'Equipment with this name has different details'],
   TRIP_REVISION_CONFLICT: [409, 'Trip revision conflict'],
+  TRIP_FAVORITE_OWN: [409, 'Organizers cannot save their own trip'],
   TRIP_APPLICATION_UNAVAILABLE: [409, 'Participation requests are closed for this user or trip'],
   ROUTE_REVISION_CONFLICT: [409, 'Route revision conflict'],
   POI_REVISION_CONFLICT: [409, 'POI revision conflict'],

@@ -1,0 +1,320 @@
+{
+  "version": 6,
+  "journeys": [
+    {
+      "id": "a06d60ae-2c92-5d70-841d-563b6b1aa90a",
+      "ownerId": "9bd97585-f99b-4a95-a93f-b28d6ffac261",
+      "title": "Луга в пойме Оби",
+      "description": "Понаблюдаем за птицами у проток и пообедаем на сухом берегу.",
+      "startsInDays": 45,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "foot",
+      "freeCapacity": 6,
+      "admissionMode": "request",
+      "lifecycle": "planned",
+      "stops": [
+        {
+          "name": "Луговая тропа",
+          "lon": 84.145,
+          "lat": 56.956
+        },
+        {
+          "name": "Песчаная коса",
+          "lon": 84.132,
+          "lat": 56.973
+        }
+      ],
+      "confirmed": [
+        "faa4369b-7d54-52e9-94c8-0721ab8224c9",
+        "408ebed2-9c44-557a-a019-e227cb9f0d47"
+      ],
+      "pending": [
+        "818e21a3-6cab-5f3c-b7f4-5db6616afb10",
+        "5404f57d-84bc-548f-8180-63b4652f7788"
+      ]
+    },
+    {
+      "id": "e019eca4-5d9c-5bcd-9d7a-d8b7515fb241",
+      "ownerId": "9bd97585-f99b-4a95-a93f-b28d6ffac261",
+      "title": "Рассвет у Некрасовского озера",
+      "description": "Встречаемся на рассвете и идём по кромке леса к озеру.",
+      "startsInDays": 1,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "foot",
+      "freeCapacity": 6,
+      "admissionMode": "open",
+      "lifecycle": "planned",
+      "stops": [
+        {
+          "name": "Опушка",
+          "lon": 85.162,
+          "lat": 56.426
+        },
+        {
+          "name": "Озёрный берег",
+          "lon": 85.179,
+          "lat": 56.422
+        }
+      ]
+    },
+    {
+      "id": "5ccc8b87-da11-5214-ad92-886f70c85d82",
+      "ownerId": "9bd97585-f99b-4a95-a93f-b28d6ffac261",
+      "title": "Веломаршрут по набережным Томи",
+      "description": "Едем от Лагерного сада до набережной у Речного вокзала.",
+      "startsInDays": 0,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "bicycle",
+      "freeCapacity": 6,
+      "admissionMode": "open",
+      "lifecycle": "in_progress",
+      "stops": [
+        {
+          "name": "Лагерный сад",
+          "lon": 84.952,
+          "lat": 56.448
+        },
+        {
+          "name": "Речной вокзал",
+          "lon": 84.945,
+          "lat": 56.495
+        }
+      ]
+    },
+    {
+      "id": "b61b6f0b-0c4d-5151-9c86-5bb027504252",
+      "ownerId": "9bd97585-f99b-4a95-a93f-b28d6ffac261",
+      "title": "Осенние краски Таловских чаш",
+      "description": "Прошли лесным трактом к минеральным источникам и вернулись вдоль ручья.",
+      "startsInDays": -12,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "foot",
+      "freeCapacity": 6,
+      "admissionMode": "request",
+      "lifecycle": "completed",
+      "stops": [
+        {
+          "name": "Лесной тракт",
+          "lon": 85.362,
+          "lat": 56.292
+        },
+        {
+          "name": "Минеральный источник",
+          "lon": 85.38,
+          "lat": 56.288
+        }
+      ]
+    },
+    {
+      "id": "ab46b6bf-dfa9-526c-a185-8a3d79388c06",
+      "ownerId": "9bd97585-f99b-4a95-a93f-b28d6ffac261",
+      "title": "Выезд к Кедровому мысу",
+      "description": "Поездка к переправе перенесена из-за уровня воды.",
+      "startsInDays": 16,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "car",
+      "freeCapacity": 6,
+      "admissionMode": "request",
+      "lifecycle": "cancelled",
+      "stops": [
+        {
+          "name": "Поворот у села",
+          "lon": 84.146,
+          "lat": 57.029
+        },
+        {
+          "name": "Кедровый мыс",
+          "lon": 84.088,
+          "lat": 57.052
+        }
+      ]
+    },
+    {
+      "id": "2e86d036-3742-5193-af64-70bd962dc072",
+      "ownerId": "faa4369b-7d54-52e9-94c8-0721ab8224c9",
+      "title": "Протоки и острова у Мельникова",
+      "description": "Идём с Анной через заливные луга до тихой речной протоки.",
+      "startsInDays": 28,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "foot",
+      "freeCapacity": 6,
+      "admissionMode": "open",
+      "lifecycle": "planned",
+      "stops": [
+        {
+          "name": "Мельниковская тропа",
+          "lon": 84.065,
+          "lat": 57.145
+        },
+        {
+          "name": "Протока",
+          "lon": 84.081,
+          "lat": 57.163
+        }
+      ],
+      "confirmed": [
+        "9bd97585-f99b-4a95-a93f-b28d6ffac261"
+      ]
+    },
+    {
+      "id": "447b8ce1-d75b-5167-ac2d-7eeea1da8f59",
+      "ownerId": "408ebed2-9c44-557a-a019-e227cb9f0d47",
+      "title": "Утро на Синем Утёсе",
+      "description": "Пройдём вдоль реки к утёсу и встретим утро у сосен.",
+      "startsInDays": 1,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "foot",
+      "freeCapacity": 6,
+      "admissionMode": "open",
+      "lifecycle": "planned",
+      "stops": [
+        {
+          "name": "Сосновая поляна",
+          "lon": 84.986,
+          "lat": 56.363
+        },
+        {
+          "name": "Синий Утёс",
+          "lon": 84.977,
+          "lat": 56.351
+        }
+      ],
+      "confirmed": [
+        "9bd97585-f99b-4a95-a93f-b28d6ffac261"
+      ]
+    },
+    {
+      "id": "f0db5192-cd3b-56b7-a7f4-77ab1eff449e",
+      "ownerId": "818e21a3-6cab-5f3c-b7f4-5db6616afb10",
+      "title": "Лесными дорогами к Асино",
+      "description": "Едем в темпе группы через лесные посёлки.",
+      "startsInDays": 0,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "bicycle",
+      "freeCapacity": 6,
+      "admissionMode": "open",
+      "lifecycle": "in_progress",
+      "stops": [
+        {
+          "name": "Станция",
+          "lon": 86.119,
+          "lat": 56.991
+        },
+        {
+          "name": "Лесная дорога",
+          "lon": 86.151,
+          "lat": 57.006
+        }
+      ],
+      "confirmed": [
+        "9bd97585-f99b-4a95-a93f-b28d6ffac261"
+      ]
+    },
+    {
+      "id": "8a34324f-8b01-50f7-adb4-9fd0067667b7",
+      "ownerId": "5404f57d-84bc-548f-8180-63b4652f7788",
+      "title": "Серебряный бор у Кожевникова",
+      "description": "Прогулка по береговой террасе Оби с привалом в сосновом бору.",
+      "startsInDays": -8,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "foot",
+      "freeCapacity": 6,
+      "admissionMode": "open",
+      "lifecycle": "completed",
+      "stops": [
+        {
+          "name": "Береговая терраса",
+          "lon": 83.975,
+          "lat": 56.258
+        },
+        {
+          "name": "Серебряный бор",
+          "lon": 83.996,
+          "lat": 56.268
+        }
+      ],
+      "confirmed": [
+        "9bd97585-f99b-4a95-a93f-b28d6ffac261"
+      ]
+    },
+    {
+      "id": "55018401-3fda-58e9-959e-7000dbbea1eb",
+      "ownerId": "408ebed2-9c44-557a-a019-e227cb9f0d47",
+      "title": "К скалам вдоль Яи",
+      "description": "Пеший маршрут отменён после разлива реки.",
+      "startsInDays": 19,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "foot",
+      "freeCapacity": 6,
+      "admissionMode": "open",
+      "lifecycle": "cancelled",
+      "stops": [
+        {
+          "name": "Переправа",
+          "lon": 86.238,
+          "lat": 56.439
+        },
+        {
+          "name": "Скальная тропа",
+          "lon": 86.245,
+          "lat": 56.461
+        }
+      ],
+      "confirmed": [
+        "9bd97585-f99b-4a95-a93f-b28d6ffac261"
+      ]
+    },
+    {
+      "id": "e8dbd4c2-b184-5e09-abf3-bf426d05b226",
+      "ownerId": "818e21a3-6cab-5f3c-b7f4-5db6616afb10",
+      "title": "Тропа к Моховому озеру",
+      "description": "Небольшой группой обойдём лесное озеро по восточному берегу.",
+      "startsInDays": 63,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "foot",
+      "freeCapacity": 6,
+      "admissionMode": "request",
+      "lifecycle": "planned",
+      "stops": [
+        {
+          "name": "Квартальная просека",
+          "lon": 84.384,
+          "lat": 56.691
+        },
+        {
+          "name": "Моховое озеро",
+          "lon": 84.396,
+          "lat": 56.711
+        }
+      ],
+      "pending": [
+        "9bd97585-f99b-4a95-a93f-b28d6ffac261"
+      ]
+    },
+    {
+      "id": "4b8d4da6-4e96-50df-bf6b-e5cdb975e3ea",
+      "ownerId": "5404f57d-84bc-548f-8180-63b4652f7788",
+      "title": "Берёзовый тракт на закате",
+      "description": "Поедем через берёзовые рощи и остановимся на холме перед закатом.",
+      "startsInDays": 50,
+      "timezone": "Asia/Tomsk",
+      "transportMode": "bicycle",
+      "freeCapacity": 6,
+      "admissionMode": "open",
+      "lifecycle": "planned",
+      "stops": [
+        {
+          "name": "Начало тракта",
+          "lon": 85.197,
+          "lat": 56.702
+        },
+        {
+          "name": "Смотровой холм",
+          "lon": 85.234,
+          "lat": 56.71
+        }
+      ],
+      "favorite": true
+    }
+  ]
+}

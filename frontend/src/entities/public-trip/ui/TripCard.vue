@@ -8,10 +8,11 @@ import { UiButton } from '@fsd/shared/ui/kit';
 import { publicTripCover } from '../trip-cover';
 import OrganizerLink from './OrganizerLink.vue';
 import TripFacts from './TripFacts.vue';
+import TripRouteMetrics from './TripRouteMetrics.vue';
 
 defineProps<{ trip: PublicTripSummary | PublicTrip; active?: boolean; expanded?: boolean; showMapAction?: boolean; linkQuery?: LocationQuery }>();
 defineEmits<{ locate: [tripId: string]; close: [] }>();
-defineSlots<{ participation?(): unknown; timeline?(): unknown }>();
+defineSlots<{ favorite?(): unknown; participation?(): unknown; timeline?(): unknown }>();
 const { t } = useI18n();
 </script>
 
@@ -47,7 +48,11 @@ const { t } = useI18n();
       :to="{ path: `/catalog/${trip.trip_id}`, query: linkQuery }"
     >{{ trip.title }}</NuxtLink></h3>
     <TripFacts :trip="trip">
-      <template #dateNote><span class="catalog-trip-status">{{ t('catalog.lifecycle.' + trip.lifecycle) }}</span></template>
+      <template #dateNote>
+        <slot name="favorite" />
+        <span class="catalog-trip-status">{{ t('catalog.lifecycle.' + trip.lifecycle) }}</span>
+      </template>
+      <template #routeMetrics><TripRouteMetrics :count="trip.route_count" :distance="trip.total_distance_m" /></template>
     </TripFacts>
     <div class="catalog-card-copy">
       <OrganizerLink v-if="trip.organizer" compact :organizer="trip.organizer" />

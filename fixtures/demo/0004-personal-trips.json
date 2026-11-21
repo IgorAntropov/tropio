@@ -1,0 +1,15 @@
+{
+  "version": 4,
+  "accountTrips": {
+    "archive": {
+      "id": "96abbd6f-13df-459e-9090-5dbb5a61810e",
+      "title": "Осенний маршрут вдоль Басандайки",
+      "description": "План однодневной прогулки от Аникино до устья Басандайки. Сохранён в архиве для следующей осени."
+    },
+    "favorites": ["1d4eacf6-d196-548c-b05e-df146197dcb5"],
+    "participation": [
+      { "tripId": "1d4eacf6-d196-548c-b05e-df146197dcb5", "mode": "open" },
+      { "tripId": "f3833309-50c0-5808-b613-ab4cd63ad2de", "mode": "request" }
+    ]
+  }
+}

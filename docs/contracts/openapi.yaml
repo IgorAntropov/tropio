@@ -1,7 +1,7 @@
 openapi: 3.1.1
 info:
   title: Трулала GIS MVP
-  version: 0.7.0
+  version: 0.9.0
   description: |
     Внешний API BFF. Identity реализован в GIS-02, черновики Travel в GIS-03. Редактор маршрутов, расчёт треков и POI реализованы в GIS-04. В GIS-06 Travel публикует закреплённые версии, а публичный каталог проверяет действующий доступ к геометрии.
     Каждый ответ этого контракта получает Cache-Control: no-store и X-Request-Id.
@@ -418,6 +418,75 @@ paths:
           $ref: '#/components/responses/IdentityNotFound'
         '503':
           $ref: '#/components/responses/IdentityUnavailable'
+  /me/trips:
+    get:
+      operationId: listAccountTrips
+      tags: [Account trips]
+      summary: Открыть личную подборку путешествий
+      description: Поиск по названию и описанию и фильтр применяются перед пагинацией. Созданные поездки читаются по рабочей версии владельца. Участие и избранное содержат доступные публикации с повторной проверкой прав Travel и Geo. Во всех подборках lifecycle отражает текущее состояние Travel. Сортировка по UUID.
+      parameters:
+        - {in: query, name: collection, schema: {type: string, enum: [all, created, participation, pending, joined, favorites], default: all}}
+        - {in: query, name: status, schema: {type: string, enum: [all, draft, published, starting_soon, in_progress, completed, cancelled, archived], default: all}, description: draft и archived применимы к созданным. Архив открывается отдельным фильтром.}
+        - {in: query, name: query, schema: {type: string, maxLength: 120}}
+        - $ref: '#/components/parameters/MyTripsCursor'
+        - $ref: '#/components/parameters/MyTripsLimit'
+      responses:
+        '200':
+          description: Страница личной подборки.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccountTripPage'}
+        '400': {$ref: '#/components/responses/TravelInvalidRequest'}
+        '401': {$ref: '#/components/responses/TravelSessionRequired'}
+        '503': {$ref: '#/components/responses/TravelUnavailable'}
+  /me/favorites/{tripId}:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+    get:
+      operationId: getTripFavorite
+      tags: [Account trips]
+      summary: Проверить сохранение поездки у зрителя
+      responses:
+        '200':
+          description: Отметка текущего аккаунта. Для недоступной поездки возвращается false.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TripFavoriteState'}
+        '400': {$ref: '#/components/responses/TravelInvalidRequest'}
+        '401': {$ref: '#/components/responses/TravelSessionRequired'}
+        '503': {$ref: '#/components/responses/TravelUnavailable'}
+    put:
+      operationId: setTripFavorite
+      tags: [Account trips]
+      summary: Сохранить поездку или убрать её из избранного
+      description: Добавление требует доступной публикации другого организатора. Владелец отметки может удалить её после закрытия доступа. Повтор команды устанавливает то же состояние.
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [saved]
+              properties:
+                saved: {type: boolean}
+      responses:
+        '200':
+          description: Сохранённое состояние отметки.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TripFavoriteState'}
+        '400': {$ref: '#/components/responses/TravelInvalidRequest'}
+        '401': {$ref: '#/components/responses/TravelSessionRequired'}
+        '403': {$ref: '#/components/responses/TravelCsrfRejected'}
+        '404': {$ref: '#/components/responses/TravelDraftNotFound'}
+        '409': {$ref: '#/components/responses/OwnTripFavorite'}
+        '503': {$ref: '#/components/responses/TravelUnavailable'}
   /trips:
     get:
       operationId: listMyTripDrafts
@@ -547,7 +616,8 @@ paths:
     get:
       operationId: getTripDraftCover
       tags: [Travel drafts]
-      summary: Прочитать обложку текущего черновика владельца
+      summary: Прочитать текущую обложку своей поездки
+      description: Обложка доступна владельцу в списке созданных и в архиве. Устаревшие идентификаторы обложек недоступны.
       responses:
         '200':
           $ref: '#/components/responses/TripCoverImage'
@@ -855,14 +925,22 @@ paths:
             items: {$ref: '#/components/schemas/Uuid'}
       responses:
         '200':
-          description: Идентификатор зрителя, его ожидающие заявки и подтверждённые участия в доступных поездках. Для гостя возвращаются null и два пустых списка.
+          description: Идентификатор зрителя, его ожидающие заявки, подтверждённые участия, избранное и собственные доступные поездки. Для гостя возвращаются null и пустые списки.
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: false
-                required: [viewer_id, trip_ids, joined_trip_ids]
+                required: [viewer_id, trip_ids, joined_trip_ids, saved_trip_ids, owned_trip_ids]
                 properties:
+                  saved_trip_ids:
+                    type: array
+                    uniqueItems: true
+                    items: {$ref: '#/components/schemas/Uuid'}
+                  owned_trip_ids:
+                    type: array
+                    uniqueItems: true
+                    items: {$ref: '#/components/schemas/Uuid'}
                   joined_trip_ids:
                     description: Запрошенные доступные поездки с подтверждённым участием зрителя.
                     type: array
@@ -880,6 +958,54 @@ paths:
           $ref: '#/components/responses/TravelInvalidRequest'
         '503':
           $ref: '#/components/responses/TravelUnavailable'
+  /trips/{tripId}/roster:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+    get:
+      operationId: getTripRoster
+      tags: [Account trips]
+      summary: Открыть заявки и состав собственной поездки
+      responses:
+        '200':
+          description: Актуальный состав и допустимые действия организатора.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TripRoster'}
+        '400': {$ref: '#/components/responses/TravelInvalidRequest'}
+        '401': {$ref: '#/components/responses/TravelSessionRequired'}
+        '404': {$ref: '#/components/responses/TravelDraftNotFound'}
+        '503': {$ref: '#/components/responses/TravelUnavailable'}
+  /trips/{tripId}/roster/{entryId}:
+    parameters:
+      - $ref: '#/components/parameters/TripId'
+      - {in: path, name: entryId, required: true, schema: {$ref: '#/components/schemas/Uuid'}}
+    put:
+      operationId: updateTripRoster
+      tags: [Account trips]
+      summary: Принять или отклонить заявку либо исключить участника
+      security:
+        - session: []
+          csrf: []
+      parameters:
+        - $ref: '#/components/parameters/IdentityOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action]
+              properties:
+                action: {enum: [accept, decline, remove]}
+      responses:
+        '204': {description: Решение организатора сохранено.}
+        '400': {$ref: '#/components/responses/TravelInvalidRequest'}
+        '401': {$ref: '#/components/responses/TravelSessionRequired'}
+        '403': {$ref: '#/components/responses/TravelCsrfRejected'}
+        '404': {$ref: '#/components/responses/TravelDraftNotFound'}
+        '409': {$ref: '#/components/responses/TravelApplicationUnavailable'}
+        '503': {$ref: '#/components/responses/TravelUnavailable'}
   /trips/{tripId}/applications:
     parameters:
       - $ref: '#/components/parameters/TripId'
@@ -1934,6 +2060,17 @@ components:
                 properties:
                   status: {const: 409}
                   code: {const: IDEMPOTENCY_KEY_REUSED}
+    OwnTripFavorite:
+      description: Организатор сохраняет собственную поездку.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                properties:
+                  status: {const: 409}
+                  code: {const: TRIP_FAVORITE_OWN}
     TravelApplicationUnavailable:
       description: Пользователь организует поездку либо приём новых заявок закрыт.
       content:
@@ -2907,11 +3044,84 @@ components:
           anyOf:
             - $ref: '#/components/schemas/SystemAvatar'
             - type: 'null'
+    TripRoster:
+      type: object
+      additionalProperties: false
+      required: [viewer_id, items, can_manage, can_accept, occupied_slots, capacity]
+      properties:
+        viewer_id: {$ref: '#/components/schemas/Uuid'}
+        can_manage: {type: boolean}
+        can_accept: {type: boolean}
+        occupied_slots: {type: integer, minimum: 0}
+        capacity: {$ref: '#/components/schemas/TripCapacity'}
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, user_id, status, profile]
+            properties:
+              id: {$ref: '#/components/schemas/Uuid'}
+              user_id: {$ref: '#/components/schemas/Uuid'}
+              status: {enum: [pending, joined]}
+              profile:
+                anyOf:
+                  - $ref: '#/components/schemas/PublicOrganizer'
+                  - type: 'null'
+    TripFavoriteState:
+      type: object
+      additionalProperties: false
+      required: [viewer_id, saved]
+      properties:
+        viewer_id: {$ref: '#/components/schemas/Uuid'}
+        saved: {type: boolean}
+    AccountTripPage:
+      type: object
+      additionalProperties: false
+      required: [viewer_id, items, next_cursor]
+      properties:
+        viewer_id: {$ref: '#/components/schemas/Uuid'}
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/AccountTripCard'}
+        next_cursor: {type: [string, 'null'], format: uuid}
+    AccountTripCard:
+      type: object
+      additionalProperties: false
+      required: [trip_id, publication_id, cover_id, organizer, title, description, start_date, end_date, day_count, difficulty, free_capacity, confirmed_participants, lifecycle, trip_type, archived, participation_status, saved, is_owner, starting_soon, pending_count, route_count, total_distance_m]
+      properties:
+        route_count: {type: integer, minimum: 0}
+        total_distance_m: {type: [number, 'null'], minimum: 0, description: Сумма длин рабочих маршрутов у организатора или опубликованных у остальных. При закрытой геометрии длина недоступна.}
+        trip_id: {$ref: '#/components/schemas/Uuid'}
+        publication_id: {type: [string, 'null'], format: uuid}
+        cover_id: {type: [string, 'null'], format: uuid}
+        organizer:
+          anyOf:
+            - $ref: '#/components/schemas/PublicOrganizer'
+            - type: 'null'
+        title: {type: string}
+        description: {type: string}
+        start_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        end_date: {$ref: '#/components/schemas/TripCalendarDate'}
+        day_count: {type: integer, minimum: 0}
+        difficulty: {$ref: '#/components/schemas/TripDifficulty'}
+        free_capacity: {$ref: '#/components/schemas/TripCapacity'}
+        confirmed_participants: {type: integer, minimum: 0}
+        lifecycle: {enum: [planned, in_progress, completed, cancelled]}
+        trip_type: {enum: [foot, bicycle, car, combined, null]}
+        archived: {type: boolean}
+        is_owner: {type: boolean}
+        starting_soon: {type: boolean}
+        pending_count: {type: integer, minimum: 0}
+        participation_status: {enum: [pending, joined, null]}
+        saved: {type: boolean}
     PublicTripSummary:
       type: object
       additionalProperties: false
-      required: [admission_mode, confirmed_participants, trip_id, publication_id, organizer, title, description, start_date, end_date, difficulty, free_capacity, trip_type, day_count, applications_open, lifecycle, start]
+      required: [admission_mode, confirmed_participants, trip_id, publication_id, organizer, title, description, start_date, end_date, difficulty, free_capacity, trip_type, day_count, applications_open, lifecycle, start, route_count, total_distance_m]
       properties:
+        route_count: {type: integer, minimum: 0}
+        total_distance_m: {type: number, minimum: 0, description: Сумма длин маршрутов всех дней по закреплённым ревизиям Geo в метрах.}
         cover_id: {$ref: '#/components/schemas/NullableUuid'}
         organizer:
           anyOf:
@@ -2938,8 +3148,10 @@ components:
     PublicTrip:
       type: object
       additionalProperties: false
-      required: [admission_mode, confirmed_participants, trip_id, publication_id, organizer, title, description, start_date, end_date, difficulty, free_capacity, trip_type, day_count, applications_open, lifecycle, start, days, pois]
+      required: [admission_mode, confirmed_participants, trip_id, publication_id, organizer, title, description, start_date, end_date, difficulty, free_capacity, trip_type, day_count, applications_open, lifecycle, start, days, pois, route_count, total_distance_m]
       properties:
+        route_count: {type: integer, minimum: 0}
+        total_distance_m: {type: number, minimum: 0, description: Сумма длин маршрутов всех дней по закреплённым ревизиям Geo в метрах.}
         cover_id: {$ref: '#/components/schemas/NullableUuid'}
         equipment: {$ref: '#/components/schemas/TripEquipment'}
         organizer:

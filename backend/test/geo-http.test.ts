@@ -277,6 +277,12 @@ describe('GIS-04 through the BFF', () => {
       const page = await json<{ items: Poi[] }>(await send('GET', `/pois?${query}`, visitor), 200);
       expect(page.items.map(item => item.poi_id)).not.toContain(poi.poi_id);
     }
+    const summaries = await server.app.get(GeoPublicationService).readOwnedSummaries(visitor.id, [{
+      trip_id: visitorTrip.trip_id,
+      route_ids: [draft.route_id],
+      archived: false,
+    }]);
+    expect(summaries.get(visitorTrip.trip_id)).toEqual({ total_distance_m: null, trip_type: null });
     expect(await json<Route>(await send('GET', path, visitor), 200)).toEqual({
       availability: 'geometry_restricted',
       route_id: draft.route_id,
@@ -624,7 +630,7 @@ describe('Geo publication holds', () => {
     }), 200);
     await approve(moved);
     await expect(geo.read(manifest)).resolves.toBeNull();
-    await expect(geo.readStarts([manifest])).resolves.toEqual([null]);
+    await expect(geo.readSummaries([manifest])).resolves.toEqual([null]);
     await expect(geo.verify(manifest)).rejects.toMatchObject({ code: 'POI_PUBLICATION_RESTRICTED' });
     await expect(geo.prepare({ ...manifest, operationId: randomUUID() })).rejects.toMatchObject({ code: 'POI_PUBLICATION_RESTRICTED' });
   });
@@ -660,6 +666,12 @@ describe('Geo publication holds', () => {
     await Promise.all([geo.prepare(manifest), geo.prepare(manifest)]);
     expect(await count()).toBe(2);
     const saved = await geo.read(manifest);
+    const total = saved!.days.flatMap(day => day.legs).reduce((sum, leg) => sum + leg.distance_m, 0);
+    expect(total).toBeGreaterThan(0);
+    expect(saved).toMatchObject({ route_count: 2, total_distance_m: total });
+    await expect(geo.readSummaries([manifest])).resolves.toEqual([{ start: positions[0], route_count: 2, total_distance_m: total }]);
+    const working = await geo.readOwnedSummaries(owner.id, [{ trip_id: bound.trip_id, archived: false, route_ids: bound.days.map(day => day.route_id) }]);
+    expect(working.get(bound.trip_id)).toEqual({ total_distance_m: expect.closeTo(total, 5), trip_type: 'combined' });
     expect(saved?.days.map(day => day.lines[0]!.coordinates[0])).toEqual(positions.slice(0, 2).map(p => [p.lon, p.lat]));
     await expect(geo.verify(manifest)).resolves.toEqual({ start: positions[0], tripType: 'combined' });
     await expect(geo.prepare({ ...manifest, routes: [...routes].reverse() })).rejects.toMatchObject({ code: 'PUBLICATION_PRECONDITION_FAILED' });

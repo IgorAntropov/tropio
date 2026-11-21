@@ -71,12 +71,12 @@ it('requires consecutive versions matching the file names', () => {
   expect(() => buildDemoCatalog({ '0001-travel.json': nextVersion })).toThrow('Некорректная версия');
 });
 
-it('keeps private equipment versions out of the published catalog sequence', () => {
+it('keeps private equipment and account collections out of the published catalog sequence', () => {
   const files = {
     '0001-travel.json': dataset,
-    '0003-lakes.json': { ...nextVersion, version: 3 },
+    '0004-lakes.json': { ...nextVersion, version: 4 },
   };
-  const { demoTrips: published } = buildDemoCatalog(files, ['0002-personal-equipment.json']);
+  const { demoTrips: published } = buildDemoCatalog(files, ['0002-personal-equipment.json', '0003-personal-trips.json']);
   expect(published.at(-1)?.id).toBe(nextTour.id);
   expect(() => buildDemoCatalog(files)).toThrow('Некорректная версия');
 });

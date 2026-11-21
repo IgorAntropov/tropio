@@ -386,6 +386,27 @@ export class IdentityService {
     });
   }
 
+  async replaceInitialAvatars(initialAvatarId: string, assignments: { userId: string; avatarId: string }[]): Promise<void> {
+    await this.database.transaction(async (client) => {
+      const ids = [...new Set(assignments.map(item => item.avatarId))];
+      const { rowCount } = await client.query(
+        `SELECT a.id FROM identity.avatar_assets a JOIN identity.avatar_collections c ON c.id = a.collection_id
+         WHERE a.id = ANY($1::uuid[]) AND a.active AND c.status = 'active' FOR SHARE OF a, c`,
+        [ids],
+      );
+      if (rowCount !== ids.length) {
+        throw new BffProblem('AVATAR_UNAVAILABLE');
+      }
+      await client.query(
+        `UPDATE identity.users u SET avatar_asset_id = target.avatar, updated_at = clock_timestamp()
+         FROM unnest($2::uuid[], $3::uuid[]) AS target(account, avatar)
+         WHERE u.id = target.account AND u.avatar_asset_id = $1 AND u.custom_avatar_object_key IS NULL
+           AND u.status = 'active' AND u.updated_at = u.created_at`,
+        [initialAvatarId, assignments.map(item => item.userId), assignments.map(item => item.avatarId)],
+      );
+    });
+  }
+
   async avatarAssets() {
     return this.database.transaction(async (client) => {
       const { rows } = await client.query<AvatarRow>(

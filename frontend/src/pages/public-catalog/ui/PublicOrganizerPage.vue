@@ -4,13 +4,16 @@ import {
   canRetryRead,
   isResourceId,
 } from '@fsd/shared/api';
+import { accountTripsReturnPath } from '@fsd/shared/session';
 import { UiAvatar } from '@fsd/shared/ui/kit';
 import { SystemErrorState } from '@fsd/shared/ui/page-error';
 import { usePublicResource } from '../model/use-public-resource';
 import CatalogFrame from './CatalogFrame.vue';
 
-const props = defineProps<{ id: string }>();
+const props = defineProps<{ id: string; sessionConfirmed: boolean | null }>();
 const { t } = useI18n();
+const route = useRoute();
+const fromTrips = computed(() => accountTripsReturnPath(route.query.returnTo));
 const canonical = new URL('/organizers/' + encodeURIComponent(props.id), useRuntimeConfig().public.siteUrl).href;
 const { ready, value: profile, status, pending, refresh } = usePublicResource('public-organizer-' + props.id, async (signal) => {
   if (!isResourceId(props.id)) {
@@ -40,9 +43,9 @@ if (import.meta.server && status.value !== 200) {
 </script>
 
 <template>
-  <CatalogFrame>
+  <CatalogFrame :session-confirmed="sessionConfirmed">
     <div class="catalog-detail">
-      <NuxtLink v-if="profile" class="catalog-back" to="/catalog">← {{ t('catalog.title') }}</NuxtLink>
+      <NuxtLink v-if="profile" class="catalog-back" :to="fromTrips ?? '/catalog'">← {{ t(fromTrips ? 'workspace.trips' : 'catalog.title') }}</NuxtLink>
       <article v-if="profile" class="detail-hero detail-summary catalog-profile">
         <UiAvatar :name="profile.display_name" :src="profile.avatar?.url" />
         <div><span>{{ t('catalog.organizer') }}</span><h1>{{ profile.display_name }}</h1><p v-if="profile.bio">{{ profile.bio }}</p></div>
@@ -61,7 +64,7 @@ if (import.meta.server && status.value !== 200) {
           type="button"
           @click="refresh"
         >{{ t('catalog.retry') }}</button>
-        <NuxtLink class="tk-button" to="/catalog">{{ t('catalog.open') }}</NuxtLink>
+        <NuxtLink class="tk-button" :to="fromTrips ?? '/catalog'">{{ t(fromTrips ? 'workspace.trips' : 'catalog.open') }}</NuxtLink>
       </SystemErrorState>
       <p v-else class="catalog-empty" role="status">{{ t('catalog.loadingProfile') }}</p>
     </div>

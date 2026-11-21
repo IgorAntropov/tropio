@@ -27,6 +27,8 @@ it.each([
     cover_id: null,
     publication_id: randomUUID(),
     access_generation: '1',
+    starting_soon: false,
+    current_lifecycle: 'planned',
     applications_open: true,
     confirmed_participants: 0,
     operationId: randomUUID(),
@@ -54,7 +56,7 @@ it.each([
     access_generation: '2',
   };
   const next = candidate(18);
-  const point = { lon: 85, lat: 56 };
+  const point = { start: { lon: 85, lat: 56 }, route_count: 1, total_distance_m: 1234 };
   const travel = app.get(PublicCatalog);
   const geo = app.get(GeoPublicationService);
   const identity = app.get(IdentityService);
@@ -62,7 +64,7 @@ it.each([
   try {
     vi.spyOn(travel, 'candidates').mockResolvedValueOnce([first, second, ...hidden])
       .mockResolvedValueOnce(more ? [republished, next] : [republished]);
-    vi.spyOn(geo, 'readStarts').mockResolvedValueOnce([point, secondVisible ? point : null, ...hidden.map(() => null)])
+    vi.spyOn(geo, 'readSummaries').mockResolvedValueOnce([point, secondVisible ? point : null, ...hidden.map(() => null)])
       .mockResolvedValueOnce(more ? [point, point] : [point]);
     const profiles = vi.spyOn(identity, 'publicOrganizers').mockResolvedValue(new Map([[ownerId, organizer]]));
     const confirm = vi.spyOn(travel, 'confirm').mockImplementation(async candidates => new Map(

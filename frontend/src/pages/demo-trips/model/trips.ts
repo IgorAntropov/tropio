@@ -47,7 +47,7 @@ export function buildDemoCatalog(files: Record<string, DemoVersion>, personalVer
       throw new Error('Некорректная версия демонстрационных данных: ' + filename);
     }
     const data = files[path];
-    if (!data && filename.endsWith('-personal-equipment.json')) {
+    if (!data && /^\d{4}-personal-/.test(filename)) {
       return [];
     }
     if (data?.version !== version) {
@@ -71,7 +71,7 @@ export function buildDemoCatalog(files: Record<string, DemoVersion>, personalVer
 
 const versions = import.meta.glob<DemoVersion>([
   '../../../../../fixtures/demo/*.json',
-  '!../../../../../fixtures/demo/*-personal-equipment.json',
+  '!../../../../../fixtures/demo/*-personal-*.json',
 ], { eager: true, import: 'default' });
-const personalVersionPaths = Object.keys(import.meta.glob('../../../../../fixtures/demo/*-personal-equipment.json'));
+const personalVersionPaths = Object.keys(import.meta.glob('../../../../../fixtures/demo/*-personal-*.json'));
 export const { demoTrips, myDemoTrips } = buildDemoCatalog(versions, personalVersionPaths);

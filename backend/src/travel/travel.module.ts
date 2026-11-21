@@ -1,5 +1,6 @@
 import type { DynamicModule } from '@nestjs/common';
 import { Module } from '@nestjs/common';
+import { AccountTrips } from './account-trips.js';
 import { EquipmentLibraryController } from './equipment/equipment-library.controller.js';
 import { EquipmentLibrary } from './equipment/equipment-library.service.js';
 import { PublicCatalog } from './public-catalog.js';
@@ -24,13 +25,14 @@ export class TravelModule {
       providers: [
         { provide: TRAVEL_DATABASE_URL, useValue: travelDatabaseUrl(options) },
         TravelDatabase,
+        AccountTrips,
         EquipmentLibrary,
         TravelService,
         PublicationService,
         PublicCatalog,
         TripApplications,
       ],
-      exports: [TravelService, PublicationService, PublicCatalog, TripApplications],
+      exports: [AccountTrips, TravelService, PublicationService, PublicCatalog, TripApplications],
     };
   }
 }

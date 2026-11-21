@@ -6,7 +6,7 @@ import { useTripParticipation } from './use-trip-participation';
 
 const props = defineProps<{ trip: Pick<PublicTripSummary, 'trip_id' | 'organizer' | 'applications_open' | 'admission_mode'> }>();
 const { t } = useI18n();
-const { viewer, sent, joined, busy, errors, apply } = useTripParticipation();
+const { viewer, owned, sent, joined, busy, errors, apply } = useTripParticipation();
 const immediate = computed(() => props.trip.admission_mode === 'open');
 const actionLabel = computed(() => {
   if (busy.value.has(props.trip.trip_id)) {
@@ -18,7 +18,7 @@ const actionLabel = computed(() => {
 
 <template>
   <div class="participation-action">
-    <span v-if="viewer && viewer === trip.organizer?.id">{{ t('participation.owner') }}</span>
+    <span v-if="viewer && (owned.has(trip.trip_id) || viewer === trip.organizer?.id)">{{ t('participation.owner') }}</span>
     <span v-else-if="joined.has(trip.trip_id)" role="status">{{ t('participation.joined') }}</span>
     <span v-else-if="sent.has(trip.trip_id) && (!immediate || !trip.applications_open)" role="status">{{ t('participation.sent') }}</span>
     <UiButton

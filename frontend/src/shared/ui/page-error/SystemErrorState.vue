@@ -6,6 +6,7 @@ const props = withDefaults(defineProps<{
   description?: string;
   heading?: 'h1' | 'h2';
   page?: boolean;
+  compact?: boolean;
 }>(), {
   heading: 'h2',
   statusCode: 500,
@@ -59,8 +60,13 @@ const illustrations = {
   offline: 'radio',
 };
 const art = computed(() => `${baseURL}system-pages/${illustrations[kind.value]}.webp`);
-const title = computed(() => kind.value === 'offline' || !props.title ? t(`errors.${kind.value}`) : props.title);
-const description = computed(() => kind.value === 'offline' || !props.description ? t(`errors.${kind.value}Hint`) : props.description);
+const title = computed(() => (kind.value === 'offline' && !props.compact) || !props.title ? t(`errors.${kind.value}`) : props.title);
+const description = computed(() => {
+  if (kind.value === 'offline') {
+    return t(props.compact ? 'errors.connectionHint' : 'errors.offlineHint');
+  }
+  return props.description || t(`errors.${kind.value}Hint`);
+});
 
 useHead(() => ({
   link: [{ key: 'system-page-style', rel: 'stylesheet', href: `${baseURL}system-pages/screen.css` }],
@@ -75,7 +81,7 @@ useHead(() => ({
 </script>
 
 <template>
-  <section :aria-labelledby="headingId" class="system-state" :class="{ 'system-state--page': page }">
+  <section :aria-labelledby="headingId" class="system-state" :class="{ 'system-state--page': page, 'system-state--compact': compact }">
     <img
       alt=""
       class="system-state-art"
@@ -84,7 +90,7 @@ useHead(() => ({
       width="600"
     >
     <div class="system-state-copy">
-      <p v-if="kind !== 'offline'" class="system-state-code">{{ t('errors.code', { status: statusCode }) }}</p>
+      <p v-if="!compact && kind !== 'offline'" class="system-state-code">{{ t('errors.code', { status: statusCode }) }}</p>
       <component :is="heading" :id="headingId" class="system-state-title">{{ title }}</component>
       <p class="system-state-description">{{ description }}</p>
     </div>

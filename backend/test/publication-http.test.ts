@@ -8,6 +8,7 @@ import {
   vi,
 } from 'vitest';
 import { GeoPublicationService } from '../src/geo/publication/geo-publication.service.js';
+import { TravelDatabase } from '../src/travel/travel-database.js';
 import { TripApplications } from '../src/travel/trip-applications.js';
 import {
   actor,
@@ -62,7 +63,7 @@ function manifest(draft: Trip, route: Route, poiIds: string[] = []) {
   };
 }
 
-async function prepareTrip(linkedPoi?: string, near = positions[0] as { lon: number; lat: number }, title?: string, difficulty = 'Легко') {
+async function prepareTrip(linkedPoi?: string, near = positions[0] as { lon: number; lat: number }, title?: string, difficulty = 'Легко', mode: 'foot' | 'bicycle' = 'foot') {
   const created = await trip(owner);
   if (linkedPoi) {
     expect((await send('PUT', `/trips/${created.trip_id}/pois/${linkedPoi}`, owner)).status).toBe(204);
@@ -76,7 +77,7 @@ async function prepareTrip(linkedPoi?: string, near = positions[0] as { lon: num
     difficulty,
     free_capacity: 4,
   }), 200);
-  const body = draftBody([near, positions[2]], ['foot']);
+  const body = draftBody([near, positions[2]], [mode]);
   const route = await json<Route>(await send('PUT', routePath(draft), owner, {
     ...body,
     points: [{ position: near, ...(linkedPoi ? { poi_id: linkedPoi } : {}) }, body.points[1]],
@@ -109,7 +110,9 @@ async function publish(path: string, body: ReturnType<typeof manifest>, key = ra
 
 describe('GIS-06 through the BFF', () => {
   it('AT-17 serves a single pinned snapshot until explicit republication, even after a retry', async () => {
-    const { draft, route, path, card } = await prepareTrip();
+    const { draft, path, card, route } = await prepareTrip(undefined, positions[0], undefined, 'Легко', 'bicycle');
+    const firstDraft = await json<Page>(await send('GET', '/me/trips?query=' + draft.trip_id + '&status=draft', owner), 200);
+    expect(firstDraft.items).toMatchObject([{ publication_id: null, trip_type: 'bicycle' }]);
     expect((await send('GET', card)).status).toBe(404);
     const key = randomUUID();
     const body = manifest(draft, route);
@@ -117,12 +120,14 @@ describe('GIS-06 through the BFF', () => {
     const replay = await json<Operation>(await send('POST', `${path}/publish`, owner, body, { key }), 200);
     expect(replay).toEqual(first);
     const initial = await json<Card>(await send('GET', card), 200);
-    expect(initial).toMatchObject({ start: positions[0], days: [{ legs: [{ transport_mode: 'foot', distance_m: expect.any(Number) }] }] });
+    const publishedMetrics = { trip_type: 'bicycle', route_count: 1, total_distance_m: route.tracks[0]!.distance_m };
+    expect(initial).toMatchObject(publishedMetrics);
+    expect(initial).toMatchObject({ start: positions[0], days: [{ legs: [{ transport_mode: 'bicycle', distance_m: expect.any(Number) }] }] });
     expect(initial).toMatchObject({
       publication_id: first.publication_id,
       organizer: { id: owner.id, display_name: expect.any(String) },
       free_capacity: 4,
-      trip_type: 'foot',
+      trip_type: 'bicycle',
       day_count: 1,
     });
     const current = await json<Draft>(await send('GET', `${path}/draft`, owner), 200);
@@ -140,6 +145,12 @@ describe('GIS-06 through the BFF', () => {
       tracks: replacement.tracks.map(track => ({ ...track, name: 'Набережная' })),
     }), 200);
     expect(await json<Card>(await send('GET', card), 200)).toEqual(initial);
+    const workingMetrics = { trip_type: 'foot', route_count: 1, total_distance_m: latest.tracks[0]!.distance_m };
+    expect(workingMetrics.total_distance_m).not.toBe(publishedMetrics.total_distance_m);
+    const ownCard = await json<Page>(await send('GET', '/me/trips?query=' + draft.trip_id, owner), 200);
+    expect(ownCard.items).toMatchObject([workingMetrics]);
+    const guestCards = await json<Page>(await send('GET', '/catalog/trips?q=' + draft.trip_id), 200);
+    expect(guestCards.items).toMatchObject([publishedMetrics]);
     const second = await publish(path, manifest(changed, latest));
     const updated = await json<Card>(await send('GET', card), 200);
     expect(updated).toMatchObject({ days: [{ legs: [{ name: 'Набережная', start_name: 'Пристань', end_name: 'Вид на реку' }] }] });
@@ -158,7 +169,7 @@ describe('GIS-06 through the BFF', () => {
     expect(page.items[0]).toMatchObject({ trip_id: draft.trip_id, publication_id: second.publication_id, start: positions[0] });
     filters.set('near', '84.94,56.48');
     filters.set('radius_km', '0.1');
-    expect((await json<Page>(await send('GET', `${publicPath}?${filters}`), 200)).items[0]).toMatchObject({ distance_m: 0 });
+    expect((await json<Page>(await send('GET', `${publicPath}?${filters}`), 200)).items[0]).toMatchObject({ distance_m: 0, ...workingMetrics });
     filters.set('near', '85.94,57.48');
     expect((await json<Page>(await send('GET', `${publicPath}?${filters}`), 200)).items).toHaveLength(0);
     filters.delete('near');
@@ -252,9 +263,14 @@ describe('GIS-06 through the BFF', () => {
     }), 200);
     await publish(path, manifest(future, route, [optional.poi_id]));
     const coverPath = card + '/covers/' + future.cover_id;
+    const favorite = '/me/favorites/' + draft.trip_id;
+    const collection = (name: string) => send('GET', '/me/trips?collection=' + name + '&query=' + draft.trip_id, visitor);
+    await json(await send('PUT', favorite, visitor, { saved: true }), 200);
+    expect((await json<Page>(await collection('favorites'), 200)).items).toMatchObject([{ trip_id: draft.trip_id, saved: true }]);
     expect((await send('GET', coverPath)).status).toBe(200);
     expect(await json(await send('POST', path + '/applications', visitor), 200)).toEqual({ status: 'pending' });
     expect((await json<Card>(await send('GET', card), 200)).pois.map(poi => poi.poi_id)).toEqual([optional.poi_id]);
+    expect((await json<Page>(await collection('participation'), 200)).items).toMatchObject([{ trip_id: draft.trip_id, participation_status: 'pending' }]);
     await json(await send('PATCH', `/pois/${optional.poi_id}/visibility`, visitor, {
       poi_revision_id: optionalVersion.poi_revision_id,
       visibility: 'private',
@@ -270,8 +286,19 @@ describe('GIS-06 through the BFF', () => {
     await problem(await send('GET', coverPath), 'GET', publicCoverPath, 404, 'NOT_FOUND');
     await problem(await send('GET', card, visitor), 'GET', publicPath + '/{tripId}', 404, 'NOT_FOUND');
     await problem(await send('POST', path + '/applications', visitor), 'POST', applicationPath, 404, 'NOT_FOUND');
-    expect(await json(await send('GET', participationPath + '?trip_ids=' + draft.trip_id, visitor), 200)).toEqual({ viewer_id: visitor.id, trip_ids: [], joined_trip_ids: [] });
+    expect(await json(await send('GET', participationPath + '?trip_ids=' + draft.trip_id, visitor), 200)).toEqual({
+      viewer_id: visitor.id,
+      trip_ids: [],
+      joined_trip_ids: [],
+      saved_trip_ids: [],
+      owned_trip_ids: [],
+    });
     expect((await json<Page>(await send('GET', `${publicPath}?q=${draft.trip_id}`), 200)).items).toHaveLength(0);
+    for (const name of ['participation', 'favorites']) {
+      expect((await json<Page>(await collection(name), 200)).items).toEqual([]);
+    }
+    expect(await json(await send('GET', favorite, visitor), 200)).toMatchObject({ saved: false });
+    expect((await send('PUT', favorite, visitor, { saved: true })).status).toBe(404);
   }, 30_000);
 
   it('withdraws the active snapshot on closing, republishing requires a new explicit command', async () => {
@@ -299,7 +326,13 @@ describe('GIS-06 through the BFF', () => {
     for (const [session, viewer] of [[undefined, null], [expired, null], [visitor, visitor.id]] as const) {
       const response = await send('GET', participation, session);
       expect(response.headers.get('vary')).toBe('Cookie');
-      expect(await json(response, 200)).toEqual({ viewer_id: viewer, trip_ids: [], joined_trip_ids: [] });
+      expect(await json(response, 200)).toEqual({
+        viewer_id: viewer,
+        trip_ids: [],
+        joined_trip_ids: [],
+        saved_trip_ids: [],
+        owned_trip_ids: [],
+      });
     }
     const invalid = await send('GET', participationPath + '?trip_ids=bad');
     expect(invalid.headers.get('vary')).toBe('Cookie');
@@ -333,13 +366,31 @@ describe('GIS-06 through the BFF', () => {
     await problem(await send('POST', target, visitor, { applicant_user_id: owner.id }), 'POST', applicationPath, 400, 'INVALID_REQUEST');
     await problem(await send('POST', target, owner), 'POST', applicationPath, 409, 'TRIP_APPLICATION_UNAVAILABLE');
     await problem(await send('GET', mine + ',' + id, visitor), 'GET', participationPath, 400, 'INVALID_REQUEST');
-    expect(await json(await send('GET', mine, visitor), 200)).toEqual({ viewer_id: visitor.id, trip_ids: [], joined_trip_ids: [] });
+    expect(await json(await send('GET', mine, visitor), 200)).toEqual({
+      viewer_id: visitor.id,
+      trip_ids: [],
+      joined_trip_ids: [],
+      saved_trip_ids: [],
+      owned_trip_ids: [],
+    });
     const replies = await Promise.all([send('POST', target, visitor, undefined, { key: false }), send('POST', target, visitor, {})]);
     for (const reply of replies) {
       expect(await json(reply, 200)).toEqual({ status: 'pending' });
     }
-    expect(await json(await send('GET', mine, visitor), 200)).toEqual({ viewer_id: visitor.id, trip_ids: [id], joined_trip_ids: [] });
-    expect(await json(await send('GET', mine, moderator), 200)).toEqual({ viewer_id: moderator.id, trip_ids: [], joined_trip_ids: [] });
+    expect(await json(await send('GET', mine, visitor), 200)).toEqual({
+      viewer_id: visitor.id,
+      trip_ids: [id],
+      joined_trip_ids: [],
+      saved_trip_ids: [],
+      owned_trip_ids: [],
+    });
+    expect(await json(await send('GET', mine, moderator), 200)).toEqual({
+      viewer_id: moderator.id,
+      trip_ids: [],
+      joined_trip_ids: [],
+      saved_trip_ids: [],
+      owned_trip_ids: [],
+    });
     expect(await json(await send('GET', card), 200)).toMatchObject({ applications_open: true, free_capacity: 1 });
     const pool = new pg.Pool({ connectionString: process.env.TROPIO_TRAVEL_TEST_DATABASE_URL! });
     try {
@@ -370,12 +421,75 @@ describe('GIS-06 through the BFF', () => {
     });
     try {
       await problem(await send('POST', target, moderator), 'POST', applicationPath, 404, 'NOT_FOUND');
-      expect(await json(await send('GET', mine, visitor), 200)).toEqual({ viewer_id: visitor.id, trip_ids: [], joined_trip_ids: [] });
+      expect(await json(await send('GET', mine, visitor), 200)).toEqual({
+        viewer_id: visitor.id,
+        trip_ids: [],
+        joined_trip_ids: [],
+        saved_trip_ids: [],
+        owned_trip_ids: [],
+      });
     }
     finally {
       archive.mockRestore();
     }
   }, 30_000);
+
+  it('lets only the owner manage applications, serializes the last seat and keeps decision retries tied to the original entry', async () => {
+    const { draft, route, path } = await prepareTrip();
+    const rosterPath = path + '/roster';
+    const spec = contractTrip + '/roster';
+    const decision = spec + '/{entryId}';
+    const configured = await json<Draft>(await send('PATCH', path, owner, {
+      trip_revision_id: draft.trip_revision_id,
+      free_capacity: 1,
+      start_date: '2200-01-01',
+      end_date: null,
+    }), 200);
+    await publish(path, manifest(configured, route));
+    for (const person of [visitor, moderator]) {
+      expect((await send('POST', path + '/applications', person)).status).toBe(200);
+    }
+    type Roster = { items: { id: string; user_id: string; status: string }[]; occupied_slots: number; can_accept: boolean };
+    const read = () => send('GET', rosterPath, owner).then(response => json<Roster>(response, 200));
+    const pending = await read();
+    expect(pending).toMatchObject({
+      viewer_id: owner.id,
+      occupied_slots: 0,
+      can_accept: true,
+      can_manage: true,
+      capacity: 1,
+    });
+    expect(pending.items).toHaveLength(2);
+    expect(pending.items).toEqual(expect.arrayContaining([expect.objectContaining({
+      status: 'pending',
+      user_id: visitor.id,
+      profile: expect.objectContaining({ id: visitor.id, display_name: expect.any(String) }),
+    })]));
+    const responses = await Promise.all(pending.items.map(item => send('PUT', rosterPath + '/' + item.id, owner, { action: 'accept' })));
+    const winningIndex = responses.findIndex(reply => reply.status === 204);
+    expect(winningIndex).toBeGreaterThanOrEqual(0);
+    await problem(responses[1 - winningIndex]!, 'PUT', decision, 409, 'TRIP_APPLICATION_UNAVAILABLE');
+    const won = pending.items[winningIndex]!;
+    const denied = pending.items[1 - winningIndex]!;
+    const put = (entry: string, action: string) => send('PUT', rosterPath + '/' + entry, owner, { action });
+    expect((await put(won.id, 'accept')).status).toBe(204);
+    const full = await read();
+    expect(full).toMatchObject({ occupied_slots: 1, can_accept: false });
+    const member = full.items.find(entry => entry.status === 'joined')!;
+    expect(member.user_id).toBe(won.user_id);
+    await problem(await send('GET', rosterPath, moderator), 'GET', spec, 404, 'NOT_FOUND');
+    await problem(await send('PUT', rosterPath + '/' + member.id, moderator, { action: 'remove' }), 'PUT', decision, 404, 'NOT_FOUND');
+    await problem(await send('PUT', rosterPath + '/' + member.id, owner, { action: 'remove' }, { csrf: 'invalid' }), 'PUT', decision, 403, 'CSRF_REJECTED');
+    for (let i = 0; i < 2; i++) {
+      expect((await put(denied.id, 'decline')).status).toBe(204);
+      expect((await put(member.id, 'remove')).status).toBe(204);
+    }
+    expect(await read()).toMatchObject({ occupied_slots: 0, can_accept: true, items: [] });
+    const previous = won.user_id === visitor.id ? visitor : moderator;
+    await json(await send('POST', path + '/applications', previous), 200);
+    expect((await put(won.id, 'accept')).status).toBe(204);
+    expect(await read()).toMatchObject({ occupied_slots: 0, items: [{ status: 'pending', user_id: previous.id }] });
+  }, 20_000);
 
   it('pins admission to the published version, serializes the last seat and upgrades a pending applicant only with explicit consent', async () => {
     const { draft, route, path, card } = await prepareTrip();
@@ -412,13 +526,27 @@ describe('GIS-06 through the BFF', () => {
       }
     }
     expect(await json(await send('POST', join, winner, { admission_mode: 'open' }), 200)).toEqual({ status: 'joined' });
-    expect(await json(await send('GET', myParticipation, winner), 200)).toEqual({ viewer_id: winner.id, trip_ids: [], joined_trip_ids: [id] });
+    expect(await json(await send('GET', myParticipation, winner), 200)).toEqual({
+      viewer_id: winner.id,
+      trip_ids: [],
+      joined_trip_ids: [id],
+      saved_trip_ids: [],
+      owned_trip_ids: [],
+    });
+    const joined = await json<Page>(await send('GET', '/me/trips?collection=participation', winner), 200);
+    expect(joined.items).toContainEqual(expect.objectContaining({ trip_id: id, participation_status: 'joined' }));
     expect(await json(await send('GET', card), 200)).toMatchObject({ applications_open: false, confirmed_participants: 1, free_capacity: 1 });
     const limitless = await edit({ free_capacity: null });
     await publish(path, manifest(limitless, route));
     for (const user of applicants) {
       expect(await json(await send('POST', join, user, { admission_mode: 'open' }), 200)).toEqual({ status: 'joined' });
-      expect(await json(await send('GET', myParticipation, user), 200)).toEqual({ viewer_id: user.id, trip_ids: [], joined_trip_ids: [id] });
+      expect(await json(await send('GET', myParticipation, user), 200)).toEqual({
+        viewer_id: user.id,
+        trip_ids: [],
+        joined_trip_ids: [id],
+        saved_trip_ids: [],
+        owned_trip_ids: [],
+      });
     }
     const undersized = await edit({ free_capacity: 1 });
     const attempt = await json<Operation>(await send('POST', path + '/publish', owner, manifest(undersized, route)), 202);
@@ -426,7 +554,13 @@ describe('GIS-06 through the BFF', () => {
     expect(await json(await send('GET', card), 200)).toMatchObject({ free_capacity: null, confirmed_participants: 2, applications_open: true });
     const closed = await edit({ visibility: 'private' });
     expect(closed.publication_id).toBeNull();
-    expect(await json(await send('GET', myParticipation, winner), 200)).toEqual({ viewer_id: winner.id, trip_ids: [], joined_trip_ids: [] });
+    expect(await json(await send('GET', myParticipation, winner), 200)).toEqual({
+      viewer_id: winner.id,
+      trip_ids: [],
+      joined_trip_ids: [],
+      saved_trip_ids: [],
+      owned_trip_ids: [],
+    });
     await problem(await send('POST', join, winner, { admission_mode: 'open' }), 'POST', applicationPath, 404, 'NOT_FOUND');
   }, 30_000);
 
@@ -493,11 +627,123 @@ describe('GIS-06 through the BFF', () => {
     }
   }, 15_000);
 
+  it('searches every owned page, isolates the owner and separates archived trips', async () => {
+    const marker = randomUUID();
+    const list = (query: string) => send('GET', '/me/trips?' + query, owner);
+    const title = 'Сосновая долина';
+    const selected = await json<Draft>(await send('POST', '/trips', owner, { title, description: marker, cover: await tripCover('png') }), 201);
+    const another = await json<Draft>(await send('POST', '/trips', owner, { title: marker }), 201);
+    await json(await send('POST', '/trips', visitor, { title: marker }), 201);
+    const first = await json<Page>(await list('status=draft&query=' + marker + '&limit=1'), 200);
+    const second = await json<Page>(await list('status=draft&query=' + marker + '&limit=1&cursor=' + first.next_cursor), 200);
+    expect([first.items[0]!.trip_id, second.items[0]!.trip_id]).toEqual([selected.trip_id, another.trip_id].sort());
+    expect(first.next_cursor).toBe(first.items[0]!.trip_id);
+    expect(second.next_cursor).toBeNull();
+    const upper = await json<Page>(await list('query=' + encodeURIComponent(title.toUpperCase())), 200);
+    expect(upper.items.some(item => item.trip_id === selected.trip_id)).toBe(true);
+    expect((await json<Page>(await list('status=published&query=' + marker), 200)).items).toEqual([]);
+    await json(await send('POST', '/trips/' + selected.trip_id + '/archive', owner, { trip_revision_id: selected.trip_revision_id }), 200);
+    const archived = await json<Page>(await list('status=archived&query=' + marker), 200);
+    expect(archived).toMatchObject({ viewer_id: owner.id, items: [{
+      trip_id: selected.trip_id,
+      archived: true,
+      cover_id: selected.cover_id,
+      day_count: 1,
+    }] });
+    expect((await json<Page>(await list('query=' + marker), 200)).items.map(item => item.trip_id)).toEqual([another.trip_id]);
+    const cover = '/trips/' + selected.trip_id + '/covers/' + selected.cover_id;
+    expect((await send('GET', cover, owner)).status).toBe(200);
+    expect((await send('GET', cover, visitor)).status).toBe(404);
+    expect((await send('GET', '/me/trips?collection=favorites&status=draft', owner)).status).toBe(400);
+  });
+
+  it('keeps favorites private, returns only the pinned public card and supports removal after withdrawal', async () => {
+    const marker = randomUUID();
+    const { draft, route, path } = await prepareTrip(undefined, positions[0], 'В сосновый бор ' + marker);
+    const favorite = '/me/favorites/' + draft.trip_id;
+    const list = (collection: string, status = 'all') => send('GET', '/me/trips?' + new URLSearchParams({ collection, status, query: marker }), visitor);
+    const ownedList = (status: string) => send('GET', '/me/trips?' + new URLSearchParams({ collection: 'created', status, query: marker }), owner)
+      .then(response => json<Page>(response, 200));
+    expect((await send('PUT', favorite, visitor, { saved: true })).status).toBe(404);
+    const future = await json<Draft>(await send('PATCH', path, owner, {
+      trip_revision_id: draft.trip_revision_id,
+      start_date: '2200-01-01',
+      end_date: '2200-01-01',
+      free_capacity: null,
+    }), 200);
+    const operation = await publish(path, manifest(future, route));
+    await problem(await send('PUT', favorite, owner, { saved: true }), 'PUT', '/me/favorites/{tripId}', 409, 'TRIP_FAVORITE_OWN');
+    const viewerContext = participationPath + '?trip_ids=' + draft.trip_id;
+    expect(await json(await send('GET', viewerContext, owner), 200)).toMatchObject({ owned_trip_ids: [draft.trip_id], saved_trip_ids: [] });
+    for (let repeat = 0; repeat < 2; repeat++) {
+      expect(await json(await send('PUT', favorite, visitor, { saved: true }), 200)).toEqual({ viewer_id: visitor.id, saved: true });
+    }
+    const own = await json<Draft>(await send('POST', '/trips', visitor, { title: marker }), 201);
+    const first = await json<Page>(await send('GET', '/me/trips?query=' + marker + '&limit=1', visitor), 200);
+    const next = await json<Page>(await send('GET', '/me/trips?query=' + marker + '&limit=1&cursor=' + first.next_cursor, visitor), 200);
+    expect(first.next_cursor).toBe(first.items[0]?.trip_id);
+    expect(next.next_cursor).toBeNull();
+    expect([...first.items, ...next.items].map(item => item.trip_id)).toEqual([own.trip_id, draft.trip_id].sort());
+    const active = await json<Draft>(await send('GET', path + '/draft', owner), 200);
+    const updated = await json<Draft>(await send('PATCH', path, owner, { title: 'Новое приватное название ' + marker, free_capacity: 2, trip_revision_id: active.trip_revision_id }), 200);
+    expect((await ownedList('published')).items).toMatchObject([{ trip_id: draft.trip_id, free_capacity: null }]);
+    expect(await json(await send('GET', path + '/roster', owner), 200)).toMatchObject({ capacity: null });
+    expect((await json<Page>(await list('favorites'), 200)).items).toMatchObject([{
+      trip_id: draft.trip_id,
+      title: 'В сосновый бор ' + marker,
+      publication_id: operation.publication_id,
+      saved: true,
+      archived: false,
+      participation_status: null,
+    }]);
+    expect(await json(await send('GET', favorite, owner), 200)).toMatchObject({ viewer_id: owner.id, saved: false });
+    expect((await json<Page>(await list('participation'), 200)).items).toEqual([]);
+    await json(await send('POST', path + '/applications', visitor), 200);
+    expect(await json(await send('GET', viewerContext, visitor), 200)).toMatchObject({ saved_trip_ids: [draft.trip_id], trip_ids: [draft.trip_id] });
+    expect((await json<Page>(await list('all'), 200)).items.filter(item => item.trip_id === draft.trip_id)).toMatchObject([{
+      trip_id: draft.trip_id,
+      is_owner: false,
+      saved: true,
+      participation_status: 'pending',
+    }]);
+    expect((await json<Page>(await list('pending'), 200)).items).toMatchObject([{ trip_id: draft.trip_id }]);
+    expect((await json<Page>(await list('joined'), 200)).items).toEqual([]);
+    await server.app.get(TravelDatabase).transaction(client => client.query(
+      'UPDATE travel.trips SET lifecycle = \'completed\' WHERE id = $1', [draft.trip_id],
+    ));
+    for (const collection of ['created', 'favorites', 'participation']) {
+      const viewer = collection === 'created' ? owner : visitor;
+      const completed = await json<Page>(await send('GET', '/me/trips?status=completed&collection=' + collection, viewer), 200);
+      expect(completed.items).toContainEqual(expect.objectContaining({ trip_id: draft.trip_id, lifecycle: 'completed', publication_id: operation.publication_id }));
+    }
+    expect((await json<Page>(await list('favorites', 'in_progress'), 200)).items).toEqual([]);
+    await json(await send('POST', path + '/unpublish', owner, { trip_revision_id: updated.trip_revision_id, publication_id: operation.publication_id }), 200);
+    expect((await ownedList('completed')).items).toEqual([]);
+    expect((await ownedList('draft')).items).toMatchObject([{ trip_id: draft.trip_id, publication_id: null, free_capacity: 2 }]);
+    expect(await json(await send('GET', favorite, visitor), 200)).toMatchObject({ saved: false });
+    expect((await json<Page>(await list('favorites'), 200)).items).toEqual([]);
+    expect(await json(await send('PUT', favorite, visitor, { saved: false }), 200)).toMatchObject({ saved: false });
+  }, 20_000);
+
   it('checks the HTTP status and problem code declared for each publication operation', async () => {
     const { draft, route, path, card } = await prepareTrip();
     const down = await start(process.env.TROPIO_GEO_TEST_DATABASE_URL!, process.env.TROPIO_IDENTITY_TEST_DATABASE_URL!,
       'postgresql://127.0.0.1:1/unavailable');
     const request = manifest(draft, route);
+    const favorite = '/me/favorites/' + draft.trip_id;
+    const favoriteSpec = '/me/favorites/{tripId}';
+    await problem(await send('GET', '/me/trips'), 'GET', '/me/trips', 401, 'SESSION_REQUIRED');
+    await problem(await send('GET', '/me/trips?status=unknown', owner), 'GET', '/me/trips', 400, 'INVALID_REQUEST');
+    await problem(await send('GET', '/me/trips', owner, undefined, { server: down }), 'GET', '/me/trips', 503, 'DEPENDENCY_UNAVAILABLE');
+    for (const method of ['GET', 'PUT'] as const) {
+      const body = method === 'PUT' ? { saved: true } : undefined;
+      await problem(await send(method, favorite, undefined, body), method, favoriteSpec, 401, 'SESSION_REQUIRED');
+      await problem(await send(method, '/me/favorites/invalid', visitor, body), method, favoriteSpec, 400, 'INVALID_REQUEST');
+      await problem(await send(method, favorite, visitor, body, { server: down }), method, favoriteSpec, 503, 'DEPENDENCY_UNAVAILABLE');
+    }
+    await problem(await send('PUT', favorite, visitor, { saved: true }), 'PUT', favoriteSpec, 404, 'NOT_FOUND');
+    await problem(await send('PUT', favorite, visitor, { saved: true }, { csrf: 'invalid' }), 'PUT', favoriteSpec, 403, 'CSRF_REJECTED');
+    expect((await send('PUT', favorite, visitor, { saved: 'true' })).status).toBe(400);
     await problem(await send('POST', path + '/applications', visitor, undefined, { server: down }),
       'POST', applicationPath, 503, 'DEPENDENCY_UNAVAILABLE');
     await problem(await send('GET', participationPath + '?trip_ids=' + draft.trip_id, visitor, undefined, { server: down }),
@@ -506,6 +752,19 @@ describe('GIS-06 through the BFF', () => {
     const active = await json<Draft>(await send('GET', `${path}/draft`, owner), 200);
     const remove = { trip_revision_id: active.trip_revision_id, publication_id: active.publication_id };
     const ops: { method: Method; target: string; spec: string; body?: object; bad: string; guest?: boolean }[] = [
+      {
+        method: 'GET',
+        target: path + '/roster',
+        spec: contractTrip + '/roster',
+        bad: '/trips/bad/roster',
+      },
+      {
+        method: 'PUT',
+        target: path + '/roster/' + randomUUID(),
+        spec: contractTrip + '/roster/{entryId}',
+        bad: path + '/roster/bad',
+        body: { action: 'decline' },
+      },
       {
         method: 'GET',
         target: optionsPath,
@@ -580,6 +839,6 @@ describe('GIS-06 through the BFF', () => {
         'POST', contractTrip + '/' + action, 409, 'IDEMPOTENCY_KEY_REUSED');
       current = response;
     }
-    expect([...seen].sort()).toEqual([...declaredErrors('Travel publications'), ...declaredErrors('Travel participation')].sort());
+    expect([...seen].sort()).toEqual([...declaredErrors('Travel publications'), ...declaredErrors('Travel participation'), ...declaredErrors('Account trips')].sort());
   }, 30_000);
 });

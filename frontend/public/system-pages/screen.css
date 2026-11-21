@@ -185,3 +185,50 @@ body:has(.system-page) {
     gap: 20px;
   }
 }
+
+.system-state--compact {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: start;
+  align-self: flex-start;
+  gap: .75rem;
+  inline-size: min(100%, 38rem);
+  padding: 1rem;
+  border: 1px solid var(--tk-line, #cedbd7);
+  border-radius: var(--tk-radius, .75rem);
+  background: var(--tk-surface, white);
+  text-align: start;
+}
+
+.system-state--compact .system-state-art {
+  inline-size: 3.75rem;
+  block-size: 3.5rem;
+  flex: none;
+}
+
+.system-state--compact .system-state-copy {
+  flex: 1 1 11rem;
+  justify-items: start;
+  gap: .25rem;
+}
+
+.system-state--compact .system-state-title {
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.system-state--compact .system-state-description {
+  font-size: .875rem;
+}
+
+.system-state--compact .system-state-actions {
+  gap: .5rem;
+  justify-content: start;
+}
+
+@media (max-width: 559px) {
+  .system-state--compact { gap: .5rem .75rem; padding: .75rem; }
+  .system-state--compact .system-state-art { inline-size: 3.25rem; block-size: 3rem; }
+  .system-state--compact .system-state-actions { flex-basis: 100%; padding-inline-start: 4rem; }
+}

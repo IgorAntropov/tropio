@@ -385,7 +385,55 @@ export interface components {
             display_name: string;
             avatar: components["schemas"]["SystemAvatar"] | null;
         };
+        TripRoster: {
+            viewer_id: components["schemas"]["Uuid"];
+            can_manage: boolean;
+            can_accept: boolean;
+            occupied_slots: number;
+            capacity: components["schemas"]["TripCapacity"];
+            items: {
+                id: components["schemas"]["Uuid"];
+                user_id: components["schemas"]["Uuid"];
+                status: "pending" | "joined";
+                profile: components["schemas"]["PublicOrganizer"] | null;
+            }[];
+        };
+        TripFavoriteState: {
+            viewer_id: components["schemas"]["Uuid"];
+            saved: boolean;
+        };
+        AccountTripPage: {
+            viewer_id: components["schemas"]["Uuid"];
+            items: components["schemas"]["AccountTripCard"][];
+            next_cursor: string | null;
+        };
+        AccountTripCard: {
+            route_count: number;
+            total_distance_m: number | null;
+            trip_id: components["schemas"]["Uuid"];
+            publication_id: string | null;
+            cover_id: string | null;
+            organizer: components["schemas"]["PublicOrganizer"] | null;
+            title: string;
+            description: string;
+            start_date: components["schemas"]["TripCalendarDate"];
+            end_date: components["schemas"]["TripCalendarDate"];
+            day_count: number;
+            difficulty: components["schemas"]["TripDifficulty"];
+            free_capacity: components["schemas"]["TripCapacity"];
+            confirmed_participants: number;
+            lifecycle: "planned" | "in_progress" | "completed" | "cancelled";
+            trip_type: "foot" | "bicycle" | "car" | "combined" | null;
+            archived: boolean;
+            is_owner: boolean;
+            starting_soon: boolean;
+            pending_count: number;
+            participation_status: "pending" | "joined" | null;
+            saved: boolean;
+        };
         PublicTripSummary: {
+            route_count: number;
+            total_distance_m: number;
             cover_id?: components["schemas"]["NullableUuid"];
             organizer: components["schemas"]["PublicOrganizer"] | null;
             distance_m?: number;
@@ -406,6 +454,8 @@ export interface components {
             start: components["schemas"]["LonLat"];
         };
         PublicTrip: {
+            route_count: number;
+            total_distance_m: number;
             cover_id?: components["schemas"]["NullableUuid"];
             equipment?: components["schemas"]["TripEquipment"];
             organizer: components["schemas"]["PublicOrganizer"] | null;
@@ -697,6 +747,17 @@ export interface components {
                 };
             };
         };
+        OwnTripFavorite: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"] & {
+                    status?: 409;
+                    code?: "TRIP_FAVORITE_OWN";
+                };
+            };
+        };
         TravelApplicationUnavailable: {
             headers: {
                 [name: string]: unknown;
@@ -846,6 +907,152 @@ export interface operations {
             };
             400: components["responses"]["TravelInvalidRequest"];
             401: components["responses"]["TravelSessionRequired"];
+            503: components["responses"]["TravelUnavailable"];
+        };
+    };
+    listAccountTrips: {
+        parameters: {
+            query?: {
+                collection?: "all" | "created" | "participation" | "pending" | "joined" | "favorites";
+                status?: "all" | "draft" | "published" | "starting_soon" | "in_progress" | "completed" | "cancelled" | "archived";
+                query?: string;
+                cursor?: components["parameters"]["MyTripsCursor"];
+                limit?: components["parameters"]["MyTripsLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountTripPage"];
+                };
+            };
+            400: components["responses"]["TravelInvalidRequest"];
+            401: components["responses"]["TravelSessionRequired"];
+            503: components["responses"]["TravelUnavailable"];
+        };
+    };
+    getTripFavorite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tripId: components["parameters"]["TripId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripFavoriteState"];
+                };
+            };
+            400: components["responses"]["TravelInvalidRequest"];
+            401: components["responses"]["TravelSessionRequired"];
+            503: components["responses"]["TravelUnavailable"];
+        };
+    };
+    setTripFavorite: {
+        parameters: {
+            query?: never;
+            header: {
+                Origin: components["parameters"]["IdentityOrigin"];
+            };
+            path: {
+                tripId: components["parameters"]["TripId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    saved: boolean;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripFavoriteState"];
+                };
+            };
+            400: components["responses"]["TravelInvalidRequest"];
+            401: components["responses"]["TravelSessionRequired"];
+            403: components["responses"]["TravelCsrfRejected"];
+            404: components["responses"]["TravelDraftNotFound"];
+            409: components["responses"]["OwnTripFavorite"];
+            503: components["responses"]["TravelUnavailable"];
+        };
+    };
+    getTripRoster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tripId: components["parameters"]["TripId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripRoster"];
+                };
+            };
+            400: components["responses"]["TravelInvalidRequest"];
+            401: components["responses"]["TravelSessionRequired"];
+            404: components["responses"]["TravelDraftNotFound"];
+            503: components["responses"]["TravelUnavailable"];
+        };
+    };
+    updateTripRoster: {
+        parameters: {
+            query?: never;
+            header: {
+                Origin: components["parameters"]["IdentityOrigin"];
+            };
+            path: {
+                tripId: components["parameters"]["TripId"];
+                entryId: components["schemas"]["Uuid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    action: "accept" | "decline" | "remove";
+                };
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["TravelInvalidRequest"];
+            401: components["responses"]["TravelSessionRequired"];
+            403: components["responses"]["TravelCsrfRejected"];
+            404: components["responses"]["TravelDraftNotFound"];
+            409: components["responses"]["TravelApplicationUnavailable"];
             503: components["responses"]["TravelUnavailable"];
         };
     };
@@ -1091,6 +1298,8 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        saved_trip_ids: components["schemas"]["Uuid"][];
+                        owned_trip_ids: components["schemas"]["Uuid"][];
                         joined_trip_ids: components["schemas"]["Uuid"][];
                         viewer_id: components["schemas"]["Uuid"] | null;
                         trip_ids: components["schemas"]["Uuid"][];

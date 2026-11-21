@@ -7,6 +7,7 @@ import {
   Inject,
   Param,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -16,6 +17,7 @@ import type {
   NodeRequest,
   NodeResponse,
 } from '@nestjs/platform-node';
+import { BffProblem } from '../http/bff-problem.js';
 import { requireJson } from '../http/json-request.js';
 import {
   readToken,
@@ -31,6 +33,7 @@ import {
   travelCommandContext,
 } from '../travel/travel-command-context.js';
 import {
+  accountTripsInput,
   admissionMode,
   fields,
   routeInput,
@@ -86,6 +89,55 @@ export class PublicationController {
     return this.publication.archive(editor, travelUuid(id), key, routeInput(body));
   }
 
+  @Get('trips/:tripId/roster')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Vary', 'Cookie')
+  async roster(@Param('tripId') tripId: string, @Req() request: NodeRequest) {
+    const viewerId = await this.identity.authenticate(requireSession(request));
+    return this.catalog.roster(travelUuid(tripId), viewerId);
+  }
+
+  @Put('trips/:tripId/roster/:entryId')
+  @HttpCode(204)
+  @Header('Cache-Control', 'private, no-store')
+  async decideRoster(@Param('tripId') tripId: string, @Param('entryId') entryId: string, @Body() body: unknown, @Req() request: NodeRequest) {
+    const editor = await travelActor(request, this.identity, this.settings.browserOrigin);
+    requireJson(request);
+    const { action } = fields(body, ['action']);
+    if (action !== 'accept' && action !== 'decline' && action !== 'remove') {
+      throw new BffProblem('INVALID_REQUEST');
+    }
+    await this.catalog.decideRoster(travelUuid(tripId), editor, travelUuid(entryId), action);
+  }
+
+  @Get('me/trips')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Vary', 'Cookie')
+  async accountTrips(@Query() query: unknown, @Req() request: NodeRequest) {
+    const viewerId = await this.identity.authenticate(requireSession(request));
+    return this.catalog.accountTrips(viewerId, accountTripsInput(query));
+  }
+
+  @Get('me/favorites/:tripId')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Vary', 'Cookie')
+  async favorite(@Param('tripId') tripId: string, @Req() request: NodeRequest) {
+    const viewerId = await this.identity.authenticate(requireSession(request));
+    return { viewer_id: viewerId, saved: await this.catalog.favorite(viewerId, travelUuid(tripId)) };
+  }
+
+  @Put('me/favorites/:tripId')
+  @Header('Cache-Control', 'private, no-store')
+  async setFavorite(@Param('tripId') tripId: string, @Body() body: unknown, @Req() request: NodeRequest) {
+    const editor = await travelActor(request, this.identity, this.settings.browserOrigin);
+    requireJson(request);
+    const { saved } = fields(body, ['saved']);
+    if (typeof saved !== 'boolean') {
+      throw new BffProblem('INVALID_REQUEST');
+    }
+    return { viewer_id: editor.userId, saved: await this.catalog.setFavorite(travelUuid(tripId), editor, saved) };
+  }
+
   @Get('catalog/trips')
   list(@Query() query: unknown) {
     return this.catalog.list(catalogInput(query));
@@ -109,11 +161,19 @@ export class PublicationController {
   }
 
   @Get('catalog/participation')
+  @Header('Cache-Control', 'private, no-store')
   async participation(@Query() query: unknown, @Req() request: NodeRequest, @Res({ passthrough: true }) response: NodeResponse) {
     response.setHeader('vary', 'Cookie');
     const ids = applicationTripIds(query);
     const viewer_id = await this.identity.optionalViewer(readToken(request, sessionCookie));
-    const participation = viewer_id ? await this.catalog.participation(viewer_id, ids) : { trip_ids: [], joined_trip_ids: [] };
+    const participation = viewer_id
+      ? await this.catalog.participation(viewer_id, ids)
+      : {
+          trip_ids: [],
+          joined_trip_ids: [],
+          saved_trip_ids: [],
+          owned_trip_ids: [],
+        };
     return { viewer_id, ...participation };
   }
 

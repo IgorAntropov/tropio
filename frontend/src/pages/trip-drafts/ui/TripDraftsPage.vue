@@ -5,45 +5,35 @@ import {
   ref,
   shallowRef,
   useTemplateRef,
-  watch,
 } from 'vue';
 import { TripPublication } from '@fsd/features/publish-trip';
-import {
-  TripDraftDialog,
-  useTripCreation,
-} from '@fsd/features/trip-draft-dialog';
+import { TripDraftDialog } from '@fsd/features/trip-draft-dialog';
+import { TripRoster } from '@fsd/features/trip-roster';
 import {
   canRetryRead,
   editorApi,
   readFailureStatus,
 } from '@fsd/shared/api';
+import { accountTripsReturnPath } from '@fsd/shared/session';
 import { SystemErrorState } from '@fsd/shared/ui/page-error';
 import { WorkspacePage } from '@fsd/shared/ui/workspace-page/index';
-import type {
-  MyTripDraftList,
-  TravelDraft,
-} from '@fsd/shared/api';
+import type { TravelDraft } from '@fsd/shared/api';
 import {
   describeEditorError,
   editorProblemCode,
 } from '@fsd/features/edit-route';
-import {
-  dayRoutePath,
-  tripDraftPath,
-} from '../paths';
+import { dayRoutePath } from '../paths';
 import '@fsd/shared/ui/kit/kit.css';
 
-const props = defineProps<{ tripId?: string }>();
+const props = defineProps<{ tripId: string }>();
 const { t } = useI18n();
 const route = useRoute();
-const router = useRouter();
-const result = shallowRef<MyTripDraftList | null>(null);
+const returnPath = computed(() => accountTripsReturnPath(route.query.returnTo) ?? '/trips');
 const draft = shallowRef<TravelDraft | null>(null);
 const issue = ref('');
 const readStatus = ref<number>();
 const signedOut = ref(false);
 const loading = ref(true);
-const creating = useTripCreation();
 const editing = ref(false);
 const publication = useTemplateRef<InstanceType<typeof TripPublication>>('publication');
 const settingsRevision = ref('');
@@ -70,20 +60,13 @@ function failure(error: unknown) {
   issue.value = describeEditorError(error);
 }
 
-async function load(append = false) {
+async function load() {
   loading.value = true;
   issue.value = '';
   readStatus.value = undefined;
   signedOut.value = false;
   try {
-    if (props.tripId) {
-      draft.value = await editorApi.getTrip(props.tripId, request.signal);
-    }
-    else {
-      const cursor = append ? result.value?.next_cursor : null;
-      const page = await editorApi.listTrips(cursor ? { cursor } : undefined, request.signal);
-      result.value = append ? { ...page, items: [...(result.value?.items ?? []), ...page.items] } : page;
-    }
+    draft.value = await editorApi.getTrip(props.tripId, request.signal);
   }
   catch (error) {
     failure(error);
@@ -95,15 +78,6 @@ async function load(append = false) {
 
 onMounted(() => {
   void load();
-  watch(() => route.query.new, (value) => {
-    if (props.tripId || route.path !== '/trips' || value !== '1') {
-      return;
-    }
-    creating.value = true;
-    const query = { ...route.query };
-    delete query.new;
-    void router.replace({ path: route.path, query, hash: route.hash });
-  }, { immediate: true });
 });
 onBeforeUnmount(() => request.abort());
 </script>
@@ -111,7 +85,7 @@ onBeforeUnmount(() => request.abort());
 <template>
   <WorkspacePage class="trip-workspace">
     <SystemErrorState
-      v-if="readStatus && !draft && !result"
+      v-if="readStatus && !draft"
       class="trip-workspace__unavailable"
       heading="h1"
       :status-code="readStatus"
@@ -122,14 +96,14 @@ onBeforeUnmount(() => request.abort());
         type="button"
         @click="load()"
       >{{ t('catalog.retry') }}</button>
-      <NuxtLink class="tk-button" :to="tripId ? '/trips' : '/feed'">{{ t(tripId ? 'workspace.trips' : 'workspace.feed.title') }}</NuxtLink>
+      <NuxtLink class="tk-button" :to="returnPath">{{ t('workspace.trips') }}</NuxtLink>
     </SystemErrorState>
     <div v-else class="workspace-page-body trip-workspace__content">
-      <NuxtLink v-if="tripId" class="trip-workspace__back" to="/trips">
+      <NuxtLink class="trip-workspace__back" :to="returnPath">
         ← {{ t('workspace.trips') }}
       </NuxtLink>
       <header>
-        <h1 class="workspace-page-title">{{ tripId ? (draft?.title || t('tripDrafts.programTitle')) : t('workspace.trips') }}</h1>
+        <h1 class="workspace-page-title">{{ draft?.title || t('tripDrafts.programTitle') }}</h1>
         <button
           v-if="draft"
           class="tk-button"
@@ -168,6 +142,7 @@ onBeforeUnmount(() => request.abort());
           </li>
         </ul>
       </section>
+      <TripRoster v-if="draft" :revision="draft.trip_revision_id" :trip-id="draft.trip_id" />
       <TripPublication
         v-if="draft"
         :key="settingsRevision || draft.trip_id"
@@ -176,25 +151,6 @@ onBeforeUnmount(() => request.abort());
         @denied="denied"
         @refresh="draft = $event"
       />
-      <section v-else-if="!tripId && result" :aria-label="t('workspace.trips')">
-        <p v-if="!result.items.length">Здесь будут твои путешествия.</p>
-        <ul v-else class="trip-workspace__list">
-          <li v-for="item in result.items" :key="item.trip_id">
-            <div>
-              <strong>{{ item.title }}</strong>
-              <p>{{ t(item.publication_id ? 'tripDrafts.status.published' : 'tripDrafts.status.draft') }}</p>
-            </div>
-            <NuxtLink class="tk-button" :to="tripDraftPath(item.trip_id)">Открыть</NuxtLink>
-          </li>
-        </ul>
-        <button
-          v-if="result.next_cursor"
-          class="tk-button"
-          :disabled="loading"
-          type="button"
-          @click="load(true)"
-        >Показать ещё</button>
-      </section>
     </div>
   </WorkspacePage>
 </template>

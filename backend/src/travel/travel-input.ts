@@ -252,3 +252,20 @@ export function tripListInput(value: unknown) {
   }
   return { limit: Number(limit), cursor: cursor === undefined ? null : travelUuid(cursor) };
 }
+
+export function accountTripsInput(value: unknown) {
+  const { collection = 'all', status = 'all', query = '', ...page } = fields(value, ['collection', 'status', 'query', 'cursor', 'limit']);
+  const collections = ['all', 'created', 'participation', 'pending', 'joined', 'favorites'] as const;
+  const statuses = ['all', 'draft', 'published', 'starting_soon', 'in_progress', 'completed', 'cancelled', 'archived'] as const;
+  const selected = collections.find(item => item === collection);
+  const filter = statuses.find(item => item === status);
+  if (!selected || !filter || (selected !== 'created' && selected !== 'all' && (filter === 'archived' || filter === 'draft'))) {
+    throw new BffProblem('INVALID_REQUEST');
+  }
+  return {
+    ...tripListInput(page),
+    collection: selected,
+    status: filter,
+    query: cleanText(query, 120),
+  };
+}

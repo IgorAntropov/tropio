@@ -36,6 +36,8 @@ interface Snapshot {
 export interface Candidate extends GeoManifest {
   cover_id: string | null;
   ownerId: string;
+  starting_soon: boolean;
+  current_lifecycle: Snapshot['lifecycle'];
   applications_open: boolean;
   confirmed_participants: number;
   publication_id: string;
@@ -48,7 +50,11 @@ interface FilterOption {
   label: string;
 }
 
-const candidateQuery = (distance = '0') => `SELECT ${distance} AS distance_m, t.id AS "tripId", t.owner_user_id AS "ownerId", t.access_generation, v.publication_id, v.operation_id AS "operationId",
+export const startingSoonSql = `(t.lifecycle = 'planned' AND COALESCE(
+  tstzrange(statement_timestamp(), statement_timestamp() + interval '24 hours', '()') @>
+    COALESCE(v.meeting_at, (v.snapshot->>'start_date')::date::timestamp AT TIME ZONE COALESCE(v.snapshot->>'timezone', 'UTC')), false))`;
+
+export const candidateQuery = (distance = '0') => `SELECT ${distance} AS distance_m, t.id AS "tripId", t.owner_user_id AS "ownerId", t.access_generation, t.lifecycle AS current_lifecycle, ${startingSoonSql} AS starting_soon, v.publication_id, v.operation_id AS "operationId",
   v.snapshot, v.cover_id, seats.confirmed_participants, ${applicationsOpenSql} AS applications_open, ${manifestColumns('v.operation_id')}
   FROM travel.trip_catalog_entries c JOIN travel.trips t ON (t.id,t.publication_id) = (c.trip_id,c.publication_id)
   JOIN travel.trip_versions v ON (v.trip_id,v.publication_id) = (t.id,t.publication_id)
@@ -90,14 +96,15 @@ export class PublicCatalog {
 
   participationForViewer(userId: string, ids: string[]) {
     return this.database.transaction(async (client) => {
-      const { rows } = await client.query<Candidate & { participation: 'pending' | 'joined' }>(
-        `SELECT candidate.*, membership.participation FROM (
-           SELECT trip_id, 'pending' AS participation FROM travel.trip_applications
-           WHERE applicant_user_id = $1 AND trip_id = ANY($2::uuid[]) AND status = 'pending'
-           UNION ALL SELECT trip_id, 'joined' FROM travel.trip_participants
-           WHERE user_id = $1 AND trip_id = ANY($2::uuid[]) AND status = 'confirmed'
-         ) membership JOIN (${candidateQuery()}) candidate ON candidate."tripId" = membership.trip_id
-         ORDER BY membership.trip_id`, [userId, ids],
+      const { rows } = await client.query<Candidate & { pending: boolean; joined: boolean; saved: boolean }>(
+        `SELECT candidate.*, personal.* FROM (${candidateQuery()} AND t.id = ANY($2::uuid[])) candidate
+         CROSS JOIN LATERAL (SELECT
+           EXISTS (SELECT FROM travel.trip_applications WHERE trip_id = candidate."tripId" AND applicant_user_id = $1 AND status = 'pending') AS pending,
+           EXISTS (SELECT FROM travel.trip_participants WHERE trip_id = candidate."tripId" AND user_id = $1 AND status = 'confirmed') AS joined,
+           EXISTS (SELECT FROM travel.trip_favorites WHERE trip_id = candidate."tripId" AND user_id = $1) AS saved
+         ) personal
+         WHERE personal.pending OR personal.joined OR personal.saved OR candidate."ownerId" = $1
+         ORDER BY candidate."tripId"`, [userId, ids],
       );
       return rows;
     });

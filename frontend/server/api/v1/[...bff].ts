@@ -17,6 +17,7 @@ const identityRoutes = new Set([
 ]);
 
 const editorRoutes = new Set([
+  'GET me/trips',
   'GET me/equipment',
   'POST me/equipment',
   'GET catalog/participation',
@@ -29,6 +30,9 @@ const editorRoutes = new Set([
 ]);
 
 const editorPaths = [
+  /^GET trips\/[^/]+\/roster$/,
+  /^PUT trips\/[^/]+\/roster\/[^/]+$/,
+  /^(GET|PUT) me\/favorites\/[^/]+$/,
   /^POST trips\/[^/]+\/applications$/,
   /^PATCH trips\/[^/]+$/,
   /^POST trips\/[^/]+\/(?:publish|unpublish|archive)$/,
@@ -115,7 +119,11 @@ export default defineEventHandler(async (event) => {
   const requestId = incomingId && /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(incomingId) ? incomingId : randomUUID();
   const methodPath = `${method} ${path}`;
   const participation = methodPath === 'GET catalog/participation';
-  if (participation) {
+  const account = path === 'me/trips' || path.startsWith('me/favorites/') || /^trips\/[^/]+\/roster(?:\/|$)/.test(path);
+  if (account) {
+    setResponseHeader(event, 'cache-control', 'private, no-store');
+  }
+  if (participation || account) {
     setResponseHeader(event, 'vary', 'Cookie');
   }
   const identity = identityRoutes.has(methodPath) || /^GET users\/[^/]+$/.test(methodPath);

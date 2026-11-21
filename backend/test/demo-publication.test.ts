@@ -25,7 +25,7 @@ it('retries only the pending demo publication with backoff after a temporary wor
   const status = vi.fn<PublicationService['status']>().mockResolvedValueOnce(pending).mockResolvedValueOnce(succeeded);
   const prepare = vi.fn(async () => {});
   const completed = publishDemoTrip({ publish, status }, { prepare }, editor, 'trip', command, 'initial');
-  const result = expect(completed).resolves.toBeUndefined();
+  const result = expect(completed).resolves.toBe('latest');
   await vi.advanceTimersByTimeAsync(999);
   expect(prepare).toHaveBeenCalledTimes(1);
   await vi.advanceTimersByTimeAsync(1);

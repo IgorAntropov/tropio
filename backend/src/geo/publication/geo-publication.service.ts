@@ -6,15 +6,20 @@ import type { PoolClient } from 'pg';
 import { BffProblem } from '../../http/bff-problem.js';
 import { GeoDatabase } from '../geo-database.js';
 import {
-  heldStarts,
+  heldSummaries,
   lockBatch,
   manifestHash,
+  ownedRouteSummaries,
   publicDays,
   retainRoutes,
   selectedPois,
   tripType,
 } from './publication-store.js';
-import type { GeoManifest } from './publication-store.js';
+import type {
+  GeoManifest,
+  OwnedRouteSet,
+  OwnedRouteSummary,
+} from './publication-store.js';
 
 export type { GeoManifest } from './publication-store.js';
 
@@ -36,7 +41,7 @@ export class GeoPublicationService {
       );
       if (!rowCount) {
         await lockBatch(client, operationId, tripId);
-        await heldStarts(client, [manifest], true);
+        await heldSummaries(client, [manifest], true);
         return;
       }
       await retainRoutes(client, manifest);
@@ -57,12 +62,12 @@ export class GeoPublicationService {
 
   async verify(manifest: GeoManifest) {
     return this.snapshot(async (client) => {
-      const [start] = await heldStarts(client, [manifest], true);
-      if (!start) {
+      const [summary] = await heldSummaries(client, [manifest], true);
+      if (!summary) {
         throw new BffProblem('POI_PUBLICATION_RESTRICTED');
       }
       await selectedPois(client, manifest, true);
-      return { start, tripType: await tripType(client, manifest.operationId) };
+      return { start: summary.start, tripType: await tripType(client, manifest.operationId) };
     });
   }
 
@@ -88,17 +93,25 @@ export class GeoPublicationService {
 
   async read(manifest: GeoManifest) {
     return this.snapshot(async (client) => {
-      const [start] = await heldStarts(client, [manifest]);
-      if (!start) {
+      const [summary] = await heldSummaries(client, [manifest]);
+      if (!summary) {
         return null;
       }
       const days = await publicDays(client, manifest);
       const pois = await selectedPois(client, manifest, false);
-      return { start, days, pois };
+      return { ...summary, days, pois };
     });
   }
 
-  async readStarts(manifests: GeoManifest[]) {
-    return this.snapshot(client => heldStarts(client, manifests));
+  async readOwnedSummaries(userId: string, trips: OwnedRouteSet[]) {
+    const routes = trips.filter(trip => trip.route_ids.length);
+    if (!routes.length) {
+      return new Map<string, OwnedRouteSummary>();
+    }
+    return this.snapshot(client => ownedRouteSummaries(client, userId, routes.map(({ trip_id, route_ids, archived }) => ({ trip_id, route_ids, archived }))));
+  }
+
+  async readSummaries(manifests: GeoManifest[]) {
+    return this.snapshot(client => heldSummaries(client, manifests));
   }
 }

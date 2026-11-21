@@ -1,0 +1,26 @@
+{
+  "version": 7,
+  "initialAvatarId": "f7cbe6d3-4c13-55f6-951f-a0009613c54c",
+  "avatars": [
+    {
+      "userId": "c2deb9c8-2104-4dd9-8a07-a10a30168c71",
+      "avatarId": "593336b9-e4b9-56f4-854d-6dbc5918f54b"
+    },
+    {
+      "userId": "faa4369b-7d54-52e9-94c8-0721ab8224c9",
+      "avatarId": "b3c241eb-f71d-5166-80af-0309b55addc5"
+    },
+    {
+      "userId": "408ebed2-9c44-557a-a019-e227cb9f0d47",
+      "avatarId": "302a4612-e292-5882-b402-8c604ea865f6"
+    },
+    {
+      "userId": "818e21a3-6cab-5f3c-b7f4-5db6616afb10",
+      "avatarId": "82d7d5cc-4873-579b-a163-03cdab902582"
+    },
+    {
+      "userId": "5404f57d-84bc-548f-8180-63b4652f7788",
+      "avatarId": "c6a767c3-8c31-5010-b539-96c67d5adb70"
+    }
+  ]
+}

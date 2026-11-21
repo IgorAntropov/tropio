@@ -38,6 +38,29 @@ interface AppliedVersion {
   applied_at: Date | null;
 }
 
+function matchesDemoFile(filename: string, data: DemoVersion) {
+  if ('avatars' in data) {
+    return filename.endsWith('-personal-avatars.json') && data.initialAvatarId && Array.isArray(data.avatars);
+  }
+  if ('travelers' in data) {
+    return filename.endsWith('-personal-travelers.json') && Array.isArray(data.travelers)
+      && data.travelers.every(user => user.id && user.email?.endsWith('.test') && user.displayName?.trim());
+  }
+  if ('journeys' in data) {
+    return filename.endsWith('-personal-journeys.json') && Array.isArray(data.journeys);
+  }
+  if ('personalEquipment' in data) {
+    return filename.endsWith('-personal-equipment.json') && Array.isArray(data.personalEquipment);
+  }
+  if ('accountTrips' in data) {
+    const collections = data.accountTrips;
+    return filename.endsWith('-personal-trips.json') && collections?.archive?.id && collections.archive.title?.trim()
+      && Array.isArray(collections.favorites) && Array.isArray(collections.participation);
+  }
+  return !filename.includes('-personal-') && data.organizer?.id && data.organizer.email?.endsWith('.test')
+    && data.organizer.displayName?.trim() && Array.isArray(data.trips);
+}
+
 function readDemoVersions(directory: string) {
   const files = readdirSync(directory).filter(file => file.endsWith('.json')).sort();
   if (!files.length) {
@@ -45,17 +68,53 @@ function readDemoVersions(directory: string) {
   }
   const ids = new Set<string>();
   const slugs = new Set<string>();
+  const users = new Set([demoAccount.id]);
   return files.map((filename, index) => {
     const bytes = readFileSync(join(directory, filename));
     const data = JSON.parse(bytes.toString('utf8')) as DemoVersion;
     const version = index + 1;
-    const personal = filename.endsWith('-personal-equipment.json');
     if (!/^\d{4}-[a-z][a-z0-9-]*\.json$/.test(filename) || Number(filename.slice(0, 4)) !== version || data.version !== version
-      || personal !== ('personalEquipment' in data)
-      || ('personalEquipment' in data
-        ? !Array.isArray(data.personalEquipment)
-        : !data.organizer?.id || !data.organizer.email?.endsWith('.test') || !data.organizer.displayName?.trim() || !Array.isArray(data.trips))) {
+      || !matchesDemoFile(filename, data)) {
       throw new Error(`Некорректная версия демонстрационных данных: ${filename}`);
+    }
+    if ('avatars' in data) {
+      if (new Set(data.avatars.map(item => item.userId)).size !== data.avatars.length
+        || data.avatars.some(item => !users.has(item.userId) || !item.avatarId)) {
+        throw new Error(`Некорректные аватары демонстрационных пользователей: ${filename}`);
+      }
+    }
+    if ('organizer' in data) {
+      users.add(data.organizer.id);
+    }
+    if ('travelers' in data) {
+      for (const user of data.travelers) {
+        if (users.has(user.id)) {
+          throw new Error(`Повтор UUID демонстрационного путешественника: ${user.id}`);
+        }
+        users.add(user.id);
+      }
+    }
+    if ('journeys' in data) {
+      for (const journey of data.journeys) {
+        const id = journey.id.toLowerCase();
+        const members = [...journey.confirmed ?? [], ...journey.pending ?? []];
+        if (ids.has(id) || !users.has(journey.ownerId) || !members.every(userId => users.has(userId))
+          || members.includes(journey.ownerId) || new Set(members).size !== members.length
+          || (journey.ownerId === demoAccount.id && journey.favorite)
+          || (journey.pending?.length && journey.admissionMode !== 'request')
+          || !Number.isInteger(journey.startsInDays) || !['planned', 'in_progress', 'completed', 'cancelled'].includes(journey.lifecycle)) {
+          throw new Error(`Некорректный пример личного путешествия: ${journey.id}`);
+        }
+        ids.add(id);
+      }
+    }
+    if ('accountTrips' in data) {
+      const id = data.accountTrips.archive.id.toLowerCase();
+      if (ids.has(id) || !data.accountTrips.favorites.every(tripId => ids.has(tripId))
+        || !data.accountTrips.participation.every(item => ids.has(item.tripId) && ['open', 'request'].includes(item.mode))) {
+        throw new Error(`Некорректная поездка в личных подборках: ${filename}`);
+      }
+      ids.add(id);
     }
     for (const trip of ('trips' in data ? data.trips : [])) {
       const id = trip.id.toLowerCase();
@@ -107,12 +166,21 @@ async function applyPendingVersions(client: pg.Client, databases: DemoDatabases,
         'INSERT INTO travel.local_demo_versions (version, filename, checksum) VALUES ($1, $2, $3) ON CONFLICT (version) DO NOTHING',
         [version, filename, checksum],
       );
+      const { rows: [entry] } = await client.query<{ started_at: Date }>(
+        'SELECT started_at FROM travel.local_demo_versions WHERE version = $1', [version],
+      );
       await retryDemoStatementTimeout(async () => {
+        if ('travelers' in data) {
+          for (const user of data.travelers) {
+            await ensureLocalDemoAccount(databases.identityUrl, user);
+          }
+          return;
+        }
         if ('organizer' in data) {
           const { id, email, displayName } = data.organizer;
           await ensureLocalDemoAccount(databases.identityUrl, { id, email, displayName });
         }
-        await worker.applyTravelDemoVersion({ ...databases, travelerId: demoAccount.id }, data);
+        await worker.applyTravelDemoVersion({ ...databases, travelerId: demoAccount.id, startedAt: entry!.started_at }, data);
       });
       await client.query('UPDATE travel.local_demo_versions SET applied_at = clock_timestamp() WHERE version = $1', [version]);
     }

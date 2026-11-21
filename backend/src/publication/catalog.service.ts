@@ -6,17 +6,17 @@ import { GeoPublicationService } from '../geo/publication/geo-publication.servic
 import { BffProblem } from '../http/bff-problem.js';
 import { IdentityService } from '../identity/identity.service.js';
 import type { PublicOrganizer } from '../identity/identity.service.js';
+import { AccountTrips } from '../travel/account-trips.js';
+import type { AccountTripFilter } from '../travel/account-trips.js';
 import { PublicCatalog } from '../travel/public-catalog.js';
 import type { Candidate } from '../travel/public-catalog.js';
 import type { AdmissionMode } from '../travel/travel-input.js';
 import type { TravelEditor } from '../travel/travel.service.js';
+import type { RosterAction } from '../travel/trip-applications.js';
 import { TripApplications } from '../travel/trip-applications.js';
-import type {
-  catalogInput,
-  CatalogPosition,
-} from './publication-input.js';
+import type { catalogInput } from './publication-input.js';
 
-function fields({ tripId, publication_id, cover_id, snapshot, applications_open, confirmed_participants }: Candidate, organizer: PublicOrganizer | null) {
+function accountFields({ tripId, publication_id, cover_id, snapshot, confirmed_participants, current_lifecycle }: Candidate, organizer: PublicOrganizer | null) {
   return {
     trip_id: tripId,
     publication_id,
@@ -30,11 +30,13 @@ function fields({ tripId, publication_id, cover_id, snapshot, applications_open,
     free_capacity: snapshot.free_capacity,
     difficulty: snapshot.difficulty,
     trip_type: snapshot.trip_type,
-    lifecycle: snapshot.lifecycle,
-    applications_open,
-    admission_mode: snapshot.admission_mode ?? 'request',
+    lifecycle: current_lifecycle,
     confirmed_participants,
   };
+}
+
+function fields(candidate: Candidate, organizer: PublicOrganizer | null) {
+  return { ...accountFields(candidate, organizer), applications_open: candidate.applications_open, admission_mode: candidate.snapshot.admission_mode ?? 'request' };
 }
 
 function manifest({ tripId, operationId, routes, poiIds }: Candidate) {
@@ -52,7 +54,7 @@ function matches(candidate: Candidate, row: { publication_id: string; access_gen
 }
 
 type CatalogInput = ReturnType<typeof catalogInput>;
-type Summary = ReturnType<typeof fields> & { distance_m?: number; start: { lon: number; lat: number } };
+type Summary = ReturnType<typeof fields> & { route_count: number; total_distance_m: number; distance_m?: number; start: { lon: number; lat: number } };
 
 @Injectable()
 export class CatalogService {
@@ -61,6 +63,7 @@ export class CatalogService {
     @Inject(GeoPublicationService) private readonly geo: GeoPublicationService,
     @Inject(IdentityService) private readonly identity: IdentityService,
     @Inject(TripApplications) private readonly applications: TripApplications,
+    @Inject(AccountTrips) private readonly account: AccountTrips,
   ) {}
 
   filterOptions() {
@@ -74,8 +77,8 @@ export class CatalogService {
         throw new BffProblem('NOT_FOUND');
       }
       const status = await this.applications.submit(candidate, applicant, mode, async () => {
-        const [start] = await this.geo.readStarts([manifest(candidate)]);
-        if (!start) {
+        const [summary] = await this.geo.readSummaries([manifest(candidate)]);
+        if (!summary) {
           throw new BffProblem('NOT_FOUND');
         }
       });
@@ -86,23 +89,75 @@ export class CatalogService {
     throw new BffProblem('DEPENDENCY_UNAVAILABLE');
   }
 
+  async roster(tripId: string, userId: string) {
+    const roster = await this.applications.roster(userId, tripId);
+    const profiles = await this.identity.publicOrganizers([...new Set(roster.items.map(item => item.user_id))]);
+    const can_accept = roster.can_accept && await this.visibleRoute(tripId);
+    return {
+      ...roster,
+      viewer_id: userId,
+      can_accept,
+      items: roster.items.map(item => ({ ...item, profile: profiles.get(item.user_id) ?? null })),
+    };
+  }
+
+  async decideRoster(tripId: string, editor: TravelEditor, entryId: string, action: RosterAction) {
+    const candidate = action === 'accept' ? await this.travel.candidate(tripId) : null;
+    return this.applications.decide(editor, tripId, entryId, action, async (publicationId, generation) => {
+      if (!candidate || candidate.publication_id !== publicationId || candidate.access_generation !== generation) {
+        throw new BffProblem('TRIP_APPLICATION_UNAVAILABLE');
+      }
+      const [summary] = await this.geo.readSummaries([manifest(candidate)]);
+      if (!summary) {
+        throw new BffProblem('TRIP_APPLICATION_UNAVAILABLE');
+      }
+    });
+  }
+
+  private async visibleRoute(tripId: string) {
+    const candidate = await this.travel.candidate(tripId);
+    if (!candidate) {
+      return false;
+    }
+    const [summary] = await this.geo.readSummaries([manifest(candidate)]);
+    return !!summary;
+  }
+
   async participation(userId: string, tripIds: string[]) {
     const candidates = await this.travel.participationForViewer(userId, tripIds);
     const trip_ids: string[] = [];
     const joined_trip_ids: string[] = [];
+    const owned_trip_ids: string[] = [];
+    const saved_trip_ids: string[] = [];
+    const result = {
+      trip_ids,
+      joined_trip_ids,
+      owned_trip_ids,
+      saved_trip_ids,
+    };
     if (!candidates.length) {
-      return { trip_ids, joined_trip_ids };
+      return result;
     }
-    const starts = await this.geo.readStarts(candidates.map(manifest));
+    const summaries = await this.geo.readSummaries(candidates.map(manifest));
     const confirmed = await this.travel.confirm(candidates);
     for (const [index, candidate] of candidates.entries()) {
       const current = confirmed.get(candidate.tripId);
-      if (starts[index] && current && matches(candidate, current)) {
-        const ids = candidate.participation === 'joined' ? joined_trip_ids : trip_ids;
-        ids.push(candidate.tripId);
+      if (summaries[index] && current && matches(candidate, current)) {
+        if (candidate.pending) {
+          trip_ids.push(candidate.tripId);
+        }
+        if (candidate.joined) {
+          joined_trip_ids.push(candidate.tripId);
+        }
+        if (candidate.ownerId === userId) {
+          owned_trip_ids.push(candidate.tripId);
+        }
+        else if (candidate.saved) {
+          saved_trip_ids.push(candidate.tripId);
+        }
       }
     }
-    return { trip_ids, joined_trip_ids };
+    return result;
   }
 
   async cover(id: string, coverId: string) {
@@ -111,8 +166,8 @@ export class CatalogService {
       if (!candidate || candidate.cover_id !== coverId) {
         throw new BffProblem('NOT_FOUND');
       }
-      const [start] = await this.geo.readStarts([manifest(candidate)]);
-      if (!start) {
+      const [summary] = await this.geo.readSummaries([manifest(candidate)]);
+      if (!summary) {
         throw new BffProblem('NOT_FOUND');
       }
       const image = await this.travel.cover(candidate, coverId);
@@ -161,6 +216,8 @@ export class CatalogService {
         ...fields(candidate, organizer),
         equipment: candidate.snapshot.equipment ?? [],
         start: geo.start,
+        route_count: geo.route_count,
+        total_distance_m: geo.total_distance_m,
         days,
         pois: geo.pois,
       };
@@ -168,18 +225,93 @@ export class CatalogService {
     throw new BffProblem('DEPENDENCY_UNAVAILABLE');
   }
 
-  private async batch(filters: CatalogInput['filters'], after: CatalogPosition | null, size: number) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const candidates = await this.travel.candidates(filters, after, size);
-      const last = candidates.at(-1);
-      if (!last) {
-        return { allowed: [], next: null };
+  async favorite(userId: string, tripId: string) {
+    if (!await this.account.isFavorite(userId, tripId)) {
+      return false;
+    }
+    const { visible } = await this.visibleCandidates(async () => {
+      const candidate = await this.travel.candidate(tripId);
+      return candidate ? [candidate] : [];
+    });
+    return visible.length > 0;
+  }
+
+  async setFavorite(tripId: string, editor: TravelEditor, saved: boolean) {
+    if (!saved) {
+      return this.account.removeFavorite(editor, tripId);
+    }
+    const candidate = await this.travel.candidate(tripId);
+    if (!candidate) {
+      throw new BffProblem('NOT_FOUND');
+    }
+    return this.account.addFavorite(editor, candidate, async () => {
+      const [summary] = await this.geo.readSummaries([manifest(candidate)]);
+      if (!summary) {
+        throw new BffProblem('NOT_FOUND');
       }
-      const starts = await this.geo.readStarts(candidates.map(manifest));
-      if (starts.length !== candidates.length) {
+    });
+  }
+
+  async accountTrips(userId: string, input: AccountTripFilter) {
+    const owned = input.collection === 'created' || input.collection === 'all'
+      ? await this.account.created(userId, input)
+      : [];
+    const [organizers, summaries] = await Promise.all([
+      this.identity.publicOrganizers(owned.length ? [userId] : []),
+      this.geo.readOwnedSummaries(userId, owned),
+    ]);
+    const organizer = organizers.get(userId) ?? null;
+    const items = owned.map(({ route_ids, ...item }) => {
+      const summary = summaries.get(item.trip_id);
+      return {
+        ...item,
+        route_count: route_ids.length,
+        total_distance_m: route_ids.length ? summary?.total_distance_m ?? null : 0,
+        trip_type: summary?.trip_type ?? null,
+        is_owner: true,
+        participation_status: null as 'pending' | 'joined' | null,
+        organizer,
+      };
+    });
+    if (input.collection !== 'created' && input.status !== 'draft' && input.status !== 'archived') {
+      let after = input.cursor;
+      const size = Math.max(16, input.limit + 1);
+      let visibleCount = 0;
+      do {
+        const page = await this.visibleCandidates(() => this.account.candidates(userId, input, after, size));
+        for (const { candidate, summary, organizer: foreignOrganizer } of page.visible) {
+          items.push({
+            ...accountFields(candidate, foreignOrganizer),
+            route_count: summary.route_count,
+            total_distance_m: summary.total_distance_m,
+            is_owner: false,
+            saved: candidate.saved,
+            participation_status: candidate.participation_status,
+            starting_soon: candidate.starting_soon,
+            pending_count: 0,
+            archived: false,
+          });
+          visibleCount++;
+        }
+        after = page.candidates.length === size ? page.candidates.at(-1)!.tripId : null;
+      } while (after && visibleCount <= input.limit);
+    }
+    items.sort((a, b) => a.trip_id < b.trip_id ? -1 : a.trip_id > b.trip_id ? 1 : 0);
+    const page = items.slice(0, input.limit);
+    return { viewer_id: userId, items: page, next_cursor: items.length > input.limit ? page.at(-1)!.trip_id : null };
+  }
+
+  private async visibleCandidates<T extends Candidate>(load: () => Promise<T[]>) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const candidates = await load();
+      if (!candidates.length) {
+        return { candidates, visible: [] };
+      }
+      const summaries = await this.geo.readSummaries(candidates.map(manifest));
+      if (summaries.length !== candidates.length) {
         throw new BffProblem('DEPENDENCY_UNAVAILABLE');
       }
-      const owners = new Set(candidates.filter((_, index) => starts[index]).map(item => item.ownerId));
+      const owners = new Set(candidates.filter((_, index) => summaries[index]).map(item => item.ownerId));
       const organizers = await this.identity.publicOrganizers([...owners]);
       const confirmed = await this.travel.confirm(candidates);
       if (candidates.some((item) => {
@@ -188,14 +320,11 @@ export class CatalogService {
       })) {
         continue;
       }
-      const allowed: Summary[] = [];
-      for (const [index, item] of candidates.entries()) {
-        const start = starts[index];
-        if (start && confirmed.has(item.tripId)) {
-          allowed.push({ ...fields(item, organizers.get(item.ownerId) ?? null), start, ...(filters.near ? { distance_m: item.distance_m } : {}) });
-        }
-      }
-      return { allowed, next: candidates.length === size ? { id: last.tripId, distance: last.distance_m } : null };
+      const visible = candidates.flatMap((candidate, index) => {
+        const summary = summaries[index];
+        return summary && confirmed.has(candidate.tripId) ? [{ candidate, summary, organizer: organizers.get(candidate.ownerId) ?? null }] : [];
+      });
+      return { candidates, visible };
     }
     throw new BffProblem('DEPENDENCY_UNAVAILABLE');
   }
@@ -206,8 +335,9 @@ export class CatalogService {
     const seen = new Set<string>();
     const size = Math.max(16, input.limit + 1);
     do {
-      const { allowed, next } = await this.batch(input.filters, after, size);
-      for (const item of allowed) {
+      const { candidates, visible } = await this.visibleCandidates(() => this.travel.candidates(input.filters, after, size));
+      for (const { candidate, summary, organizer } of visible) {
+        const item = { ...fields(candidate, organizer), ...summary, ...(input.filters.near ? { distance_m: candidate.distance_m } : {}) };
         if (seen.has(item.trip_id)) {
           continue;
         }
@@ -218,7 +348,8 @@ export class CatalogService {
         seen.add(item.trip_id);
         items.push(item);
       }
-      after = next;
+      const last = candidates.at(-1);
+      after = last && candidates.length === size ? { id: last.tripId, distance: last.distance_m } : null;
     } while (after);
     return { items, next_cursor: null };
   }

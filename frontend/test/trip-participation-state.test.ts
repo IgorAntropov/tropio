@@ -40,7 +40,13 @@ let unmount: (() => void) | undefined;
 
 async function setup() {
   let viewer = first;
-  const result = () => ({ viewer_id: viewer, trip_ids: [], joined_trip_ids: [] });
+  const result = () => ({
+    viewer_id: viewer,
+    trip_ids: [],
+    joined_trip_ids: [],
+    owned_trip_ids: [],
+    saved_trip_ids: [],
+  });
   const read = vi.spyOn(editorApi, 'getCatalogParticipation').mockImplementation(async () => result());
   const profile = (id: string) => ({
     id,

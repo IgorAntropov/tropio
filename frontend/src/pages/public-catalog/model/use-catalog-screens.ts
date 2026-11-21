@@ -5,6 +5,7 @@ import {
   ref,
 } from 'vue';
 import type { Ref } from 'vue';
+import { accountTripsReturnPath } from '@fsd/shared/session';
 import type {
   LocationQuery,
   LocationQueryRaw,
@@ -66,7 +67,12 @@ export function useCatalogScreens(tripId: Ref<string>) {
       router.back();
     }
     else {
-      void router.replace({ path: '/catalog', query: catalogQuery(route.query) });
+      const fromTrips = accountTripsReturnPath(route.query.returnTo);
+      if (fromTrips && router.options.history.state.back === fromTrips) {
+        router.back();
+        return;
+      }
+      void router.replace(fromTrips ?? { path: '/catalog', query: catalogQuery(route.query) });
     }
   }
   return {

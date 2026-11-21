@@ -4,6 +4,7 @@ export { default as UiButton } from './UiButton.vue';
 export { default as UiDialog } from './UiDialog.vue';
 export { default as UiImage } from './UiImage.vue';
 export { default as UiSearchField } from './UiSearchField.vue';
+export { default as UiScrollPagination } from './UiScrollPagination.vue';
 export { default as UiSegmented } from './UiSegmented.vue';
 export { default as UiSelect } from './UiSelect.vue';
 export { default as UiSkeleton } from './UiSkeleton.vue';

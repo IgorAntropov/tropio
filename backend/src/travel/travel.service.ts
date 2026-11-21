@@ -313,7 +313,7 @@ export class TravelService {
       const { rows: [image] } = await client.query<TripCoverFile>(
         `SELECT c.bytes, c.content_type FROM travel.trip_covers c
          JOIN travel.trips t ON (t.id, t.cover_id) = (c.trip_id, c.id)
-         WHERE t.id = $1 AND t.owner_user_id = $2 AND t.archived_at IS NULL AND c.id = $3`,
+         WHERE t.id = $1 AND t.owner_user_id = $2 AND c.id = $3`,
         [tripId, ownerId, coverId],
       );
       if (!image) {

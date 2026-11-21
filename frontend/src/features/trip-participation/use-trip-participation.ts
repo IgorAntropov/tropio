@@ -22,6 +22,9 @@ function participationContext(tripIds: () => readonly string[], refreshTrips: ()
   const viewer = ref<string | null>();
   const sent = shallowRef(new Set<string>());
   const joined = shallowRef(new Set<string>());
+  const saved = shallowRef(new Set<string>());
+  const owned = shallowRef(new Set<string>());
+  const checked = shallowRef(new Set<string>());
   const busy = ref(new Set<string>());
   const errors = ref<Record<string, string>>({});
   const ids = computed(() => [...new Set(tripIds())].sort().join(','));
@@ -34,6 +37,9 @@ function participationContext(tripIds: () => readonly string[], refreshTrips: ()
     viewer.value = undefined;
     sent.value = new Set();
     joined.value = new Set();
+    saved.value = new Set();
+    owned.value = new Set();
+    checked.value = new Set();
     errors.value = {};
   }
 
@@ -48,6 +54,8 @@ function participationContext(tripIds: () => readonly string[], refreshTrips: ()
       const visible = ids.value.split(',');
       const pending = new Set<string>();
       const confirmed = new Set<string>();
+      const favorites = new Set<string>();
+      const organizing = new Set<string>();
       let currentViewer: string | null | undefined;
       for (let index = 0; index < visible.length; index += 100) {
         const page = await editorApi.getCatalogParticipation(visible.slice(index, index + 100), request.signal);
@@ -65,11 +73,20 @@ function participationContext(tripIds: () => readonly string[], refreshTrips: ()
         for (const tripId of page.joined_trip_ids) {
           confirmed.add(tripId);
         }
+        for (const tripId of page.saved_trip_ids) {
+          favorites.add(tripId);
+        }
+        for (const tripId of page.owned_trip_ids) {
+          organizing.add(tripId);
+        }
       }
       if (!request.signal.aborted) {
         viewer.value = currentViewer;
         sent.value = pending;
         joined.value = confirmed;
+        owned.value = organizing;
+        saved.value = favorites;
+        checked.value = new Set(visible);
       }
     }
     catch {
@@ -77,6 +94,18 @@ function participationContext(tripIds: () => readonly string[], refreshTrips: ()
         clear();
       }
     }
+  }
+
+  function changeFavorite(tripId: string, value: boolean) {
+    const next = new Set(saved.value);
+    if (value) {
+      next.add(tripId);
+    }
+    else {
+      next.delete(tripId);
+    }
+    saved.value = next;
+    void refresh();
   }
 
   async function apply(tripId: string, mode: PublicTripSummary['admission_mode']) {
@@ -178,6 +207,10 @@ function participationContext(tripIds: () => readonly string[], refreshTrips: ()
     viewer,
     sent,
     joined,
+    saved,
+    owned,
+    checked,
+    changeFavorite,
     busy,
     errors,
     apply,
@@ -187,7 +220,9 @@ function participationContext(tripIds: () => readonly string[], refreshTrips: ()
 const contextKey: InjectionKey<ReturnType<typeof participationContext>> = Symbol('trip-participation');
 
 export function provideTripParticipation(tripIds: () => readonly string[], refreshTrips: () => void) {
-  provide(contextKey, participationContext(tripIds, refreshTrips));
+  const context = participationContext(tripIds, refreshTrips);
+  provide(contextKey, context);
+  return context;
 }
 
 export function useTripParticipation() {

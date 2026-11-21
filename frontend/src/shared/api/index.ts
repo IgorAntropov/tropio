@@ -3,6 +3,11 @@ export {
   EditorResponseError,
 } from './editor';
 export type {
+  AccountTripCard,
+  AccountTripCollection,
+  AccountTripPage,
+  AccountTripQuery,
+  AccountTripStatus,
   CreatePoiRequest,
   CreateTripDraftRequest,
   DraftDay,

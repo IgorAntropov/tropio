@@ -12,6 +12,11 @@ type Output<Name extends Operation> = Extract<operations[Name]['responses'][keyo
   content: { 'application/json': unknown };
 }>['content']['application/json'];
 
+export type AccountTripQuery = NonNullable<operations['listAccountTrips']['parameters']['query']>;
+export type AccountTripCollection = NonNullable<AccountTripQuery['collection']>;
+export type AccountTripStatus = NonNullable<AccountTripQuery['status']>;
+export type AccountTripPage = Schemas['AccountTripPage'];
+export type AccountTripCard = Schemas['AccountTripCard'];
 export type TripListQuery = NonNullable<operations['listMyTripDrafts']['parameters']['query']>;
 export type PoiListQuery = operations['listPois']['parameters']['query'];
 export type EditorRequest = { csrf: string; signal?: AbortSignal };
@@ -128,10 +133,14 @@ async function call<T>(path: string, options: {
     signal?.throwIfAborted();
     throw new EditorResponseError(response.status, problem, response.headers.get('x-request-id') ?? undefined);
   }
-  return await response.json() as T;
+  return response.status === 204 ? undefined as T : await response.json() as T;
 }
 
 export const editorApi = {
+  getTripRoster: (tripId: string, signal: AbortSignal) =>
+    call<Output<'getTripRoster'>>(`/trips/${encodeURIComponent(tripId)}/roster`, { signal }),
+  updateTripRoster: (tripId: string, entryId: string, body: Input<'updateTripRoster'>, options: EditorRequest) =>
+    call<undefined>(`/trips/${encodeURIComponent(tripId)}/roster/${encodeURIComponent(entryId)}`, { ...options, method: 'PUT', body }),
   getCatalogParticipation: (ids: readonly string[], signal: AbortSignal) =>
     call<Output<'getCatalogParticipation'>>(queryPath('/catalog/participation', { trip_ids: ids.join(',') }), { signal }),
   requestTripParticipation: (tripId: string, mode: Schemas['TripAdmissionMode'], options: EditorRequest) =>
@@ -140,6 +149,12 @@ export const editorApi = {
       method: 'POST',
       body: { admission_mode: mode },
     }),
+  listAccountTrips: (query: AccountTripQuery, signal: AbortSignal) =>
+    call<AccountTripPage>(queryPath('/me/trips', query), { signal }),
+  getTripFavorite: (tripId: string, signal: AbortSignal) =>
+    call<Output<'getTripFavorite'>>('/me/favorites/' + encodeURIComponent(tripId), { signal }),
+  setTripFavorite: (tripId: string, saved: boolean, options: EditorRequest) =>
+    call<Output<'setTripFavorite'>>('/me/favorites/' + encodeURIComponent(tripId), { ...options, method: 'PUT', body: { saved } }),
   listTrips: (query?: TripListQuery, signal?: AbortSignal) =>
     call<MyTripDraftList>(queryPath('/trips', query), { signal }),
   listEquipment: (signal?: AbortSignal) => call<Output<'listEquipmentLibrary'>>('/me/equipment', { signal }),

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TripDraftsPage } from '@fsd/pages/trip-drafts';
+import { AccountTripsPage } from '@fsd/pages/trip-drafts';
 
 definePageMeta({ layout: 'workspace', middleware: 'workspace' });
 
@@ -11,5 +11,5 @@ useHead(() => ({
 </script>
 
 <template>
-  <TripDraftsPage />
+  <AccountTripsPage />
 </template>

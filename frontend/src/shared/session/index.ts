@@ -45,6 +45,13 @@ export function participationReturnPath(value: unknown): string | undefined {
   }
 }
 
+export function accountTripsReturnPath(value: unknown): string | undefined {
+  const path = workspaceReturnPath(value);
+  if (path && new URL(path, localOrigin).pathname === '/trips') {
+    return path;
+  }
+}
+
 export function workspaceReturnPath(value: unknown): string | undefined {
   const participation = participationReturnPath(value);
   if (participation) {

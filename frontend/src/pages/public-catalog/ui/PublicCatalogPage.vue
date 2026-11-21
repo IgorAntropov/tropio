@@ -5,6 +5,7 @@ import {
   tripTypeIcons,
   useTripRoute,
 } from '@fsd/entities/public-trip';
+import { TripFavoriteButton } from '@fsd/features/trip-favorite';
 import {
   provideTripParticipation,
   TripParticipationAction,
@@ -19,13 +20,18 @@ import {
 } from '@fsd/shared/api';
 import { RouteMap } from '@fsd/shared/map';
 import type { MapSelection } from '@fsd/shared/map';
+import { workspaceMemberKey } from '@fsd/shared/session';
+import type { WorkspaceMember } from '@fsd/shared/session';
 import { UiDateRange } from '@fsd/shared/ui/date-range';
 import {
   UiDialog,
+  UiScrollPagination,
   UiSearchField,
   UiSegmented,
   UiSelect,
 } from '@fsd/shared/ui/kit';
+import { SystemErrorState } from '@fsd/shared/ui/page-error';
+import { useCatalogPages } from '../model/use-catalog-pages';
 import { catalogFilters } from '../model/catalog';
 import { useCatalogScreens } from '../model/use-catalog-screens';
 import { useCatalogExpansion } from '../model/use-catalog-expansion';
@@ -45,7 +51,6 @@ const expandedId = computed(() => typeof route.params.tripId === 'string' ? rout
 const catalogVisited = ref(!expandedId.value);
 const filters = computed(() => catalogFilters(route.query));
 const query = ref(filters.value.q ?? '');
-const pages = ref(1);
 const filterOpen = ref(false);
 const filterMounted = ref(false);
 const filterButton = ref<HTMLButtonElement>();
@@ -192,11 +197,7 @@ function readTrip(id: string, signal: AbortSignal) {
     retry: 0,
   });
 }
-const { value: catalogPage, status, pending, clear, refresh, ready } = usePublicResource('public-catalog', async (signal) => {
-  const verified: [string, number][] = [];
-  if (!catalogVisited.value) {
-    return { items: [], next_cursor: null, verified };
-  }
+const pageQuery = computed(() => {
   const params = { ...filters.value };
   if (near.value && !params.bbox && !params.region) {
     params.near = near.value;
@@ -204,21 +205,12 @@ const { value: catalogPage, status, pending, clear, refresh, ready } = usePublic
       params.radius_km = route.query.radius_km;
     }
   }
-  const items: PublicTripPage['items'] = [];
-  let cursor: string | null = null;
-  for (let page = 0; page < pages.value; page++) {
-    const result: PublicTripPage = await $fetch<PublicTripPage>('/api/v1/catalog/trips', {
-      query: { ...params, limit: 24, ...(cursor ? { cursor } : {}) },
-      cache: 'no-store',
-      credentials: 'omit',
-      retry: 0,
-      signal,
-    });
-    items.push(...result.items);
-    cursor = result.next_cursor;
-    if (!cursor) {
-      break;
-    }
+  return params;
+});
+async function verifyWithdrawn(items: PublicTripPage['items'], signal: AbortSignal) {
+  const verified: [string, number][] = [];
+  if (!withdrawn.size) {
+    return verified;
   }
   const unique = new Map(items.map(item => [item.trip_id, item]));
   for (const [id, check] of withdrawn) {
@@ -236,7 +228,18 @@ const { value: catalogPage, status, pending, clear, refresh, ready } = usePublic
       signal.throwIfAborted();
     }
   }
-  return { items: Array.from(unique.values()), next_cursor: cursor, verified };
+  return verified;
+}
+const { value: catalogPage, status, pending, clear, refresh, ready, loadingNext, nextError, more } = useCatalogPages(
+  () => catalogVisited.value,
+  () => pageQuery.value,
+  verifyWithdrawn,
+);
+watchEffect(() => {
+  if (mobile.value && mode.value === 'map' && !expandedId.value && !pending.value && !nextError.value
+    && catalogPage.value?.depth === 1 && catalogPage.value.next_cursor) {
+    void more();
+  }
 });
 watch(catalogPage, (page) => {
   for (const [id, check] of page?.verified ?? []) {
@@ -326,7 +329,8 @@ watch([routeTitle, mapReady, mapElement], ([button, ready, element], _previous, 
 const preview = computed(() => detail.pending.value && !detail.status.value
   ? results.value?.items.find(item => item.trip_id === expandedId.value)
   : undefined);
-provideTripParticipation(
+const member = useState<WorkspaceMember | null>(workspaceMemberKey, () => null);
+const { viewer, checked, saved, owned, changeFavorite } = provideTripParticipation(
   () => expandedId.value ? (expandedTrip.value ? [expandedTrip.value.trip_id] : []) : results.value?.items.map(item => item.trip_id) ?? [],
   () => {
     if (expandedId.value) {
@@ -337,6 +341,10 @@ provideTripParticipation(
     }
   },
 );
+function personalActionsReady(tripId: string) {
+  return Boolean(viewer.value && viewer.value === member.value?.id && checked.value.has(tripId));
+}
+
 watch(expandedId, (id, previous) => {
   if (id) {
     flyFromCatalog.value = !previous && catalogVisited.value && mode.value === 'map' && mapReady.value;
@@ -363,19 +371,11 @@ watch(located, (position) => {
   }
 });
 watch(filterKey, () => {
-  pages.value = 1;
   selected.value = '';
   query.value = filters.value.q ?? '';
   clear();
   refresh();
 });
-function more() {
-  if (pending.value || !results.value?.next_cursor) {
-    return;
-  }
-  pages.value++;
-  refresh();
-}
 const points = computed(() => (results.value?.items ?? []).map(trip => ({ id: trip.trip_id, label: trip.title, position: trip.start })));
 const current = computed(() => results.value?.items.find(item => item.trip_id === selected.value) ?? results.value?.items[0]);
 const mapVisible = computed(() => expandedId.value
@@ -520,7 +520,7 @@ if (import.meta.server) {
             :options="viewOptions"
           /></div>
           <p v-if="showNearbyNotice && mode === 'list'" class="catalog-location">{{ t('catalog.nearbyActive') }}</p>
-          <template v-if="results && results.items.length">
+          <template v-if="results && (results.items.length || results.next_cursor)">
             <aside ref="sidebar" :aria-label="t('catalog.list')" class="catalog-results">
               <div class="catalog-rows">
                 <div
@@ -535,17 +535,37 @@ if (import.meta.server) {
                     :trip="trip"
                     @locate="focusMarker"
                   >
+                    <template v-if="personalActionsReady(trip.trip_id) && !owned.has(trip.trip_id)" #favorite>
+                      <TripFavoriteButton
+                        :saved="saved.has(trip.trip_id)"
+                        :title="trip.title"
+                        :trip-id="trip.trip_id"
+                        @changed="changeFavorite(trip.trip_id, $event)"
+                      />
+                    </template>
                     <template #participation><TripParticipationAction :trip="trip" /></template>
                   </TripCard>
                 </div>
               </div>
-              <button
-                v-if="results.next_cursor"
-                class="tk-button catalog-more"
-                :disabled="pending"
-                type="button"
-                @click="more"
-              >{{ t('catalog.more') }}</button>
+              <SystemErrorState
+                v-if="nextError"
+                class="catalog-more"
+                compact
+                :description="t('accountTrips.unavailableHint')"
+                :status-code="nextError"
+                :title="t('accountTrips.moreError')"
+              >
+                <button class="tk-button" type="button" @click="more">{{ t('catalog.retry') }}</button>
+              </SystemErrorState>
+              <UiScrollPagination
+                v-else-if="results.next_cursor"
+                class="catalog-more"
+                :cursor="results.next_cursor"
+                :loading="loadingNext"
+                :paused="pending || !!expandedId || detailLeaving || (mobile && mode !== 'list')"
+                :root="list"
+                @more="more"
+              />
             </aside>
           </template>
           <section v-else-if="results" class="catalog-empty">
@@ -636,12 +656,15 @@ if (import.meta.server) {
             :key="expandedId"
             v-model:day="day"
             v-model:segment="segment"
+            :favorite="personalActionsReady(expandedId) && !owned.has(expandedId) ? saved.has(expandedId) : undefined"
             :mobile="mobile"
+            :own="personalActionsReady(expandedId) && owned.has(expandedId)"
             :pending="detail.pending.value"
             :preview="preview"
             :status="detail.status.value"
             :trip="expandedTrip"
             @close="closeDetail"
+            @favorite="changeFavorite(expandedId, $event)"
             @retry="detail.refresh"
             @show-map="showRoute(expandedId)"
           />

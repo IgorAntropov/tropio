@@ -4,6 +4,7 @@ import {
   TripEquipmentList,
   TripTimeline,
 } from '@fsd/entities/public-trip';
+import { TripFavoriteButton } from '@fsd/features/trip-favorite';
 import { TripParticipationAction } from '@fsd/features/trip-participation';
 import type {
   PublicTrip,
@@ -13,10 +14,10 @@ import { UiButton } from '@fsd/shared/ui/kit';
 import { catalogQuery } from '../model/use-catalog-screens';
 import PublicReadIssue from './PublicReadIssue.vue';
 
-const props = defineProps<{ trip: PublicTrip | null; preview?: PublicTripSummary; status?: number; pending: boolean; mobile: boolean }>();
+const props = withDefaults(defineProps<{ trip: PublicTrip | null; preview?: PublicTripSummary; status?: number; pending: boolean; mobile: boolean; favorite?: boolean; own: boolean }>(), { preview: undefined, status: undefined, favorite: undefined });
 const day = defineModel<number>('day', { required: true });
 const segment = defineModel<string>('segment', { required: true });
-const emit = defineEmits<{ close: []; showMap: []; retry: [] }>();
+const emit = defineEmits<{ close: []; showMap: []; retry: []; favorite: [saved: boolean] }>();
 const { t } = useI18n();
 const route = useRoute();
 const panel = ref<HTMLElement>();
@@ -54,7 +55,21 @@ watch(() => [props.trip?.trip_id, props.pending, props.status], focusDetails, { 
         @close="emit('close')"
         @locate="emit('showMap')"
       >
-        <template v-if="trip" #participation><TripParticipationAction :trip="trip" /></template>
+        <template v-if="trip && favorite !== undefined && !own" #favorite>
+          <TripFavoriteButton
+            :key="trip.trip_id"
+            :saved="favorite"
+            :title="trip.title"
+            :trip-id="trip.trip_id"
+            @changed="emit('favorite', $event)"
+          />
+        </template>
+        <template v-if="trip" #participation>
+          <div class="catalog-personal-actions">
+            <TripParticipationAction :trip="trip" />
+            <NuxtLink v-if="own" class="tk-button" :to="{ path: '/trips/' + trip.trip_id, hash: '#members' }">{{ t('accountTrips.manageRoster') }}</NuxtLink>
+          </div>
+        </template>
         <template #timeline>
           <TripTimeline
             v-if="trip"
@@ -100,3 +115,7 @@ watch(() => [props.trip?.trip_id, props.pending, props.status], focusDetails, { 
     </div>
   </section>
 </template>
+
+<style scoped>
+.catalog-personal-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--tk-space-2); }
+</style>

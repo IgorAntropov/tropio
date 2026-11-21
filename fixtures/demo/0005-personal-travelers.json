@@ -1,0 +1,25 @@
+{
+  "version": 5,
+  "travelers": [
+    {
+      "id": "faa4369b-7d54-52e9-94c8-0721ab8224c9",
+      "email": "anna@travelers.trulala.test",
+      "displayName": "Анна Лебедева"
+    },
+    {
+      "id": "408ebed2-9c44-557a-a019-e227cb9f0d47",
+      "email": "pavel@travelers.trulala.test",
+      "displayName": "Павел Мельников"
+    },
+    {
+      "id": "818e21a3-6cab-5f3c-b7f4-5db6616afb10",
+      "email": "maria@travelers.trulala.test",
+      "displayName": "Мария Тихонова"
+    },
+    {
+      "id": "5404f57d-84bc-548f-8180-63b4652f7788",
+      "email": "timur@travelers.trulala.test",
+      "displayName": "Тимур Осипов"
+    }
+  ]
+}

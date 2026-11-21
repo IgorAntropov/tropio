@@ -92,6 +92,23 @@ WITH existing AS (
 INSERT INTO travel.equipment_commands (owner_user_id, idempotency_key, request_label, response)
 SELECT owner_user_id, gen_random_uuid(), label, jsonb_build_object('id', id, 'label', label, 'scope', 'personal', 'category', 'other') FROM existing;
 `);
+    const oldFolders = '0011_personal_equipment_groups.sql';
+    cpSync(join(migrationDirectory, 'travel', oldFolders), join(beforeCovers, 'travel', oldFolders));
+    applyMigrations({ database, directory: beforeCovers });
+    sql(`
+SET LOCAL ROLE tropio_travel_runtime;
+INSERT INTO travel.trip_applications (trip_id, applicant_user_id)
+SELECT id, gen_random_uuid() FROM travel.trips WHERE title = 'Travel upgrade fixture';
+`);
+    const oldFavorites = '0012_trip_favorites.sql';
+    cpSync(join(migrationDirectory, 'travel', oldFavorites), join(beforeCovers, 'travel', oldFavorites));
+    applyMigrations({ database, directory: beforeCovers });
+    sql(`
+SET LOCAL ROLE tropio_travel_runtime;
+INSERT INTO travel.trip_favorites (trip_id, user_id)
+SELECT id, owner_user_id FROM travel.trips WHERE title = 'Travel upgrade fixture'
+UNION ALL SELECT trip_id, applicant_user_id FROM travel.trip_applications;
+`);
   }
   finally {
     rmSync(beforeCovers, { recursive: true, force: true });
@@ -100,6 +117,13 @@ SELECT owner_user_id, gen_random_uuid(), label, jsonb_build_object('id', id, 'la
   sql(`
 DO $fixture$
 BEGIN
+    IF EXISTS (SELECT FROM travel.trip_favorites f JOIN travel.trips t ON t.id = f.trip_id WHERE f.user_id = t.owner_user_id)
+       OR NOT EXISTS (SELECT FROM travel.trip_favorites f JOIN travel.trip_applications a ON (a.trip_id, a.applicant_user_id) = (f.trip_id, f.user_id))
+       OR NOT EXISTS (
+        SELECT FROM travel.trip_applications a JOIN travel.trips t ON t.id = a.trip_id
+        WHERE t.title = 'Travel upgrade fixture' AND a.status = 'pending') THEN
+        RAISE EXCEPTION 'Previous participation, foreign favorite or self-favorite cleanup missing after upgrade';
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM travel.trips t JOIN travel.trip_equipment e ON e.trip_id = t.id
                    WHERE t.title = 'Travel upgrade fixture' AND t.cover_id IS NULL AND e.label = 'Термос' AND e.required)
        OR NOT EXISTS (SELECT 1 FROM travel.equipment_catalog WHERE code = 'tent') THEN

@@ -37,6 +37,8 @@ const catalogSummary = {
   start_date: '2026-12-05',
   end_date: null,
   day_count: 1,
+  route_count: 1,
+  total_distance_m: 2190,
   difficulty: null,
   free_capacity: 3,
   trip_type: 'foot',
@@ -92,7 +94,41 @@ const upstream = createServer(async (request, response) => {
     forwarded = request.headers;
     const member = request.headers.cookie === 'tropio_session=workspace-active';
     response.writeHead(200, { 'content-type': 'application/json' })
-      .end(JSON.stringify({ viewer_id: member ? dayId : null, trip_ids: [], joined_trip_ids: member ? [routeId] : [] }));
+      .end(JSON.stringify({
+        viewer_id: member ? dayId : null,
+        trip_ids: [],
+        joined_trip_ids: member ? [routeId] : [],
+        saved_trip_ids: member ? [routeId] : [],
+        owned_trip_ids: [],
+      }));
+    return;
+  }
+  if (request.url === `/api/v1/trips/${routeId}/roster` && request.method === 'GET') {
+    forwarded = request.headers;
+    response.writeHead(200, { 'content-type': 'application/json' })
+      .end(JSON.stringify({
+        viewer_id: dayId,
+        items: [],
+        occupied_slots: 0,
+        capacity: 2,
+        can_accept: true,
+        can_manage: true,
+      }));
+    return;
+  }
+  if (request.url === `/api/v1/trips/${routeId}/roster/${dayId}` && request.method === 'PUT') {
+    forwarded = request.headers;
+    forwardedBody = (await Array.fromAsync(request)).map(chunk => chunk.toString()).join('');
+    response.writeHead(204).end();
+    return;
+  }
+  if (request.url === '/api/v1/me/trips?collection=favorites&query=river' || request.url === `/api/v1/me/favorites/${routeId}`) {
+    forwarded = request.headers;
+    forwardedBody = (await Array.fromAsync(request)).map(chunk => chunk.toString()).join('');
+    response.writeHead(200, { 'content-type': 'application/json' })
+      .end(JSON.stringify(request.url.includes('/trips?')
+        ? { viewer_id: dayId, items: [], next_cursor: null }
+        : { viewer_id: dayId, saved: true }));
     return;
   }
   if (request.url === `/api/v1/trips/${routeId}/applications` && request.method === 'POST') {
@@ -638,7 +674,13 @@ it.each([
   expect(response.status).toBe(200);
   expect(response.headers.get('cache-control')).toBe('no-store');
   expect(response.headers.get('vary')?.toLowerCase().split(/,\s*/)).toContain('cookie');
-  expect(await response.json()).toEqual({ viewer_id: viewer, trip_ids: [], joined_trip_ids: joined });
+  expect(await response.json()).toEqual({
+    viewer_id: viewer,
+    trip_ids: [],
+    joined_trip_ids: joined,
+    saved_trip_ids: joined,
+    owned_trip_ids: [],
+  });
   expect(forwarded.cookie).toBe(session);
   expect(forwarded['x-csrf-token']).toBeUndefined();
 });
@@ -682,4 +724,47 @@ it('forwards the archive command through the public Nuxt origin', async () => {
   expect(await result.json()).toEqual({ trip_revision_id: revision, publication_id: null });
   expect(forwarded.cookie).toBe('tropio_session=workspace-active');
   expect(forwarded['idempotency-key']).toBe(requestId);
+});
+
+it('proxies personal trip searches and favorite reads and writes without shared caching', async () => {
+  const headers = { 'cookie': 'tropio_session=current; ignored=ignored', 'origin': 'https://trulala.test', 'x-csrf-token': 'token' };
+  const path = `/api/v1/me/favorites/${routeId}`;
+  for (const url of ['/api/v1/me/trips?collection=favorites&query=river', path]) {
+    const response = await fetch(url, { headers });
+    expect(response.status).toBe(200);
+    expect((await response.json()).viewer_id).toBe(dayId);
+    expect(response.headers.get('cache-control')).toContain('private, no-store');
+    expect(response.headers.get('vary')?.toLowerCase()).toContain('cookie');
+    expect(forwarded.cookie).toBe('tropio_session=current');
+  }
+  const response = await fetch(path, {
+    method: 'PUT',
+    headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({ saved: true }),
+  });
+  expect(response.status).toBe(200);
+  expect(JSON.parse(forwardedBody)).toEqual({ saved: true });
+  expect(forwarded.origin).toBe(headers.origin);
+  expect(forwarded['x-csrf-token']).toBe(headers['x-csrf-token']);
+  expect(forwarded.cookie).toBe('tropio_session=current');
+});
+
+it('proxies the private roster and its organizer decisions', async () => {
+  const path = `/api/v1/trips/${routeId}/roster`;
+  const headers = { 'cookie': 'tropio_session=current; ignored=ignored', 'origin': 'https://trulala.test', 'x-csrf-token': 'token' };
+  const read = await fetch(path, { headers });
+  expect(read.status).toBe(200);
+  expect((await read.json()).viewer_id).toBe(dayId);
+  expect(read.headers.get('cache-control')).toContain('private, no-store');
+  expect(read.headers.get('vary')?.toLowerCase()).toContain('cookie');
+  const write = await fetch(`${path}/${dayId}`, {
+    method: 'PUT',
+    headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'accept' }),
+  });
+  expect(write.status).toBe(204);
+  expect(forwarded.cookie).toBe('tropio_session=current');
+  expect(forwarded.origin).toBe(headers.origin);
+  expect(forwarded['x-csrf-token']).toBe(headers['x-csrf-token']);
+  expect(JSON.parse(forwardedBody)).toEqual({ action: 'accept' });
 });
