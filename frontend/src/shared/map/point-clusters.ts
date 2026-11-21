@@ -1,11 +1,7 @@
-import {
-  Marker,
-  Popup,
-} from 'maplibre-gl';
+import { Marker } from 'maplibre-gl';
 import type {
   GeoJSONSource,
   Map as LibreMap,
-  MapSourceDataEvent,
 } from 'maplibre-gl';
 import type {
   MapCoordinate,
@@ -17,27 +13,25 @@ const minimumCount = 2;
 
 export type ClusterLabels = {
   zoomGroup: (count: number) => string;
-  unnamedTrip: string;
+  groupCount: (count: number) => string;
 };
 
 export class PointClusters {
   private groups = new Map<number, Marker>();
   private points = new Map<string, MapPoint>();
+  private visiblePoints: MapPoint[] = [];
   private version = 0;
+  private zoomRequest = 0;
   private ready = false;
   private fallback = false;
   private disposed = false;
-  private popup?: Popup;
-  private chosenGroup?: { key: string; tripId: string };
 
   constructor(
     private map: LibreMap,
     private labels: ClusterLabels,
     private update: () => void,
-    private select: (point: MapPoint) => void,
   ) {
-    map.on('sourcedata', this.onSource);
-    map.on('moveend', this.onMove);
+    map.on('idle', this.onIdle);
   }
 
   install() {
@@ -66,6 +60,7 @@ export class PointClusters {
     this.ready = false;
     this.fallback = false;
     this.points = new Map(points.map(point => [point.id, point]));
+    this.visiblePoints = [];
     this.clearGroups();
     const source = this.map.getSource<GeoJSONSource>(sourceId);
     if (!source) {
@@ -92,27 +87,17 @@ export class PointClusters {
     });
   }
 
-  private onSource = (event: MapSourceDataEvent) => {
-    if (event.sourceId === sourceId && this.ready) {
-      this.update();
-    }
-  };
-
-  private onMove = () => {
-    if (this.ready) {
-      this.update();
-    }
-  };
-
   visible(): readonly MapPoint[] {
-    if (this.points.size < minimumCount || this.fallback) {
-      return [...this.points.values()];
-    }
-    if (!this.ready || !this.map.getSource(sourceId)) {
-      return [];
+    return this.points.size < minimumCount || this.fallback ? [...this.points.values()] : this.visiblePoints;
+  }
+
+  private onIdle = () => {
+    if (!this.ready || this.points.size < minimumCount || !this.map.isSourceLoaded(sourceId)) {
+      return;
     }
     const points = new Map<string, MapPoint>();
     const groups = new Set<number>();
+    const atLimit = this.map.getZoom() >= this.map.getMaxZoom();
     for (const feature of this.map.querySourceFeatures(sourceId)) {
       if (feature.geometry.type !== 'Point') {
         continue;
@@ -126,76 +111,58 @@ export class PointClusters {
       }
       else if (!groups.has(group)) {
         groups.add(group);
-        if (!this.groups.has(group)) {
+        const count = feature.properties.point_count;
+        let marker = this.groups.get(group);
+        if (!marker) {
           const [lon, lat] = feature.geometry.coordinates;
-          this.addGroup(group, feature.properties.point_count, [lon!, lat!]);
+          marker = this.addGroup(group, count, [lon!, lat!]);
+          this.groups.set(group, marker);
+        }
+        const button = marker.getElement();
+        if (button.getAttribute('aria-disabled') !== String(atLimit)) {
+          button.setAttribute('aria-disabled', String(atLimit));
+          button.setAttribute('aria-label', atLimit ? this.labels.groupCount(count) : this.labels.zoomGroup(count));
         }
       }
     }
     for (const [group, marker] of this.groups) {
       if (!groups.has(group)) {
+        if (marker.getElement() === document.activeElement) {
+          this.map.getCanvas().focus({ preventScroll: true });
+        }
         marker.remove();
         this.groups.delete(group);
       }
     }
-    return [...points.values()];
-  }
+    this.visiblePoints = [...points.values()];
+    this.update();
+  };
 
   private addGroup(id: number, count: number, center: MapCoordinate) {
-    const key = [id, ...center.map(value => value.toFixed(6))].join(':');
     const button = document.createElement('button');
-    if (this.chosenGroup?.key === key && this.points.has(this.chosenGroup.tripId)) {
-      button.dataset.clusterTrip = this.chosenGroup.tripId;
-    }
     button.type = 'button';
     button.className = 'route-map-cluster';
-    button.setAttribute('role', 'button');
-    button.title = this.labels.zoomGroup(count);
-    button.setAttribute('aria-label', button.title);
+    button.textContent = String(count);
     button.addEventListener('click', async (event) => {
       event.stopPropagation();
-      const version = this.version;
+      if (this.map.getZoom() >= this.map.getMaxZoom()) {
+        return;
+      }
+      const request = ++this.zoomRequest;
       const source = this.map.getSource<GeoJSONSource>(sourceId);
-      const zoom = await source?.getClusterExpansionZoom(id).catch(() => undefined);
-      if (!source || zoom === undefined || version !== this.version || this.disposed) {
+      const expansion = await source?.getClusterExpansionZoom(id).catch(() => undefined);
+      if (expansion === undefined || request !== this.zoomRequest || this.groups.get(id)?.getElement() !== button) {
         return;
       }
-      if (zoom <= this.map.getMaxZoom() && zoom > this.map.getZoom()) {
+      const zoom = Math.min(expansion, this.map.getMaxZoom());
+      if (zoom > this.map.getZoom()) {
         this.map.easeTo({ center, zoom });
-        return;
       }
-      const leaves = await source.getClusterLeaves(id, count, 0).catch(() => []);
-      if (version !== this.version || this.disposed || !leaves.length) {
-        return;
-      }
-      const list = document.createElement('div');
-      list.className = 'trip-cluster-list';
-      for (const leaf of leaves) {
-        const point = this.points.get(leaf.properties.id);
-        if (!point) {
-          continue;
-        }
-        const action = document.createElement('button');
-        action.type = 'button';
-        action.textContent = point.label ?? this.labels.unnamedTrip;
-        action.addEventListener('click', () => {
-          this.chosenGroup = { key, tripId: point.id };
-          button.dataset.clusterTrip = point.id;
-          this.popup?.remove();
-          this.select(point);
-        });
-        list.append(action);
-      }
-      this.popup?.remove();
-      this.popup = new Popup({ maxWidth: '18rem', offset: 16 }).setLngLat(center).setDOMContent(list).addTo(this.map);
-      list.querySelector('button')?.focus({ preventScroll: true });
     });
-    this.groups.set(id, new Marker({ element: button }).setLngLat(center).addTo(this.map));
+    return new Marker({ element: button }).setLngLat(center).addTo(this.map);
   }
 
   private clearGroups() {
-    this.popup?.remove();
-    this.popup = undefined;
     for (const marker of this.groups.values()) {
       marker.remove();
     }
@@ -204,8 +171,7 @@ export class PointClusters {
 
   destroy() {
     this.disposed = true;
-    this.map.off('sourcedata', this.onSource);
-    this.map.off('moveend', this.onMove);
+    this.map.off('idle', this.onIdle);
     this.clearGroups();
   }
 }

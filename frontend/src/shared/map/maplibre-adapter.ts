@@ -217,8 +217,7 @@ export class MapLibreRenderer implements MapRendererAdapter {
     });
     this.flight = new TripFlightCamera(this.map, events.flightEnd);
     if (options.clusterLabels) {
-      this.clusters = new PointClusters(this.map, options.clusterLabels, () => this.syncMarkers(), point =>
-        this.events.select({ kind: 'point', id: point.id }, point.position));
+      this.clusters = new PointClusters(this.map, options.clusterLabels, () => this.syncMarkers());
     }
     this.map.on('moveend', this.positionLabels);
     this.map.on('resize', this.positionLabels);

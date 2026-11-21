@@ -225,14 +225,9 @@ export function useCatalogExpansion(tripId: Ref<string>, selectedId: Ref<string>
       fallback?.focus({ preventScroll: true });
       return;
     }
-    const clusterSelector = '.route-map-cluster[data-cluster-trip="' + CSS.escape(selectedId.value) + '"]';
     function returnTarget() {
       const marker = map?.querySelector<HTMLElement>('.route-map-marker--trip[aria-pressed="true"]:not(:disabled)');
-      if (marker?.getClientRects().length) {
-        return marker;
-      }
-      const group = map?.querySelector<HTMLElement>(clusterSelector);
-      return group?.getClientRects().length ? group : undefined;
+      return marker?.getClientRects().length ? marker : undefined;
     }
     const target = returnTarget();
     const control = target ?? fallback;
@@ -255,7 +250,7 @@ export function useCatalogExpansion(tripId: Ref<string>, selectedId: Ref<string>
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['aria-pressed', 'data-cluster-trip'],
+      attributeFilter: ['aria-pressed'],
     });
     focusTimeout = setTimeout(stopFocusRestore, 1600);
   }

@@ -184,7 +184,7 @@ onMounted(async () => {
       clusterLabels: props.clusterPoints
         ? {
             zoomGroup: count => t('catalog.zoomCluster', { count }),
-            unnamedTrip: t('catalog.unnamedTrip'),
+            groupCount: count => t('catalog.clusterCount', { count }),
           }
         : undefined,
     });
@@ -379,40 +379,6 @@ onBeforeUnmount(() => {
   border-color: color-mix(in srgb, var(--tk-accent) 75%, transparent);
   background: color-mix(in srgb, var(--tk-selected) 70%, transparent);
   color: var(--tk-accent);
-}
-
-.route-map :deep(.route-map-cluster::before) {
-  content: '';
-  display: block;
-  margin: auto;
-  width: 15px;
-  height: 12px;
-  border: 2px solid currentColor;
-  border-radius: 3px;
-  box-shadow: 3px -3px var(--tk-accent), 4px -4px currentColor;
-}
-
-.route-map :deep(.trip-cluster-list) {
-  display: grid;
-  gap: 2px;
-  max-height: 13rem;
-  overflow: auto;
-}
-
-.route-map :deep(.trip-cluster-list button) {
-  min-height: 44px;
-  border: 0;
-  border-radius: .5rem;
-  padding: .4rem .75rem;
-  color: var(--tk-ink);
-  background: var(--tk-surface);
-  text-align: start;
-  font: 600 .81rem/1.35 Inter, sans-serif;
-  cursor: pointer;
-}
-
-.route-map :deep(.trip-cluster-list button:is(:hover, :focus-visible)) {
-  background: var(--tk-selected);
 }
 
 @media (max-width: 620px) {

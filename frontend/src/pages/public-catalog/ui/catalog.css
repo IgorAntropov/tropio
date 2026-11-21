@@ -194,7 +194,22 @@ body:has(.catalog-frame) { margin: 0; background: var(--tk-canvas); }
   .catalog-frame .catalog-page { margin: 0; border: 0; border-radius: 0; }
   .catalog-drawer .tk-dialog-header { padding-block: max(.75rem, env(safe-area-inset-top)) .75rem; }
 }
-.catalog-map .route-map-cluster { min-width: 44px; min-height: 44px; border: 3px solid white; border-radius: 999px; padding-inline: .65rem; background: var(--tk-accent); color: var(--tk-on-accent); box-shadow: 0 0 0 5px rgb(7 91 98 / 22%); font: 700 .93rem Inter, sans-serif; cursor: pointer; }
+.catalog-map .route-map-cluster {
+  display: grid;
+  place-items: center;
+  min-width: var(--tk-target);
+  min-height: var(--tk-target);
+  border: 3px solid var(--tk-surface);
+  border-radius: 999px;
+  padding: 0 var(--tk-space-2);
+  background: var(--tk-accent);
+  color: var(--tk-on-accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--tk-accent) 22%, transparent);
+  font: 700 1rem/1 Inter, sans-serif;
+  font-variant-numeric: tabular-nums;
+  cursor: zoom-in;
+}
+.catalog-map .route-map-cluster[aria-disabled="true"] { cursor: default; }
 .catalog-location { margin: 0 var(--catalog-gutter) var(--tk-space-3); color: var(--tk-muted); font-size: .85rem; }
 .catalog-card-link { display: block; overflow: hidden; color: inherit !important; text-overflow: ellipsis; white-space: nowrap; }
 .catalog-card .catalog-organizer-compact { max-width: 100%; }
