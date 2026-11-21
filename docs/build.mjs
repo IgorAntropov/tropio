@@ -91,6 +91,9 @@ for (const file of files) {
 }
 
 mkdirSync(generated, { recursive: true });
+for (const asset of ['trulala-icon.svg', 'trulala-logo.svg', 'favicon.ico']) {
+  copyFileSync(join(project, 'frontend', 'public', asset), join(generated, asset));
+}
 if (localBuild) {
   const sourceDirectory = relative(output, handbook).split(sep).join('/');
   const entry = readFileSync(join(handbook, 'index.html'), 'utf8')

@@ -86,6 +86,7 @@ export interface components {
         };
         UpdateTripDraftRequest: {
             trip_revision_id: components["schemas"]["Uuid"];
+            shift_day_dates?: boolean;
             visibility?: "public" | "private";
             admission_mode?: components["schemas"]["TripAdmissionMode"];
             title?: components["schemas"]["TripTitle"];

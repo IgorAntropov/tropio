@@ -29,6 +29,7 @@ import {
   useRouteEditor,
 } from '@fsd/features/edit-route';
 import type { EditSelection } from '@fsd/features/edit-route';
+import { useCreatedTripDay } from '@fsd/features/trip-draft-dialog';
 import { UiDialog } from '@fsd/shared/ui/kit';
 import '@fsd/shared/ui/kit/kit.css';
 
@@ -51,6 +52,7 @@ const pendingPoi = shallowRef<{ position: Position; categories: PoiCategories['i
 const poiIssue = ref('');
 const poiBusy = ref(false);
 const ready = ref(false);
+const createdDay = useCreatedTripDay();
 const confirmingClear = ref(false);
 const center: Position = { lon: 84.9565, lat: 56.4805 };
 let poiCommand: { token: string; key: string } | null = null;
@@ -171,6 +173,12 @@ async function load() {
   }
   finally {
     loading.value = false;
+  }
+  if (createdDay.value === props.dayId && day.value && !request.signal.aborted) {
+    createdDay.value = null;
+    if (!day.value.route_id) {
+      await startRoute();
+    }
   }
 }
 
@@ -366,9 +374,13 @@ function guardUnsaved(event: BeforeUnloadEvent) {
   event.returnValue = '';
 }
 
-onBeforeRouteLeave(() => changed.value || busy.value
-  ? window.confirm('Маршрут содержит несохранённые изменения. Выйти из редактора?')
-  : true);
+function confirmRouteChange() {
+  return (!changed.value && !busy.value)
+    || window.confirm('Маршрут содержит несохранённые изменения. Выйти из редактора?');
+}
+
+onBeforeRouteLeave(confirmRouteChange);
+onBeforeRouteUpdate((to, from) => to.path === from.path || confirmRouteChange());
 onMounted(() => {
   window.addEventListener('beforeunload', guardUnsaved);
   void load();

@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Черновики путешествий и привязка маршрута — справочник Tropio</title>
+  <title>Черновики путешествий и привязка маршрута — справочник Трулала</title>
+  <link rel="icon" href="../generated/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="../handbook.css">
 </head>
 <body>
@@ -11,7 +12,7 @@
     <nav class="standalone-nav" aria-label="Раздел справочника"><a href="../index.html">Оглавление</a> / Путешествия и каталог</nav>
     <h1>Черновики путешествий и привязка маршрута</h1>
     <p>Владелец создаёт личный черновик, меняет сведения о поездке и днях и получает идентификатор маршрута выбранного дня. В GIS MVP Travel хранит до одной привязки маршрута на день. <a href="../../.agents/docs/tropio_tz_v1.1.md#11-fr-05-путешествия-дни-и-статусы">ТЗ, § 11</a> · <a href="../../.agents/docs/POC-04-travel-geo-contracts.md#8-утверждённые-решения">Решения POC-04</a></p>
-    <p class="document-note"><strong>Статус.</strong> GIS-03 реализует операции с черновиком Travel, GIS-04 — геометрию Geo по UUID маршрута дня. GIS-05 подключает список черновиков, создание поездки, просмотр дней и переход в редактор. Интерфейс GIS-05 визуально принят. Панель публикации в программе поездки и публичный каталог приняты в GIS-06. <a href="publication.html#interface">Как опубликовать черновик</a> · <a href="../route-editor/editor.html">Редактор маршрута дня</a> · <a href="../contracts/openapi.yaml">OpenAPI 0.5.0</a></p>
+    <p class="document-note"><strong>Статус.</strong> GIS-03 реализует операции с черновиком Travel, GIS-04 — геометрию Geo по UUID маршрута дня. Список поездок и программа подключены в GIS-05. Форма создания поверх текущего раздела и переход в редактор первого дня находятся на визуальной приёмке. Панель публикации и публичный каталог приняты в GIS-06. <a href="publication.html#interface">Как опубликовать черновик</a> · <a href="../route-editor/editor.html">Редактор маршрута дня</a> · <a href="../contracts/openapi.yaml">OpenAPI 0.5.0</a></p>
 
     <nav class="document-links" aria-label="На этой странице">
       <ul>
@@ -36,12 +37,14 @@
 
     <section aria-labelledby="interface">
       <h2 id="interface">Интерфейс и макеты</h2>
-      <p>В GIS-05 на <code>/trips</code> владелец вводит название нового черновика или открывает существующий. Интерфейс различает загрузку, пустой список, необходимость входа и временный сбой. Из списка дней можно открыть связанный маршрут или начать построение. Сохранение сведений выбранного дня показано в макетах программы UX-01. Правка маршрута после сетевого сбоя остаётся неподтверждённой до проверки результата. <a href="program.html#interface">Состояния программы</a> · <a href="../route-editor/editor.html#saving">Сохранение маршрута</a></p>
+      <p>Нажми «Создать путешествие» в шапке. Форма откроется поверх текущего раздела. Укажи название. По желанию добавь описание, даты начала и окончания, число свободных мест. Отправка доступна после заполнения обязательного поля и проверки введённых значений. Если закрыть форму до отправки, ты вернёшься в тот же раздел. После успешного создания откроется редактор первого дня. <a href="../identity/account.html#workspace">Каркас аккаунта</a> · <a href="../route-editor/editor.html#workspace-map">Как открыть редактор</a></p>
+      <p>Чтобы изменить эти сведения, открой свою поездку в разделе «Мои путешествия» (<code>/trips</code>) и выбери «Параметры путешествия» в программе. В форме уже указаны сохранённые значения. Из программы также можно открыть маршрут нужного дня или начать построение. Список поездок различает загрузку, пустой результат, необходимость входа и временный сбой. <a href="program.html#interface">Состояния программы</a> · <a href="../route-editor/editor.html#saving">Сохранение маршрута</a></p>
+      <p>В одном календаре можно выбрать дату или период, включая последний день. Если перенести ранее заданное начало, форма предупредит, что даты дней программы сдвинутся на столько же календарных дней. Например, если перенести начало с 5 на 7 июня, запланированный на 6 июня день придётся на 8 июня. Дни с пустой датой сохранятся без даты. Если хотя бы один день окажется за границами периода, форма предложит изменить даты. <a href="../../.agents/docs/tropio_tz_v1.1.md#111-атрибуты-путешествия">ТЗ · Даты путешествия</a></p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Макеты черновика и дней">
         <table>
           <thead><tr><th scope="col">Состояние UX-01</th><th scope="col">Десктоп</th><th scope="col">Смартфон</th></tr></thead>
           <tbody>
-            <tr><th scope="row">Новое путешествие</th><td><a href="../../.agents/images/layouts/desktop/create-trip-basics.png">Форма</a></td><td><a href="../../.agents/images/layouts/mobile/create-trip-basics.png">Форма</a></td></tr>
+            <tr><th scope="row">Новое путешествие (исторический макет UX-01)</th><td><a href="../../.agents/images/layouts/desktop/create-trip-basics.png">Форма</a></td><td><a href="../../.agents/images/layouts/mobile/create-trip-basics.png">Форма</a></td></tr>
             <tr><th scope="row">Свои путешествия</th><td><a href="../../.agents/images/layouts/desktop/my-trips-created.png">Созданные</a></td><td><a href="../../.agents/images/layouts/mobile/my-trips-created.png">Созданные</a></td></tr>
             <tr><th scope="row">День без маршрута</th><td><a href="../../.agents/images/layouts/desktop/trip-program-unbuilt.png">К построению</a></td><td><a href="../../.agents/images/layouts/mobile/trip-program-unbuilt.png">К построению</a></td></tr>
             <tr><th scope="row">День с готовым маршрутом</th><td><a href="../../.agents/images/layouts/desktop/trip-program-ready.png">Открыть маршрут</a></td><td><a href="../../.agents/images/layouts/mobile/trip-program-ready.png">Открыть маршрут</a></td></tr>
@@ -60,7 +63,7 @@
             <tr><th scope="row"><code>POST /trips</code></th><td><code>createTripDraft</code></td><td><code>title</code> и необязательные поля поездки. <code>201</code> с черновиком и первым днём.</td></tr>
             <tr><th scope="row"><code>GET /trips</code></th><td><code>listMyTripDrafts</code></td><td><code>limit</code> от 1 до 100, по умолчанию 50. Необязательный <code>cursor</code> берётся из <code>next_cursor</code> предыдущей страницы. <code>200</code>, <code>items</code> и <code>next_cursor</code>. Пустая выдача содержит <code>[]</code> и <code>null</code>.</td></tr>
             <tr><th scope="row"><code>GET /trips/{tripId}/draft</code></th><td><code>getTripDraft</code></td><td><code>tripId</code> — UUID своей поездки. <code>200</code> с текущим черновиком и днями.</td></tr>
-            <tr><th scope="row"><code>PATCH /trips/{tripId}</code></th><td><code>updateTripDraft</code></td><td><code>tripId</code>, ожидаемая ревизия и хотя бы одно изменяемое поле поездки. <code>200</code> с сохранённым черновиком.</td></tr>
+            <tr><th scope="row"><code>PATCH /trips/{tripId}</code></th><td><code>updateTripDraft</code></td><td><code>tripId</code>, ожидаемая ревизия и хотя бы одно изменяемое поле поездки. Для переноса дат программы вместе с поездкой передай новое <code>start_date</code> и <code>shift_day_dates: true</code>. При отсутствии флага или значении <code>false</code> даты дней сохраняются. <code>200</code> с сохранённым черновиком.</td></tr>
             <tr><th scope="row"><code>POST /trips/{tripId}/days</code></th><td><code>addTripDay</code></td><td><code>tripId</code>, ожидаемая ревизия, необязательные <code>local_date</code>, <code>description</code>, <code>notes</code>. <code>201</code> с черновиком и новым днём.</td></tr>
             <tr><th scope="row"><code>PATCH /days/{dayId}</code></th><td><code>updateTripDay</code></td><td><code>dayId</code> — UUID дня своей поездки. Ожидаемая ревизия и хотя бы одно из полей <code>local_date</code>, <code>description</code>, <code>notes</code>. <code>200</code> с сохранённым черновиком.</td></tr>
             <tr><th scope="row"><code>PUT /days/{dayId}/route</code></th><td><code>ensureTripDayRoute</code></td><td><code>dayId</code> и ожидаемая ревизия. <code>200</code> с черновиком, где для дня указан единственный <code>route_id</code>.</td></tr>
@@ -115,7 +118,7 @@
         <li>При потере ответа повтори ту же команду с теми же ресурсом, телом, ожидаемой ревизией и ключом. После проверки текущих прав Travel сверяет сохранённый ключ до сравнения ревизии, поэтому точный повтор может вернуть прежний подтверждённый результат.</li>
         <li>Если ответ повтора относится к более ранней редакции, перечитай текущий черновик перед следующей правкой. UUID ревизии сравнивается по равенству.</li>
         <li>При <code>409 TRIP_REVISION_CONFLICT</code> перечитай черновик, сохрани ввод для сверки и предложи подтвердить правку на текущей версии с новым ключом. Актуальный <code>current_trip_revision_id</code> выдаётся только владельцу.</li>
-        <li>При <code>409 IDEMPOTENCY_KEY_REUSED</code> проверь содержание команды. Для нового действия используй новый ключ. При <code>422 INVALID_TRIP_DATES</code> согласуй даты поездки и дней перед следующим сохранением.</li>
+        <li>При <code>409 IDEMPOTENCY_KEY_REUSED</code> проверь содержание команды. Для нового действия используй новый ключ. Если хотя бы одна дата программы выходит за итоговый период, Travel отклоняет правку целиком с <code>422 INVALID_TRIP_DATES</code>. Черновик и дни сохраняют прежние значения. Выбери период, который вмещает всю программу, и повтори сохранение.</li>
       </ol>
     </section>
 
@@ -123,7 +126,8 @@
       <h2 id="acceptance">Приёмка</h2>
       <p><code>pnpm db:test:travel</code> входит в <code>pnpm check</code> и проверяет реальные ответы NestJS на временной базе PostgreSQL. Проверки черновика опираются на § 11 ТЗ и согласованные правила прав и повтора из POC-04. AT-18 связан с правами на поездку, AT-20 с отображением неподтверждённых изменений при подключении редактора. <a href="../../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">Сценарии ТЗ</a> · <a href="../contracts/postgres-migrations.html#commands">Проверочная база</a></p>
       <ul>
-        <li>Создать черновик по названию, получить первый день, добавить ещё один день, изменить выбранный день и проверить порядок программы.</li>
+        <li>Открыть создание поверх каталога и закрыть форму до отправки. Снова открыть её, проверить обязательность названия, неверный диапазон дат и число мест. Заполнить поля и убедиться, что после сохранения открыт редактор первого дня. В программе открыть «Параметры путешествия», изменить сведения и проверить их после повторного чтения.</li>
+        <li>Создать черновик только по названию, получить первый день, добавить ещё один день, изменить выбранный день и проверить порядок программы.</li>
         <li>Создать пустую привязку на один день. Повторить точную команду и проверить, что маршрут единственный. Отдельно проверить сохранение других дней и конфликт двух команд с одной ожидаемой ревизией.</li>
         <li>Попытаться прочитать и изменить поездку или день из другой учётной записи. Сопоставить отказ с ответом для отсутствующей записи и проверить, что чужая ревизия остаётся скрытой.</li>
         <li>Проверить недопустимое тело, сессию, CSRF, неверный диапазон, повтор ключа и временный отказ хранилища. Сверить HTTP-статус, код, медиа-тип и идентификатор запроса с контрактом.</li>

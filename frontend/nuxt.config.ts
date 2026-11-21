@@ -19,6 +19,7 @@ export default defineNuxtConfig({
     '/': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
     '/catalog': { headers: { 'cache-control': 'no-store' } },
     '/catalog/**': { headers: { 'cache-control': 'no-store' } },
+    '/chats': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
     '/organizers/**': { headers: { 'cache-control': 'no-store' } },
     '/feed': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
     '/map': { headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
@@ -59,7 +60,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       htmlAttrs: { lang: defaultLocale },
-      link: [{ key: 'favicon', rel: 'icon', href: '/favicon.ico' }],
+      link: [{ key: 'favicon', rel: 'icon', href: '/favicon.ico?v=trulala' }],
     },
   },
   $env: {
@@ -69,7 +70,7 @@ export default defineNuxtConfig({
       app: {
         baseURL: pagesBaseURL,
         head: {
-          link: [{ key: 'favicon', rel: 'icon', href: `${pagesBaseURL}favicon.ico` }],
+          link: [{ key: 'favicon', rel: 'icon', href: `${pagesBaseURL}favicon.ico?v=trulala` }],
         },
       },
       nitro: {

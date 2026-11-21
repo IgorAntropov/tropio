@@ -16,11 +16,6 @@ function startReader({ documents, includeLocal }) {
   const sectionLabel = document.querySelector('#reader-section');
   const toggle = document.querySelector('.sidebar-toggle');
   if (includeLocal) {
-    const favicon = document.querySelector('[data-local-href]');
-    favicon.href = new URL(favicon.dataset.localHref, sourceIndex);
-    const logo = document.querySelector('[data-local-src]');
-    logo.src = new URL(logo.dataset.localSrc, sourceIndex);
-    logo.hidden = false;
     document.documentElement.style.setProperty('--handbook-font', 'Inter, system-ui, sans-serif');
   }
   const entries = [...document.querySelectorAll('#contents a')].flatMap((link) => {
@@ -178,7 +173,7 @@ function startReader({ documents, includeLocal }) {
     if (title) {
       article.setAttribute('aria-labelledby', title.id);
     }
-    document.title = title ? `${title.textContent} · Tropio` : 'Технический справочник Tropio';
+    document.title = title ? `${title.textContent} · Трулала` : 'Технический справочник Трулала';
 
     sourceLink.hidden = !hasDocument;
     if (hasDocument) {

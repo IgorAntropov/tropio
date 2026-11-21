@@ -541,6 +541,35 @@ describe('Travel HTTP contract', () => {
     expect(await read(draft)).toEqual(draft);
   });
 
+  it('moves dated days atomically on request and replays the result with the original key', async () => {
+    const original = await create('Программа високосного года', { start_date: '2028-02-28', end_date: '2028-03-01' });
+    const withLeapDay = await draftResponse(await edit(addDay, original, { local_date: '2028-02-29' }), 201);
+    const draft = await draftResponse(await edit(addDay, withLeapDay), 201);
+    const shortened = { shift_day_dates: true, start_date: '9999-12-31', end_date: null };
+    await expectProblem(await edit(patchTrip, draft, shortened), patchTrip, 422, 'INVALID_TRIP_DATES');
+    expect(await read(draft)).toEqual(draft);
+
+    const period = { start_date: '0001-01-01', end_date: '0001-01-02', shift_day_dates: true };
+    const key = randomUUID();
+    const moved = await draftResponse(await edit(patchTrip, draft, period, key));
+    expect(moved.days).toEqual(draft.days.map((day, i) => ({ ...day, local_date: ['0001-01-01', '0001-01-02', null][i] })));
+    expect(moved.trip_revision_id).not.toBe(draft.trip_revision_id);
+    expect(await draftResponse(await edit(patchTrip, draft, period, key))).toEqual(moved);
+    expect(await read(moved)).toEqual(moved);
+    await expectProblem(await edit(patchTrip, draft, { ...period, shift_day_dates: false }, key), patchTrip, 409, 'IDEMPOTENCY_KEY_REUSED');
+  });
+
+  it('requires a changed start date and an existing period for shifting day dates', async () => {
+    const draft = await create('Без дат');
+    for (const settings of [{ shift_day_dates: true }, { start_date: null, shift_day_dates: true }, { title: 'Поездка', shift_day_dates: 'true' }]) {
+      await expectProblem(await edit(patchTrip, draft, settings), patchTrip, 400, 'INVALID_REQUEST');
+    }
+    await expectProblem(await edit(patchTrip, draft, { start_date: '2027-01-01', shift_day_dates: true }), patchTrip, 422, 'INVALID_TRIP_DATES');
+    const scheduled = await draftResponse(await edit(patchTrip, draft, { start_date: '2027-01-01' }));
+    await expectProblem(await edit(patchTrip, scheduled, { start_date: scheduled.start_date, shift_day_dates: true }), patchTrip, 422, 'INVALID_TRIP_DATES');
+    expect(await read(scheduled)).toEqual(scheduled);
+  });
+
   it('keeps an existing out-of-range day date during unrelated edits', async () => {
     const original = await create('Поездка из предыдущей версии', {
       start_date: '2027-01-01',

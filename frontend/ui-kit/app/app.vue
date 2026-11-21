@@ -5,6 +5,7 @@ import {
 } from 'vue';
 import {
   UiAvatar,
+  UiBrandLogo,
   UiButton,
   UiDialog,
   UiSegmented,
@@ -50,17 +51,17 @@ const trips = [
 const people = [
   {
     name: 'Ирина Волкова',
-    src: '/avatar_04.png',
+    src: '/avatars/avatar_04.png',
     presence: 'online',
     description: 'В сети',
   },
   {
     name: 'Максим Ким',
-    src: '/avatar_09.png',
+    src: '/avatars/avatar_09.png',
     presence: 'offline',
     description: 'Не в сети',
   },
-  { name: 'Анна Левина', src: '/avatar_01.png', description: 'Без статуса' },
+  { name: 'Анна Левина', src: '/avatars/avatar_01.png', description: 'Без статуса' },
 ] as const;
 const colors = [
   { token: 'accent', label: 'Акцент' },
@@ -119,13 +120,7 @@ function openForm(mode: 'track' | 'trip') {
     <a class="skip-link" href="#main">К содержанию</a>
     <header class="mast">
       <a class="wordmark" href="#">
-        <img
-          alt=""
-          height="36"
-          src="/logo.png"
-          width="36"
-        >
-        Тропио
+        <UiBrandLogo alt="Трулала" />
       </a>
       <UiSegmented
         v-model="theme"
@@ -141,7 +136,7 @@ function openForm(mode: 'track' | 'trip') {
       </nav>
 
       <main id="main" class="showcase-main">
-        <h1>UI-kit Тропио</h1>
+        <h1>UI-kit Трулала</h1>
         <section id="controls" aria-labelledby="controls-heading" class="showcase-section">
           <h2 id="controls-heading">Управление</h2>
           <div class="showcase-grid showcase-grid-map">
@@ -319,7 +314,8 @@ body { margin: 0; }
   border-bottom: 1px solid var(--tk-line);
   background: var(--tk-surface);
 }
-.wordmark { display: flex; gap: 8px; align-items: center; font-size: 1.05rem; font-weight: 700; text-decoration: none; }
+.wordmark { display: flex; align-items: center; }
+[data-theme="dark"] .wordmark { border-radius: var(--tk-radius); background: #fff; }
 .theme-switch { font-size: var(--tk-text-sm); }
 .theme-switch .tk-segment > span { padding-inline: var(--tk-space-3); }
 .skip-link:not(:focus) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

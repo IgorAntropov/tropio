@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiBrandLogo } from '@fsd/shared/ui/kit';
 import { useDemoAccount } from './composables/useDemoAccount';
 
 const { t, locale } = useI18n();
@@ -23,7 +24,7 @@ useHead(() => ({
 <template>
   <div class="demo-shell font-sans">
     <header v-if="route.meta.layout !== false" class="demo-header demo-width flex items-center justify-between">
-      <NuxtLink class="demo-wordmark" to="/">{{ t('productName') }}</NuxtLink>
+      <NuxtLink class="demo-wordmark" to="/"><UiBrandLogo :alt="t('productName')" /></NuxtLink>
       <nav :aria-label="t('identity.navigation')" class="demo-account">
         <span>{{ mounted && signedIn ? displayName : t('demo.label') }}</span>
         <NuxtLink v-if="mounted && signedIn" to="/trips/">{{ t('workspace.trips') }}</NuxtLink>
@@ -120,12 +121,8 @@ body {
 }
 
 .demo-header .demo-wordmark {
-  color: var(--ink);
-  font-family: Georgia, serif;
-  font-size: 1.7rem;
-  font-weight: 700;
-  line-height: 1;
-  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
 }
 
 .demo-main {

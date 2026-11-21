@@ -1,6 +1,6 @@
 openapi: 3.1.1
 info:
-  title: Tropio GIS MVP
+  title: Трулала GIS MVP
   version: 0.5.0
   description: |
     Внешний API BFF. Identity реализован в GIS-02, черновики Travel в GIS-03. Редактор маршрутов, расчёт треков и POI реализованы в GIS-04. В GIS-06 Travel публикует закреплённые версии, а публичный каталог проверяет действующий доступ к геометрии.
@@ -2209,8 +2209,21 @@ components:
       additionalProperties: false
       required: [trip_revision_id]
       minProperties: 2
+      dependentSchemas:
+        shift_day_dates:
+          minProperties: 3
+          if:
+            properties:
+              shift_day_dates: {const: true}
+          then:
+            required: [start_date]
+            properties:
+              start_date: {type: string}
       properties:
         trip_revision_id: {$ref: '#/components/schemas/Uuid'}
+        shift_day_dates:
+          type: boolean
+          description: При значении true передайте новое непустое start_date для поездки с уже заданным началом. Travel сдвигает даты активных дней на календарную разницу между новым и прежним началом. Недатированные дни сохраняются. Все дни с датой должны поместиться в итоговый период. Если флаг пропущен или равен false, даты дней сохраняются.
         visibility: {enum: [public, private]}
         admission_mode: {$ref: '#/components/schemas/TripAdmissionMode'}
         title: {$ref: '#/components/schemas/TripTitle'}

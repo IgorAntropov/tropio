@@ -2,7 +2,7 @@ import type { IdentityProfile } from '@fsd/shared/api';
 
 const uuid = '[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}';
 const workspacePaths = new RegExp(
-  `^/(?:feed|map|profile|trips(?:/${uuid}(?:/days/${uuid}/route)?)?)/?$`,
+  `^/(?:feed|chats|map|profile|trips(?:/${uuid}(?:/days/${uuid}/route)?)?)/?$`,
   'i',
 );
 const localOrigin = 'https://tropio.invalid';

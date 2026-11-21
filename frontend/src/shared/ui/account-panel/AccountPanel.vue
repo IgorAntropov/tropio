@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiBrandLogo } from '../kit';
 import AuthMapBackdrop from './AuthMapBackdrop.vue';
 
 defineProps<{
@@ -11,7 +12,6 @@ defineProps<{
 }>();
 
 const { t } = useI18n();
-const { baseURL } = useRuntimeConfig().app;
 </script>
 
 <template>
@@ -39,13 +39,7 @@ const { baseURL } = useRuntimeConfig().app;
           </svg>
         </NuxtLink>
         <NuxtLink :aria-label="auth ? t('identity.catalogBrand', { product: t('productName') }) : undefined" class="account-brand" :to="auth ? catalogLink ?? '/catalog' : '/'">
-          <img
-            alt=""
-            :height="auth ? 52 : 34"
-            :src="`${baseURL}logo.png`"
-            :width="auth ? 52 : 34"
-          >
-          <span>{{ t('productName') }}</span>
+          <UiBrandLogo :alt="auth ? '' : t('productName')" :height="auth ? 72 : 52" />
         </NuxtLink>
       </header>
       <h1>{{ title }}</h1>

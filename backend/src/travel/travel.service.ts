@@ -14,6 +14,7 @@ import type {
   DayFields,
   EquipmentItem,
   TripFields,
+  updateTripInput,
 } from './travel-input.js';
 
 export interface TravelEditor {
@@ -204,19 +205,27 @@ function assertDayDate({ start_date: start, end_date: end }: Dates, localDate: s
   }
 }
 
-async function assertExistingDayDates(client: PoolClient, tripId: string, dates: Dates): Promise<void> {
+async function updateDayDates(client: PoolClient, tripId: string, dates: Dates, shiftFrom?: string | null): Promise<void> {
   if (!dates.start_date) {
     return;
   }
 
   const { rowCount } = await client.query(
     `SELECT 1 FROM travel.trip_days
-     WHERE trip_id = $1 AND archived_at IS NULL AND (local_date < $2::date OR local_date > $3::date)
+     WHERE trip_id = $1 AND archived_at IS NULL
+       AND local_date NOT BETWEEN $2::date AND $2::date + ($4::date - $3::date)
      LIMIT 1`,
-    [tripId, dates.start_date, dates.end_date ?? dates.start_date],
+    [tripId, shiftFrom ?? dates.start_date, dates.start_date, dates.end_date ?? dates.start_date],
   );
   if (rowCount) {
     throw new BffProblem('INVALID_TRIP_DATES');
+  }
+  if (shiftFrom) {
+    await client.query(
+      `UPDATE travel.trip_days SET local_date = $3::date + (local_date - $2::date)
+       WHERE trip_id = $1 AND archived_at IS NULL AND local_date IS NOT NULL`,
+      [tripId, shiftFrom, dates.start_date],
+    );
   }
 }
 
@@ -398,13 +407,16 @@ export class TravelService {
     });
   }
 
-  async updateTrip(editor: TravelEditor, tripId: string, key: string, input: DraftEdit<TripFields & { visibility: 'private' | 'public' }>): Promise<TripDraft> {
+  async updateTrip(editor: TravelEditor, tripId: string, key: string, input: ReturnType<typeof updateTripInput>): Promise<TripDraft> {
     return this.editDraft(editor, { kind: 'trip', id: tripId }, 'trip.update', key, input, async (client, trip) => {
       const { equipment, ...patch } = input.patch;
       const updated = { ...trip, ...patch };
       assertTripDates(updated);
+      if (input.shift_day_dates && (!trip.start_date || trip.start_date === updated.start_date)) {
+        throw new BffProblem('INVALID_TRIP_DATES');
+      }
       if (patch.start_date !== undefined || patch.end_date !== undefined) {
-        await assertExistingDayDates(client, tripId, updated);
+        await updateDayDates(client, tripId, updated, input.shift_day_dates ? trip.start_date : undefined);
       }
       if (updated.visibility === 'private' && trip.visibility === 'public') {
         await revokePublication(client, trip, editor.userId, key, 'private');

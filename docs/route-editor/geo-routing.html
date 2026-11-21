@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Точки, треки и расчёт маршрута — справочник Tropio</title>
+  <title>Точки, треки и расчёт маршрута — справочник Трулала</title>
+  <link rel="icon" href="../generated/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="../handbook.css">
 </head>
 <body>
@@ -71,7 +72,7 @@
 
     <section aria-labelledby="providers">
       <h2 id="providers">Локальные провайдеры</h2>
-      <p>Храни граф, GeoTIFF и локальный манифест вне Git. <code>pnpm dev:all</code> запускает приложения и хранилища Tropio. Граф Valhalla и растры готовятся отдельно. <a href="../contracts/postgres-migrations.html#commands">Локальный запуск</a> · <a href="../../.env.example">Переменные окружения</a></p>
+      <p>Храни граф, GeoTIFF и локальный манифест вне Git. <code>pnpm dev:all</code> запускает приложения и хранилища «Трулала». Граф Valhalla и растры готовятся отдельно. <a href="../contracts/postgres-migrations.html#commands">Локальный запуск</a> · <a href="../../.env.example">Переменные окружения</a></p>
       <ul>
         <li><strong>Valhalla.</strong> Подготовь региональный OSM PBF, собери граф с <code>valhalla_build_tiles</code> и запусти <code>valhalla_service</code> с той же конфигурацией. Для пилота используй командную последовательность и области из POC-02. Задай <code>TROPIO_VALHALLA_URL</code> (например <code>http://127.0.0.1:18002</code>), <code>TROPIO_VALHALLA_GRAPH_VERSION</code> и <code>TROPIO_VALHALLA_COVERAGE</code> как JSON-массив областей <code>[west,south,east,north]</code>. <code>TROPIO_VALHALLA_SNAP_LIMIT_M</code> по умолчанию 50 м и принимает положительные значения до 50 м. <a href="../../.agents/docs/POC-02-routing-dem.md#метод-локального-прогона">Подготовка графа</a> · <a href="../../backend/src/geo/providers/valhalla.ts">Адаптер Valhalla</a></li>
         <li><strong>Copernicus DEM GLO-30 Public.</strong> Скопируй пилотный манифест рядом с исходными COG, проверь их SHA-256 по манифесту и укажи путь к JSON в <code>TROPIO_DEM_MANIFEST</code>. Он закрепляет версию набора, датум EGM2008 и имена тайлов. Geo проверяет контрольные суммы при чтении и берёт отсчёты с шагом до 30 м. На пропусках высота равна <code>null</code>. При разрыве полного профиля набор и сброс возвращаются как <code>null</code>, а минимум и максимум считаются по доступным отсчётам. <a href="../../backend/geo-data/copernicus-pilot.json">Пилотный манифест и условия атрибуции</a> · <a href="../../.agents/docs/POC-02-routing-dem.md#источники-высот">Данные и метод пилота</a> · <a href="../../backend/src/geo/providers/copernicus-dem.ts">Адаптер Copernicus</a></li>

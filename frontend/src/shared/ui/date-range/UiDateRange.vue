@@ -19,7 +19,15 @@ import {
   shiftMonth,
 } from './calendar';
 
-defineProps<{ label: string }>();
+const props = defineProps<{
+  label: string;
+  placeholder?: string;
+  startOnlyLabel?: string;
+  disabled?: boolean;
+  error?: string;
+  hint?: string;
+}>();
+const emit = defineEmits<{ blur: [] }>();
 const start = defineModel<string>('start', { required: true });
 const end = defineModel<string>('end', { required: true });
 const { t, locale } = useI18n();
@@ -52,7 +60,7 @@ const summary = computed(() => {
   if (last) {
     return t('dateRange.through', { date: formatCalendarPeriod(t, last) });
   }
-  return t('dateRange.any');
+  return props.placeholder ?? t('dateRange.any');
 });
 const weeks = computed(() => monthWeeks(cursor.value).map(week => week.map((date) => {
   if (!date) {
@@ -127,7 +135,7 @@ function choose(day: Date) {
   }
   anchor.value = selected;
   start.value = selected;
-  end.value = selected;
+  end.value = props.startOnlyLabel ? '' : selected;
 }
 
 function clear() {
@@ -185,6 +193,11 @@ function outside(target: EventTarget | null) {
     close();
   }
 }
+function blur(event: FocusEvent) {
+  if (!root.value?.contains(event.relatedTarget as Node | null)) {
+    emit('blur');
+  }
+}
 function tab() {
   requestAnimationFrame(() => outside(document.activeElement));
 }
@@ -199,6 +212,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', pointer));
   <div
     ref="root"
     class="tk-field date-range"
+    @focusout="blur"
     @keydown.esc="escape"
     @keydown.tab="tab"
   >
@@ -206,9 +220,12 @@ onUnmounted(() => document.removeEventListener('pointerdown', pointer));
     <button
       ref="trigger"
       :aria-controls="open ? id : undefined"
+      :aria-describedby="error || hint ? id + '-message' : undefined"
       :aria-expanded="open"
+      :aria-invalid="error ? true : undefined"
       :aria-labelledby="id + '-label ' + id + '-value'"
       class="tk-select-trigger"
+      :disabled="disabled"
       type="button"
       @click="toggle"
     >
@@ -234,7 +251,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', pointer));
       <span :id="id + '-value'" class="date-range-value">{{ summary }}</span><i aria-hidden="true" class="tk-chevron" />
     </button>
     <div
-      v-if="open"
+      v-if="open && !disabled"
       :id="id"
       :aria-labelledby="id + '-label'"
       class="date-range-panel"
@@ -293,8 +310,20 @@ onUnmounted(() => document.removeEventListener('pointerdown', pointer));
         :disabled="!start && !end"
         type="button"
         @click="clear"
-      >{{ t('dateRange.clear') }}</button></div>
+      >{{ t('dateRange.clear') }}</button><button
+        v-if="startOnlyLabel && start && !end"
+        class="tk-button"
+        type="button"
+        @click="close(true)"
+      >{{ startOnlyLabel }}</button></div>
     </div>
+    <p
+      v-if="error"
+      :id="id + '-message'"
+      class="tk-field-error"
+      role="alert"
+    >{{ error }}</p>
+    <p v-else-if="hint" :id="id + '-message'" class="tk-field-hint">{{ hint }}</p>
   </div>
 </template>
 
@@ -347,5 +376,5 @@ onUnmounted(() => document.removeEventListener('pointerdown', pointer));
 }
 .date-range-day:focus-visible { outline: 2px solid var(--tk-focus); outline-offset: -3px; }
 .date-range-day:is(.date-range-first, .date-range-last):focus-visible { outline-color: var(--tk-on-accent); }
-.date-range-footer { display: flex; justify-content: flex-end; margin-top: var(--tk-space-2); padding-top: var(--tk-space-1); border-top: 1px solid var(--tk-line); }
+.date-range-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--tk-space-2); margin-top: var(--tk-space-2); padding-top: var(--tk-space-1); border-top: 1px solid var(--tk-line); }
 </style>

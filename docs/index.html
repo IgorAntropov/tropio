@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Технический справочник Tropio</title>
-  <link rel="icon" data-local-href="../.agents/images/favicon.ico">
+  <title>Технический справочник Трулала</title>
+  <link rel="icon" href="generated/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="handbook.css">
   <script defer src="generated/documents.js"></script>
   <script defer src="reader.js"></script>
@@ -15,8 +15,11 @@
     <aside class="sidebar">
       <header class="sidebar-header">
         <a class="identity" href="index.html">
-          <img data-local-src="../.agents/images/travel_icon_192.png" alt="" width="38" height="38" hidden>
-          <span><strong>Tropio</strong><span>Технический справочник</span></span>
+          <picture>
+            <source media="(max-width: 47rem)" srcset="generated/trulala-icon.svg">
+            <img src="generated/trulala-logo.svg" alt="Трулала" width="90" height="51">
+          </picture>
+          <span>Технический справочник</span>
         </a>
         <button class="sidebar-toggle" type="button" aria-expanded="false" aria-controls="contents">Разделы</button>
       </header>
@@ -106,7 +109,7 @@
             <li><a href="contracts/bff-errors.html">Ошибки BFF и восстановление</a></li>
             <li><a href="../.agents/docs/poc-04/events.md">События POC-04</a></li>
             <li><a href="contracts/events-deduplication.html">События Travel/Geo и дедупликация</a></li>
-            <li><a href="../.agents/docs/UX-01-ui-kit.md">UI-kit Тропио</a></li>
+            <li><a href="../.agents/docs/UX-01-ui-kit.md">UI-kit «Трулала»</a></li>
             <li><a href="../.agents/docs/TODO.md#текущая-работа">Утверждённые макеты UX-01</a></li>
             <li><a href="../.agents/docs/tropio_tz_v1.1.md#34-бренд-и-визуальная-система">Бренд, локализация и визуальная система</a></li>
             <li><a href="../.agents/docs/tropio_tz_v1.1.md#291-приёмочные-сценарии">Приёмочные сценарии ТЗ</a></li>
@@ -121,7 +124,7 @@
         <a id="reader-source" target="_blank" rel="noopener" hidden>Исходник</a>
       </header>
       <article class="document" id="document" aria-labelledby="document-title">
-        <h1 id="document-title">Технический справочник Tropio</h1>
+        <h1 id="document-title">Технический справочник Трулала</h1>
         <p>Собери справочник командой <code>npm --prefix docs run build</code> из корня репозитория. <a href="README.md">Инструкция по запуску</a></p>
         <noscript><p>Для просмотра документов в этой панели включи JavaScript.</p></noscript>
       </article>

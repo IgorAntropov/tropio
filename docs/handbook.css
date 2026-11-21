@@ -133,27 +133,26 @@ a {
   text-decoration: none;
 }
 
-.identity img {
+.identity picture {
   flex: none;
-  border-radius: 0.5rem;
+}
+
+.identity img {
+  display: block;
+  object-fit: contain;
 }
 
 .identity span {
-  display: block;
-}
-
-.identity strong {
-  display: block;
-  font-size: 1.16rem;
-  line-height: 1.15;
-  letter-spacing: -0.035em;
-}
-
-.identity span span {
-  margin-block-start: 0.19rem;
-  font-size: 0.75rem;
-  color: var(--muted);
+  font-size: 0.875rem;
   line-height: 1.35;
+  color: var(--muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  .identity img {
+    border-radius: 0.5rem;
+    background: #f0f5f2;
+  }
 }
 
 .sidebar-toggle {
@@ -482,6 +481,11 @@ tbody tr:last-child > * {
     margin: 0;
     padding: 0.625rem var(--canvas-gutter);
     border: 0;
+  }
+
+  .identity img {
+    inline-size: 40px;
+    block-size: 40px;
   }
 
   .sidebar-toggle {

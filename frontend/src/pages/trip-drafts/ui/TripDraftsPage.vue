@@ -4,15 +4,16 @@ import {
   onMounted,
   ref,
   shallowRef,
+  useTemplateRef,
   watch,
 } from 'vue';
 import { TripPublication } from '@fsd/features/publish-trip';
 import {
-  editorApi,
-  identityApi,
-} from '@fsd/shared/api';
+  TripDraftDialog,
+  useTripCreation,
+} from '@fsd/features/trip-draft-dialog';
+import { editorApi } from '@fsd/shared/api';
 import type {
-  CreateTripDraftRequest,
   MyTripDraftList,
   TravelDraft,
 } from '@fsd/shared/api';
@@ -20,11 +21,6 @@ import {
   describeEditorError,
   editorProblemCode,
 } from '@fsd/features/edit-route';
-import {
-  hasInvalidText,
-  useFormValidation,
-} from '@fsd/shared/ui/form';
-import { UiTextField } from '@fsd/shared/ui/kit';
 import {
   dayRoutePath,
   tripDraftPath,
@@ -40,29 +36,22 @@ const draft = shallowRef<TravelDraft | null>(null);
 const issue = ref('');
 const signedOut = ref(false);
 const loading = ref(true);
-const creating = ref(false);
-const busy = ref(false);
-const title = ref('');
-const { valid, errors, touch, reset: resetValidation } = useFormValidation({
-  title: () => {
-    const value = title.value.trim();
-    if (!value) {
-      return t('tripDrafts.titleRequired');
-    }
-    if (hasInvalidText(value)) {
-      return t('tripDrafts.titleInvalid');
-    }
-    if ([...value].length > 120) {
-      return t('tripDrafts.titleTooLong');
-    }
-  },
-});
+const creating = useTripCreation();
+const editing = ref(false);
+const publication = useTemplateRef<InstanceType<typeof TripPublication>>('publication');
+const settingsRevision = ref('');
 const request = new AbortController();
-let pendingCreate: { body: CreateTripDraftRequest; key: string } | null = null;
 
 function denied(error: unknown) {
   draft.value = null;
   failure(error);
+}
+
+function acceptSettings(saved: TravelDraft) {
+  if (draft.value?.trip_revision_id !== saved.trip_revision_id) {
+    settingsRevision.value = saved.trip_revision_id;
+  }
+  draft.value = saved;
 }
 
 function failure(error: unknown) {
@@ -95,40 +84,6 @@ async function load(append = false) {
   }
 }
 
-async function createTrip() {
-  if (busy.value || !valid.value) {
-    return;
-  }
-  const normalized = title.value.trim();
-  if (!pendingCreate || pendingCreate.body.title !== normalized) {
-    pendingCreate = { body: { title: normalized }, key: crypto.randomUUID() };
-  }
-  busy.value = true;
-  issue.value = '';
-  try {
-    const session = await identityApi.me(request.signal);
-    const created = await editorApi.createTrip(pendingCreate.body, {
-      csrf: session.csrf_token,
-      key: pendingCreate.key,
-      signal: request.signal,
-    });
-    await router.push(tripDraftPath(created.trip_id));
-  }
-  catch (error) {
-    failure(error);
-  }
-  finally {
-    busy.value = false;
-  }
-}
-
-function toggleCreation() {
-  creating.value = !creating.value;
-  if (!creating.value) {
-    resetValidation();
-  }
-}
-
 onMounted(() => {
   void load();
   watch(() => route.query.new, (value) => {
@@ -148,7 +103,7 @@ onBeforeUnmount(() => request.abort());
   <main class="trip-workspace">
     <div class="trip-workspace__content">
       <NuxtLink class="trip-workspace__back" :to="tripId ? '/trips' : '/'">
-        ← {{ tripId ? 'Мои путешествия' : 'Тропио' }}
+        ← {{ t(tripId ? 'workspace.trips' : 'productName') }}
       </NuxtLink>
       <header>
         <h1>{{ tripId ? (draft?.title || 'Путешествие') : 'Мои путешествия' }}</h1>
@@ -156,42 +111,33 @@ onBeforeUnmount(() => request.abort());
           v-if="!tripId && !signedOut"
           class="tk-button tk-button-primary"
           type="button"
-          @click="toggleCreation"
+          @click="creating = true"
         >
-          {{ creating ? 'Закрыть форму' : 'Создать путешествие' }}
+          {{ t('workspace.createTrip') }}
         </button>
+        <button
+          v-if="draft"
+          class="tk-button"
+          :disabled="publication?.locked"
+          type="button"
+          @click="editing = true"
+        >{{ t('tripDrafts.settings') }}</button>
       </header>
+      <TripDraftDialog
+        v-if="draft"
+        v-model="editing"
+        :draft="draft"
+        @saved="acceptSettings"
+      />
       <p v-if="issue" class="trip-workspace__message" role="alert">{{ issue }}</p>
       <NuxtLink v-if="signedOut" class="tk-button tk-button-primary" to="/login">Войти</NuxtLink>
       <button
-        v-else-if="issue && !creating"
+        v-else-if="issue"
         class="tk-button"
         :disabled="loading"
         type="button"
         @click="load()"
       >Повторить</button>
-      <form
-        v-if="creating && !signedOut"
-        class="trip-workspace__form"
-        novalidate
-        @submit.prevent="createTrip"
-      >
-        <UiTextField
-          v-model="title"
-          autocomplete="off"
-          class="trip-workspace__title"
-          :disabled="busy"
-          :error="errors.title"
-          :label="t('tripDrafts.title')"
-          :maxlength="240"
-          name="title"
-          required
-          @blur="touch('title')"
-        />
-        <button class="tk-button tk-button-primary" :disabled="busy || !valid" type="submit">
-          {{ busy ? 'Создаём…' : 'Создать черновик' }}
-        </button>
-      </form>
       <p v-if="loading" role="status">Загружаем…</p>
       <section v-if="draft" aria-label="Программа по дням">
         <h2>Программа по дням</h2>
@@ -209,7 +155,8 @@ onBeforeUnmount(() => request.abort());
       </section>
       <TripPublication
         v-if="draft"
-        :key="draft.trip_id"
+        :key="settingsRevision || draft.trip_id"
+        ref="publication"
         :draft="draft"
         @denied="denied"
         @refresh="draft = $event"
@@ -244,14 +191,9 @@ onBeforeUnmount(() => request.abort());
 .trip-workspace__content h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 2.75rem); }
 .trip-workspace__content h2 { font-size: 1.25rem; margin: 1.8rem 0 .9rem; }
 .trip-workspace__back { color: var(--tk-accent); font-weight: 650; text-decoration: none; }
-.trip-workspace__form { display: flex; gap: 1rem; align-items: start; padding: 1.25rem; background: var(--tk-surface); border: 1px solid var(--tk-line); border-radius: var(--tk-radius); }
-.trip-workspace__title { flex: 1; }
 .trip-workspace__list { list-style: none; display: grid; gap: .75rem; margin: 0 0 1rem; padding: 0; }
 .trip-workspace__list li { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: .75rem; padding: 1rem; border: 1px solid var(--tk-line); border-radius: var(--tk-radius); background: var(--tk-surface); }
 .trip-workspace__list p { margin: .35rem 0 0; white-space: pre-wrap; color: var(--tk-muted); }
 .trip-workspace :deep(a.tk-button) { text-decoration: none; }
 .trip-workspace__message { color: var(--tk-danger); }
-@media (max-width: 520px) {
-  .trip-workspace__form { flex-direction: column; align-items: stretch; }
-}
 </style>

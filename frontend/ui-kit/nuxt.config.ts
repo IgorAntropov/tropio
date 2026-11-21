@@ -14,10 +14,10 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: 'UI-kit · Тропио',
+      title: 'UI-kit · Трулала',
       htmlAttrs: { lang: 'ru' },
       meta: [{ name: 'robots', content: 'noindex' }],
-      link: [{ rel: 'icon', href: '/favicon.ico' }],
+      link: [{ rel: 'icon', href: '/favicon.ico?v=trulala' }],
     },
   },
 });

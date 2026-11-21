@@ -82,28 +82,8 @@ body:has(.account-surface) {
 .account-brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--tk-space-2);
   width: fit-content;
-  color: inherit;
-  font-size: var(--tk-text-lg);
-  font-weight: 700;
   text-decoration: none;
-}
-
-.account-surface-auth .account-brand {
-  gap: var(--tk-space-3);
-  color: var(--tk-ink);
-  font-size: clamp(1.35rem, 3vw, 1.6rem);
-  letter-spacing: -.02em;
-}
-
-.account-surface-auth .account-brand span {
-  min-inline-size: 0;
-  overflow-wrap: anywhere;
-}
-
-.account-surface-auth .account-brand:hover {
-  color: var(--tk-accent);
 }
 
 .account-back {

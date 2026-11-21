@@ -189,7 +189,7 @@ export function createTripInput(value: unknown): Partial<TripFields> & Pick<Trip
 }
 
 export function updateTripInput(value: unknown) {
-  const input = fields(value, ['trip_revision_id', 'visibility', ...tripKeys]);
+  const input = fields(value, ['trip_revision_id', 'visibility', 'shift_day_dates', ...tripKeys]);
   const patch: Partial<TripFields> & { visibility?: 'public' | 'private' } = tripFields(input);
   if (Object.hasOwn(input, 'visibility')) {
     if (input.visibility !== 'public' && input.visibility !== 'private') {
@@ -197,10 +197,16 @@ export function updateTripInput(value: unknown) {
     }
     patch.visibility = input.visibility;
   }
-  if (Object.keys(patch).length === 0) {
+  if (Object.keys(patch).length === 0
+    || (Object.hasOwn(input, 'shift_day_dates') && typeof input.shift_day_dates !== 'boolean')
+    || (input.shift_day_dates === true && !patch.start_date)) {
     throw new BffProblem('INVALID_REQUEST');
   }
-  return { trip_revision_id: travelUuid(input.trip_revision_id), patch };
+  return {
+    trip_revision_id: travelUuid(input.trip_revision_id),
+    patch,
+    ...(input.shift_day_dates === true ? { shift_day_dates: true } : {}),
+  };
 }
 
 export function dayInput(value: unknown, requirePatch: boolean) {

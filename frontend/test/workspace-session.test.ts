@@ -78,6 +78,8 @@ describe('workspace sessions', () => {
     expect(workspaceReturnPath(route)).toBe(route);
     expect(workspaceReturnPath('/trips?new=1')).toBe('/trips?new=1');
     expect(workspaceReturnPath('/map')).toBe('/map');
+    expect(workspaceReturnPath('/chats')).toBe('/chats');
+    expect(workspaceReturnPath('/chats/unimplemented')).toBeUndefined();
     expect(workspaceReturnPath(`/catalog/${trip}#participation`)).toBe(`/catalog/${trip}#participation`);
     expect(workspaceReturnPath('/catalog/no-id#participation')).toBeUndefined();
     expect(workspaceReturnPath(`/catalog/${trip}?next=/login#participation`)).toBeUndefined();

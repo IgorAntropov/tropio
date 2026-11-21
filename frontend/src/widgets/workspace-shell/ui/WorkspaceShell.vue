@@ -1,11 +1,17 @@
 <script setup lang="ts">
+import {
+  TripDraftDialog,
+  useTripCreation,
+} from '@fsd/features/trip-draft-dialog';
+import { UiBrandLogo } from '@fsd/shared/ui/kit';
 import '@fsd/shared/ui/kit/kit.css';
 import WorkspaceAccount from './WorkspaceAccount.vue';
 import './workspace-shell.css';
 
-const props = defineProps<{ guest?: boolean; immersive?: boolean }>();
+defineProps<{ guest?: boolean; immersive?: boolean }>();
 const route = useRoute();
 const { t } = useI18n();
+const creating = useTripCreation();
 const sidebarStorageKey = 'tropio:sidebar-collapsed';
 const sidebarPreference = ref<boolean>();
 const compactSidebar = ref(false);
@@ -61,24 +67,24 @@ const entries = [
     icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M16 8l-2.5 5.5L8 16l2.5-5.5z',
   },
   {
-    id: 'map',
-    path: '/map',
-    label: 'workspace.map',
-    compactLabel: 'workspace.map',
-    icon: 'm3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2z M9 3v16 M15 5v16',
-  },
-  {
     id: 'trips',
     path: '/trips',
     label: 'workspace.trips',
     compactLabel: 'workspace.tripsCompact',
     icon: 'M5 7h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M8 11v6 M16 11v6',
   },
+  {
+    id: 'chats',
+    path: '/chats',
+    label: 'workspace.chats',
+    compactLabel: 'workspace.chats',
+    icon: 'M21 11a8 8 0 0 1-8 8H8l-5 3 1.5-5A8 8 0 0 1 11 3h2a8 8 0 0 1 8 8z M8 9h8 M8 13h5',
+  },
 ] as const;
 
 const active = computed(() => {
-  if (props.immersive && route.path.startsWith('/trips/') && route.query.from === 'map') {
-    return 'map';
+  if (route.path.replace(/\/$/, '') === '/map') {
+    return 'trips';
   }
   return entries.find(entry => route.path === entry.path || route.path.startsWith(entry.path + '/'))?.id;
 });
@@ -93,13 +99,13 @@ const active = computed(() => {
 
     <aside v-if="!guest" id="workspace-sidebar" class="workspace-sidebar">
       <NuxtLink :aria-label="t('workspace.openFeed')" class="workspace-brand" to="/feed">
-        <img
+        <UiBrandLogo alt="" class="workspace-sidebar-full-logo" :height="60" />
+        <UiBrandLogo
           alt=""
-          height="34"
-          src="/logo.png"
-          width="34"
-        >
-        <span aria-hidden="true" class="workspace-sidebar-label">{{ t('productName') }}</span>
+          class="workspace-sidebar-icon"
+          compact
+          :height="40"
+        />
       </NuxtLink>
 
       <nav :aria-label="t('workspace.navigation')">
@@ -159,16 +165,16 @@ const active = computed(() => {
     <div :class="{ 'workspace-main': !guest }">
       <header v-if="!guest" class="workspace-header">
         <NuxtLink :aria-label="t('workspace.openFeed')" class="workspace-brand workspace-header-brand" to="/feed">
-          <img
-            alt=""
-            height="30"
-            src="/logo.png"
-            width="30"
-          >
-          <span>{{ t('productName') }}</span>
+          <UiBrandLogo alt="" :height="44" />
         </NuxtLink>
         <div class="workspace-header-actions">
-          <NuxtLink :aria-label="t('workspace.createTrip')" class="tk-button tk-button-primary workspace-create" :to="{ path: '/trips', query: { new: '1' } }">
+          <button
+            aria-haspopup="dialog"
+            :aria-label="t('workspace.createTrip')"
+            class="tk-button tk-button-primary workspace-create"
+            type="button"
+            @click="creating = true"
+          >
             <svg
               aria-hidden="true"
               fill="none"
@@ -180,7 +186,7 @@ const active = computed(() => {
               <path d="M12 5v14 M5 12h14" />
             </svg>
             <span>{{ t('workspace.createTrip') }}</span>
-          </NuxtLink>
+          </button>
           <WorkspaceAccount />
         </div>
       </header>
@@ -192,5 +198,6 @@ const active = computed(() => {
         <slot />
       </div>
     </div>
+    <TripDraftDialog v-if="!guest" v-model="creating" />
   </div>
 </template>

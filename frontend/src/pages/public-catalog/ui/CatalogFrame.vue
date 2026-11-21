@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiBrandLogo } from '@fsd/shared/ui/kit';
 import '@fsd/shared/ui/kit/kit.css';
 import './catalog.css';
 
@@ -10,12 +11,7 @@ const { t } = useI18n();
   <div :class="{ 'catalog-frame': !sessionConfirmed, 'catalog-frame--checking': sessionConfirmed === null }" data-catalog-frame>
     <a v-if="!sessionConfirmed" class="catalog-skip" href="#catalog-content">{{ t('workspace.skipToContent') }}</a>
     <header v-if="!sessionConfirmed" class="catalog-bar">
-      <NuxtLink class="catalog-brand" to="/catalog"><img
-        alt=""
-        height="34"
-        src="/logo.png"
-        width="34"
-      >{{ t('productName') }}</NuxtLink>
+      <NuxtLink class="catalog-brand" to="/catalog"><UiBrandLogo :alt="t('productName')" /></NuxtLink>
       <nav :aria-label="t('workspace.navigation')">
         <NuxtLink class="tk-button" to="/login">
           <svg

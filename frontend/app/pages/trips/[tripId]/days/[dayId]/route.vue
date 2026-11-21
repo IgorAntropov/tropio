@@ -10,7 +10,12 @@ definePageMeta({
   workspaceImmersive: true,
   key: route => route.path,
 });
-useHead({ title: 'Редактор маршрута — Тропио', meta: [{ name: 'robots', content: 'noindex' }] });
+
+const { t } = useI18n();
+useHead(() => ({
+  title: t('pageTitle', { title: t('routeEditor.title') }),
+  meta: [{ name: 'robots', content: 'noindex' }],
+}));
 </script>
 
 <template>

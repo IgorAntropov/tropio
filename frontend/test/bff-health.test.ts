@@ -238,7 +238,7 @@ it('returns the BFF health response through the Nuxt origin', async () => {
   expect(await response.json()).toEqual({ status: 'ok' });
 });
 
-it.each(['/', '/login', '/feed'])('renders a neutral session check in SSR at %s without the API-scoped cookie', async (path) => {
+it.each(['/', '/login', '/feed', '/chats'])('renders a neutral session check in SSR at %s without the API-scoped cookie', async (path) => {
   const response = await fetch(path);
   const html = await response.text();
 
@@ -246,7 +246,7 @@ it.each(['/', '/login', '/feed'])('renders a neutral session check in SSR at %s 
   expect(response.headers.get('cache-control')).toBe('no-store');
   expect(html).toContain('Проверяем сессию');
   expect(html).not.toContain('<h1>Вход по почте</h1>');
-  expect(html).not.toContain('<h1>Лента</h1>');
+  expect(html).not.toContain('<nav aria-label="Основная навигация"');
 });
 
 it('renders the Russian document language and product title at the entry route', async () => {
@@ -255,7 +255,7 @@ it('renders the Russian document language and product title at the entry route',
 
   expect(response.status).toBe(200);
   expect(html).toMatch(/<html\b[^>]*\blang="ru"/);
-  expect(html).toContain('<title>Тропио</title>');
+  expect(html).toContain('<title>Трулала</title>');
 });
 
 it.each(['/', '/login'])('sends an SSR request with a verified session at %s to the feed', async (path) => {
@@ -283,12 +283,19 @@ it('preserves the participation destination on the sign-in link below registrati
   expect(html).toMatch(/<a\b(?=[^>]*class="account-brand")(?=[^>]*href="\/catalog")[^>]*>/);
 });
 
-it('allows server-rendered workspace content with an active session without serializing session secrets', async () => {
-  const response = await fetch('/feed', { headers: { cookie: 'tropio_session=workspace-active' } });
+it.each([
+  ['/feed', 'Лента'],
+  ['/chats', 'Беседы'],
+])('renders the private placeholder and its navigation at %s with an active session', async (path, label) => {
+  const response = await fetch(path, { headers: { cookie: 'tropio_session=workspace-active' } });
   const html = await response.text();
 
   expect(response.status).toBe(200);
-  expect(html).toMatch(/<h1[^>]*>Лента<\/h1>/);
+  expect(html).toMatch(/>Раздел в разработке, скоро будет<\//);
+  expect(html).toContain(`<title>${label} · Трулала</title>`);
+  const navigation = html.match(/<nav\b[^>]*aria-label="Основная навигация"[^>]*>([\s\S]*?)<\/nav>/)?.[1] ?? '';
+  expect([...navigation.matchAll(/<a\b[^>]*href="([^"]+)"/g)].map(link => link[1]))
+    .toEqual(['/feed', '/catalog', '/trips', '/chats']);
   expect(html).not.toContain('workspace-csrf-fixture');
   expect(html).not.toContain('workspace-active');
 });
@@ -296,6 +303,7 @@ it('allows server-rendered workspace content with an active session without seri
 it.each([
   ['/', '/catalog', null],
   ['/map', '/login', '/map'],
+  ['/chats', '/login', '/chats'],
 ])('sends an expired SSR session at %s to %s', async (path, destination, returnTo) => {
   const response = await fetch(path, {
     headers: { cookie: 'tropio_session=workspace-expired' },
@@ -308,7 +316,7 @@ it.each([
   expect(location.searchParams.get('returnTo')).toBe(returnTo);
 });
 
-it.each(['/', '/login', '/feed'])('returns 503 at %s when session verification is unavailable', async (path) => {
+it.each(['/', '/login', '/feed', '/chats'])('returns 503 at %s when session verification is unavailable', async (path) => {
   identityDisconnected = true;
   try {
     const response = await fetch(path, {

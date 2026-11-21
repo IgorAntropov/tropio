@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { WorkspaceFeed } from '@fsd/pages/workspace-feed';
+import { WorkspacePlaceholder } from '@fsd/shared/ui/workspace-placeholder/index';
 
 definePageMeta({ layout: 'workspace', middleware: 'workspace' });
 
@@ -11,5 +11,5 @@ useHead(() => ({
 </script>
 
 <template>
-  <WorkspaceFeed />
+  <WorkspacePlaceholder :label="t('workspace.feed.title')" />
 </template>

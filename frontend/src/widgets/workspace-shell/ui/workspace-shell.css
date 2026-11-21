@@ -12,6 +12,7 @@ body:has(.workspace-shell) {
   --workspace-top-bar: 64px;
   --workspace-bottom-bar: 0px;
   --workspace-sidebar-width: 224px;
+  --workspace-brand-compact: 0;
   --workspace-content-height: calc(100dvh - var(--workspace-top-bar) - var(--workspace-bottom-bar));
   display: grid;
   grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr);
@@ -22,11 +23,16 @@ body:has(.workspace-shell) {
 
 .workspace-shell[data-sidebar-collapsed="true"] {
   --workspace-sidebar-width: 68px;
+  --workspace-brand-compact: 1;
 }
 
 @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
   .workspace-shell--animate-sidebar {
     transition: grid-template-columns 260ms cubic-bezier(.2, .75, .25, 1);
+  }
+
+  .workspace-shell--animate-sidebar .workspace-sidebar .workspace-brand img {
+    transition: opacity 210ms ease-in-out;
   }
 }
 
@@ -48,18 +54,29 @@ body:has(.workspace-shell) {
 .workspace-brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--tk-space-2);
   min-block-size: var(--tk-target);
-  color: var(--tk-ink);
   text-decoration: none;
-  font-size: var(--tk-text-lg);
-  font-weight: 760;
-  letter-spacing: -.02em;
 }
 
 .workspace-sidebar .workspace-brand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
   flex: none;
-  padding-inline: 7px;
+  block-size: 60px;
+  overflow: clip;
+}
+
+.workspace-sidebar .workspace-brand img {
+  grid-area: 1 / 1;
+}
+
+.workspace-sidebar-full-logo {
+  opacity: calc(1 - var(--workspace-brand-compact));
+}
+
+.workspace-sidebar-icon {
+  opacity: var(--workspace-brand-compact);
 }
 
 .workspace-sidebar-label {
@@ -71,10 +88,6 @@ body:has(.workspace-shell) {
 .workspace-brand img {
   flex: none;
   object-fit: contain;
-}
-
-.workspace-brand:hover {
-  color: var(--tk-accent);
 }
 
 .workspace-header-brand {
@@ -184,7 +197,14 @@ body:has(.workspace-shell) {
 }
 
 .workspace-content {
+  --workspace-page-inset: 0px;
   min-block-size: var(--workspace-content-height);
+}
+
+@media (min-width: 700px) {
+  .workspace-content {
+    --workspace-page-inset: clamp(.75rem, 2vw, 1.5rem);
+  }
 }
 
 .workspace-content:focus {
@@ -326,6 +346,7 @@ body:has(.workspace-shell) {
 @media (min-width: 768px) and (max-width: 1039px) {
   .workspace-shell:not([data-sidebar-collapsed]) {
     --workspace-sidebar-width: 68px;
+    --workspace-brand-compact: 1;
   }
 }
 
@@ -404,7 +425,6 @@ body:has(.workspace-shell) {
   .workspace-header-brand {
     display: inline-flex;
     margin-inline-start: 0;
-    font-size: 1.0625rem;
   }
 
   .workspace-create {

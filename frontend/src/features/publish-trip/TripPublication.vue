@@ -24,6 +24,7 @@ const {
   current.value = draft;
   emit('refresh', draft);
 }, error => emit('denied', error));
+defineExpose({ locked });
 const savedMode = computed(() => current.value.admission_mode ?? 'request');
 const selectedMode = ref<string>(savedMode.value);
 const modeOptions = computed(() => [
